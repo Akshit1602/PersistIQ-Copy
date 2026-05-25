@@ -1,0 +1,27 @@
+{
+  "client_name": "demo",
+  "generated_at": "2026-05-25T07:49:28.732470",
+  "confidence": 0.95,
+  "table_mapping": {
+    "inquiries": "bronze_quotes_raw",
+    "orders": "bronze_orders_raw",
+    "buyers": "bronze_users_raw",
+    "accounts": "bronze_accounts_raw",
+    "experiments": "bronze_experiments_raw",
+    "traffic": "None"
+  },
+  "column_mapping": {
+    "inquiry_id": "inquiry_id",
+    "buyer_id": "user_id",
+    "account_segment": "account_segment",
+    "platform": "account_domain",
+    "created_at": "created_at",
+    "converted_to_order": "converted_to_order",
+    "order_value": "order_value",
+    "variant": "variant",
+    "experiment_name": "experiment_name",
+    "category": "product_category",
+    "country": "country"
+  },
+  "issues": []
+}

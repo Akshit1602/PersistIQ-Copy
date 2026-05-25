@@ -1,0 +1,74 @@
+{
+  "session_id": "2eba3b84",
+  "client_name": "demo",
+  "created_at": "2026-05-25T04:51:57.419540",
+  "last_active": "2026-05-25T07:56:10.897742",
+  "mode": "synthetic",
+  "semantic_mappings": {},
+  "active_metrics": [],
+  "experiment_configs": {},
+  "active_experiment": null,
+  "execution_history": [
+    {
+      "run_id": "37b7add1",
+      "module": "opportunity_sizing",
+      "phase": "phase_1",
+      "started_at": "2026-05-25T04:53:01.585223",
+      "elapsed_s": 0.001,
+      "ok": true,
+      "error": "",
+      "summary": "['monthly_inquiries', 'current_ior', 'target_ior', 'ior_gap_",
+      "outputs": {}
+    },
+    {
+      "run_id": "163f5c1a",
+      "module": "power_calculator",
+      "phase": "phase_1",
+      "started_at": "2026-05-25T05:01:12.487856",
+      "elapsed_s": 404.255,
+      "ok": true,
+      "error": "",
+      "summary": "['sample_size', 'duration']",
+      "outputs": {}
+    },
+    {
+      "run_id": "e5dc1dba",
+      "module": "schema_discovery",
+      "phase": "phase_0",
+      "started_at": "2026-05-25T07:49:28.807611",
+      "elapsed_s": 106.266,
+      "ok": true,
+      "error": "",
+      "summary": "['client_name', 'tables_found', 'mapping', 'issues', 'schema",
+      "outputs": {}
+    },
+    {
+      "run_id": "48ab3d6c",
+      "module": "watchtower",
+      "phase": "phase_0",
+      "started_at": "2026-05-25T07:55:58.059251",
+      "elapsed_s": 0.003,
+      "ok": true,
+      "error": "",
+      "summary": "[]",
+      "outputs": {}
+    },
+    {
+      "run_id": "6bd93859",
+      "module": "watchtower",
+      "phase": "phase_0",
+      "started_at": "2026-05-25T07:56:10.897541",
+      "elapsed_s": 0.002,
+      "ok": true,
+      "error": "",
+      "summary": "[]",
+      "outputs": {}
+    }
+  ],
+  "recommendations": [],
+  "context_keys": [
+    "schema_discovery_result",
+    "experiment_result",
+    "watchtower_result"
+  ]
+}
