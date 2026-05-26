@@ -1,19 +1,20 @@
 import sys, os
-from core.config import *
-from core.state import *
-from core.llm import *
-from core.db import *
-from utils.stats import *
-from utils.reporting import *
-from data.ingestion import *
-from data.synthetic import *
-from data.medallion import *
-from modules.foundation import *
-from modules.planning import *
-from modules.live import *
-from modules.post_experiment import *
-from modules.causal_methods import *
-from modules.deploy import *
+from continum.core.legacy_config import *
+from continum.core.legacy_state import *
+from continum.core.legacy_llm import *
+from continum.core.llm import TransformersClient, AGENT_CONFIG
+from continum.core.legacy_db import *
+from continum.utils.stats import *
+from continum.utils.reporting import *
+from continum.data.ingestion import *
+from continum.data.synthetic import *
+from continum.data.medallion import *
+from continum.modules.foundation import *
+from continum.modules.planning import *
+from continum.modules.live import *
+from continum.modules.post_experiment import *
+from continum.modules.causal_methods import *
+from continum.modules.deploy import *
 
 db = get_db()
 narrative_llm = TransformersClient(AGENT_CONFIG)
