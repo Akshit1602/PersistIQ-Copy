@@ -5,10 +5,12 @@ import logging
 import re
 from collections import OrderedDict
 from datetime import datetime
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 import pandas as pd
 
 from continum.documents.generator import render_document_pdf, PDF_PALETTE
@@ -52,8 +54,11 @@ def run_schema_discovery(
     db=None,
     client_name: Optional[str] = None,
     bootstrap_mode: bool = False,
-    output_dir: str = ".",
+    output_dir: Optional[str] = None,
 ) -> Optional[Dict]:
+    if output_dir is None:
+        ensure_runtime_data_dir()
+        output_dir = RUNTIME_DATA_DIR
     print()
     print("╔" + "═" * 70 + "╗")
     print("║" + "  SCHEMA DISCOVERY & MAPPING (Phase 0)".ljust(70) + "║")

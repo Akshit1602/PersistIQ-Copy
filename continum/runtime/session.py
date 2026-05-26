@@ -8,9 +8,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
+
 logger = logging.getLogger("continum.runtime.session")
 
-SESSION_FILE = "continum_session.json"
+ensure_runtime_data_dir()
+SESSION_FILE = os.path.join(RUNTIME_DATA_DIR, "continum_session.json")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -232,14 +235,16 @@ class ExperimentSession:
 
         # Save the parent so it's not lost
         self.save()
-        fork.save(path=f"continum_fork_{fork.session_id}.json")
+        fork_path = os.path.join(RUNTIME_DATA_DIR, f"continum_fork_{fork.session_id}.json")
+        fork.save(path=fork_path)
         logger.info("Session %s forked → %s", self.session_id, fork.session_id)
         return fork
 
     def list_forks(self) -> List[str]:
         import glob
         forks = []
-        for path in glob.glob("continum_fork_*.json"):
+        pattern = os.path.join(RUNTIME_DATA_DIR, "continum_fork_*.json")
+        for path in glob.glob(pattern):
             try:
                 import json as _j
                 with open(path) as f:

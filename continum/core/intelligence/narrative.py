@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional
+import os
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 
 logger = logging.getLogger("continum.intelligence.narrative")
 
@@ -341,9 +343,12 @@ def generate_enhanced_report(
     causal_estimates: List[Any] = None,
     bayesian: Optional[Dict] = None,
     llm=None,
-    output_path: str = "experiment_report.pdf",
+    output_path: Optional[str] = None,
     include_charts: bool = True,
 ) -> str:
+    if output_path is None:
+        ensure_runtime_data_dir()
+        output_path = os.path.join(RUNTIME_DATA_DIR, "experiment_report.pdf")
     from continum.documents.generator import render_document_pdf
 
     causal_estimates = causal_estimates or []
