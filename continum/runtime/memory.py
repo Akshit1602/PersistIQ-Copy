@@ -6,9 +6,12 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
+
 logger = logging.getLogger("continum.runtime.memory")
 
-MEMORY_DB_PATH = "continum_memory.duckdb"
+ensure_runtime_data_dir()
+MEMORY_DB_PATH = os.path.join(RUNTIME_DATA_DIR, "continum_memory.duckdb")
 
 
 class CrossExperimentMemory:

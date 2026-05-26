@@ -3,6 +3,8 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+import os
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 
 logger = logging.getLogger("continum.memory")
 
@@ -192,7 +194,10 @@ class ContinumState:
         self.execution = ExecutionMemory()
         self.org       = OrganisationalMemory(knowledge_graph)
 
-    def save_to_file(self, path: str = "continum_state.json") -> None:
+    def save_to_file(self, path: Optional[str] = None) -> None:
+        if path is None:
+            ensure_runtime_data_dir()
+            path = os.path.join(RUNTIME_DATA_DIR, "continum_state.json")
         data = {
             "execution": self.execution.to_dict(),
             "org_config": {
@@ -205,8 +210,10 @@ class ContinumState:
             json.dump(data, f, indent=2, default=str)
 
     @classmethod
-    def load_from_file(cls, path: str = "continum_state.json", knowledge_graph=None) -> "ContinumState":
+    def load_from_file(cls, path: Optional[str] = None, knowledge_graph=None) -> "ContinumState":
         import os
+        if path is None:
+            path = os.path.join(RUNTIME_DATA_DIR, "continum_state.json")
         state = cls(knowledge_graph)
         if not os.path.exists(path):
             return state

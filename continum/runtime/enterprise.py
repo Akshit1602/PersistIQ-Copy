@@ -10,11 +10,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
+
 logger = logging.getLogger("continum.runtime.enterprise")
 
-AUDIT_FILE      = ".continum_audit.ndjson"
-SNAPSHOT_DIR    = ".continum_snapshots"
-GOVERNANCE_FILE = ".continum_governance.json"
+ensure_runtime_data_dir()
+AUDIT_FILE      = os.path.join(RUNTIME_DATA_DIR, ".continum_audit.ndjson")
+SNAPSHOT_DIR    = os.path.join(RUNTIME_DATA_DIR, ".continum_snapshots")
+GOVERNANCE_FILE = os.path.join(RUNTIME_DATA_DIR, ".continum_governance.json")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

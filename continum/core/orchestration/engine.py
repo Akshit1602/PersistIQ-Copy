@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 
 logger = logging.getLogger("continum.orchestration.engine")
 
@@ -86,7 +87,10 @@ class LineageRecord:
 
 class CheckpointStore:
 
-    def __init__(self, base_dir: str = ".continum_checkpoints"):
+    def __init__(self, base_dir: Optional[str] = None):
+        if base_dir is None:
+            ensure_runtime_data_dir()
+            base_dir = os.path.join(RUNTIME_DATA_DIR, ".continum_checkpoints")
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -147,7 +151,10 @@ class CheckpointStore:
 
 class ExecutionRegistry:
 
-    def __init__(self, registry_path: str = ".continum_registry.ndjson"):
+    def __init__(self, registry_path: Optional[str] = None):
+        if registry_path is None:
+            ensure_runtime_data_dir()
+            registry_path = os.path.join(RUNTIME_DATA_DIR, ".continum_registry.ndjson")
         self.path = Path(registry_path)
 
     def append(self, record: LineageRecord) -> None:

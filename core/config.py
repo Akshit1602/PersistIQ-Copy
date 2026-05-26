@@ -105,8 +105,10 @@ print('Imports ready')
 import json as _json
 import os as _os
 from datetime import datetime as _dt
+from continum.runtime.config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 
-STATE_FILE = 'continum_state.json'
+ensure_runtime_data_dir()
+STATE_FILE = _os.path.join(RUNTIME_DATA_DIR, 'continum_state.json')
 
 def _default_state():
     return {
