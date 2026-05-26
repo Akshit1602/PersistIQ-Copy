@@ -1,0 +1,17 @@
+transformers
+torch
+accelerate
+pandas
+numpy
+scipy
+matplotlib
+tabulate
+duckdb
+sentencepiece
+reportlab
+pypdf
+python-docx
+statsmodels
+sqlglot
+scikit-learn
+snowflake-connector-python
