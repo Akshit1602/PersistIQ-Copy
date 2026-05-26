@@ -346,7 +346,13 @@ body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans
       </div>
       <!-- Ask Continum integrated into reasoning surface -->
       <div class="ask-wrap">
-        <div class="ask-lbl"><i class="fas fa-comment-dots"></i> Ask Continum</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+          <div class="ask-lbl"><i class="fas fa-comment-dots"></i> Ask Continum</div>
+          <select id="ask-engine-select" style="font-size:8px; background:var(--ask-inp); color:var(--sb-muted); border:1px solid var(--sb-bdr); border-radius:3px; padding:1px 3px">
+            <option value="copilot">Copilot</option>
+            <option value="askdata">AskData</option>
+          </select>
+        </div>
         <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px">
           <button onclick="quickAsk('What is the current IOR and AOV?')" style="background:var(--ask-inp);border:1px solid var(--sb-bdr);color:var(--sb-muted);border-radius:3px;padding:2px 6px;font-size:9px;cursor:pointer;white-space:nowrap">📊 IOR &amp; AOV</button>
           <button onclick="quickAsk('Is the experiment significant? Show me the result.')" style="background:var(--ask-inp);border:1px solid var(--sb-bdr);color:var(--sb-muted);border-radius:3px;padding:2px 6px;font-size:9px;cursor:pointer;white-space:nowrap">🔬 Significant?</button>
@@ -861,13 +867,21 @@ function srcLabel(src){
 function quickAsk(q){ document.getElementById('ask-in').value=q; sendAsk(); }
 function sendAsk(){
   const inp=document.getElementById('ask-in'),resp=document.getElementById('ask-resp');
+  const engine=document.getElementById('ask-engine-select').value;
   const chainPanel=document.getElementById('chain-panel');
   const q=inp.value.trim(); if(!q) return;
   resp.style.display='block'; resp.textContent='Reasoning…';
   chainPanel.style.display='none';
 
+  const ui_context = {
+    active_module: currentSec,
+    active_experiment: document.getElementById('exp-sel').value || document.getElementById('sb-exp').textContent,
+    compare_a: document.getElementById('cmp-a') ? document.getElementById('cmp-a').value : null,
+    compare_b: document.getElementById('cmp-b') ? document.getElementById('cmp-b').value : null
+  };
+
   const t0 = Date.now();
-  fetch('/api/ask/chain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})})
+  fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q, engine:engine, ui_context:ui_context})})
   .then(r=>r.json())
   .then(d=>{
     const elapsed = ((Date.now()-t0)/1000).toFixed(1);

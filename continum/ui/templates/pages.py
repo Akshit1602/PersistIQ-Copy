@@ -356,8 +356,14 @@ DASHBOARD_HTML = """
 
     <!-- ── Ask Continum ── -->
     <div class="ask-panel">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">
-        <i class="fas fa-comment-dots"></i> Ask Continum
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">
+          <i class="fas fa-comment-dots"></i> Ask Continum
+        </div>
+        <select id="ask-engine-select" style="font-size:10px; background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:4px; padding:2px 4px">
+          <option value="copilot">Copilot</option>
+          <option value="askdata">AskData</option>
+        </select>
       </div>
       <div class="ask-input-row">
         <input class="ask-input" id="ask-input" placeholder="Why did conversion drop?" onkeydown="if(event.key==='Enter')sendAsk()">
@@ -600,6 +606,7 @@ function selectExperiment(name) {
 // ── Ask Continum ──────────────────────────────────────────────────────────
 function sendAsk() {
   const input    = document.getElementById('ask-input');
+  const engine   = document.getElementById('ask-engine-select').value;
   const respEl   = document.getElementById('ask-response');
   const question = input.value.trim();
   if (!question) return;
@@ -607,9 +614,20 @@ function sendAsk() {
   respEl.style.display = 'block';
   respEl.textContent   = '…';
 
+  const ui_context = {
+    active_module: currentSection,
+    active_experiment: document.getElementById('exp-select').value,
+    compare_a: document.getElementById('cmp-a') ? document.getElementById('cmp-a').value : null,
+    compare_b: document.getElementById('cmp-b') ? document.getElementById('cmp-b').value : null
+  };
+
   fetch('/api/ask', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({question})
+    body: JSON.stringify({
+      question,
+      engine,
+      ui_context
+    })
   })
   .then(r => r.json())
   .then(d => { respEl.textContent = d.response || d.error || '(no response)'; })
