@@ -154,14 +154,10 @@ class TransformersClient:
                 if tok.pad_token_id is None:
                     tok.pad_token_id = tok.eos_token_id
 
-                device_for_pipe = -1 if attempt.get("force_cpu") else (
-                    0 if self._device == "cuda" else -1)
-
                 self._pipe = pipeline(
                     "text-generation",
                     model=mdl,
                     tokenizer=tok,
-                    device=device_for_pipe,
                 )
                 print(f"  ✅ {self.model_id} loaded: {attempt['label']}")
                 logger.info("Loaded: %s", attempt["label"])
