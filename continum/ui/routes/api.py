@@ -1194,10 +1194,16 @@ def ask_chain():
             pass
 
     if llm_loaded:
+        # 1. Extract and format the segments cleanly first
+        top_segments = list(db_facts.get('segments', {}).items())[:4]
+        segments_list = [f"{k}={v['ior']*100:.2f}%" for k, v in top_segments]
+        segments_str = f"Segments: {', '.join(segments_list)}"
+
+        # 2. Build your final string smoothly
         try:
             facts_str = "\n".join([
                 f"IOR: {db_facts.get('ior',0)*100:.3f}%  AOV: ${db_facts.get('aov',0):,.0f}  n: {db_facts.get('n',0):,}",
-                f"Segments: {', '.join(f'{k}={v["ior"]*100:.2f}%' for k,v in list(db_facts.get('segments',{}).items())[:4])}",
+                segments_str,
                 f"Active experiment: {session_facts.get('active_experiment','none')}",
             ])
             prompt = (
