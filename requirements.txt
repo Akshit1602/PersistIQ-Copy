@@ -15,3 +15,13 @@ statsmodels
 sqlglot
 scikit-learn
 snowflake-connector-python
+langchain
+langchain-openai
+langchain-community
+langgraph
+faiss-cpu
+sentence-transformers
+openpyxl
+flask
+python-dotenv
+pyprojroot
