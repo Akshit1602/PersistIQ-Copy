@@ -144,6 +144,7 @@ def extract_entities(question: str) -> Dict[str, Any]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _safe_get(obj, *keys, default=None):
+    if obj is None: return default
     for k in keys:
         try:
             v = getattr(obj, k, None)
@@ -169,7 +170,7 @@ def _get_result(session):
 
 def reason_why_dropped(question: str, entities: Dict, session, bus, memory) -> str:
     result = _get_result(session)
-    exp    = session.active_experiment if session else None
+    exp    = getattr(session, "active_experiment", None) if session else None
     lines  = [f"🔍 Root-Cause Investigation{': ' + exp if exp else ''}\n"]
 
     # Step 1 — SRM check
@@ -335,14 +336,14 @@ def reason_next_step(session, bus, memory) -> str:
                 lines.append(f"     {i.detail}")
 
     # From session recommendations
-    if session and session.recommendations:
+    if session and hasattr(session, "recommendations"):
         lines.append("\n  Workflow chain:")
         for r in session.recommendations[:3]:
             lines.append(f"  [{r.priority}] {r.action}  — {r.reason}")
 
     # Context-aware suggestions
     if session:
-        history_modules = {r.module for r in session.execution_history}
+        history_modules = {r.module for r in getattr(session, "execution_history", [])}
         result = _get_result(session)
         srm = _safe_get(result, "srm_detected", default=False) if result else False
 
@@ -363,7 +364,7 @@ def reason_next_step(session, bus, memory) -> str:
 
 def reason_longitudinal(question: str, session, memory) -> str:
     lines = ["📈 Longitudinal Analysis:\n"]
-    exp = session.active_experiment if session else None
+    exp = getattr(session, "active_experiment", None) if session else None
 
     if memory:
         # Get all experiments with their deltas
@@ -376,7 +377,7 @@ def reason_longitudinal(question: str, session, memory) -> str:
                 ORDER BY recorded_at DESC
                 LIMIT 20
             """).fetchall()
-            if not memory._in_memory:
+            if not getattr(memory, "_in_memory", True):
                 db_temp.close()
 
             if rows:
@@ -495,26 +496,29 @@ def reason_assumption(session) -> str:
 def reason_summarise(session, bus, memory) -> str:
     lines = ["📝 Session Summary:\n"]
     if session:
-        lines.append(f"  {session.summary_line()}")
-        if session.active_experiment:
+        if hasattr(session, "summary_line"):
+            lines.append(f"  {session.summary_line()}")
+        if getattr(session, "active_experiment", None):
             lines.append(f"\n  Active experiment: {session.active_experiment}")
-        if session.active_metrics:
+        if getattr(session, "active_metrics", None):
             lines.append(f"  Active metrics: {', '.join(session.active_metrics[:5])}")
-        if session.execution_history:
+        if getattr(session, "execution_history", None):
             lines.append(f"\n  Modules run:")
             for rec in session.execution_history[-6:]:
-                icon = "✅" if rec.ok else "❌"
-                lines.append(f"    {icon} {rec.module:<30}  {rec.elapsed_s:.2f}s  {rec.summary[:50]}")
+                icon = "✅" if getattr(rec, "ok", True) else "❌"
+                lines.append(f"    {icon} {getattr(rec, 'module', '?'):<30}  {getattr(rec, 'elapsed_s', 0):.2f}s  {getattr(rec, 'summary', '')[:50]}")
     if bus:
         w = len(bus.warnings())
         r = len(bus.recommendations())
         lines.append(f"\n  Intelligence: {w} warning{'s' if w != 1 else ''}  ·  {r} recommendation{'s' if r != 1 else ''}")
-        for ins in bus.all()[-4:]:
-            lines.append(f"    {ins.one_liner()}")
+        for ins in (bus.all() if hasattr(bus, "all") else [])[-4:]:
+            if hasattr(ins, "one_liner"):
+                lines.append(f"    {ins.one_liner()}")
     if memory:
-        n = memory.experiment_count()
-        if n:
-            lines.append(f"\n  Memory: {n} experiments stored")
+        if hasattr(memory, "experiment_count"):
+            n = memory.experiment_count()
+            if n:
+                lines.append(f"\n  Memory: {n} experiments stored")
     return "\n".join(lines)
 
 
@@ -610,7 +614,7 @@ class ReasoningChain:
 
         # ⑤ Historical patterns
         if memory:
-            exp = session.active_experiment if session else None
+            exp = getattr(session, "active_experiment", None) if session else None
             similar = memory.search_similar(exp or "", limit=3) if exp else []
             if similar:
                 sig_count = sum(1 for r in similar if r.get("is_significant"))
@@ -622,7 +626,7 @@ class ReasoningChain:
 
         # ⑥ Intelligence bus warnings
         if bus:
-            for w in bus.warnings()[-2:]:
+            for w in (bus.warnings() if hasattr(bus, "warnings") else [])[-2:]:
                 self.add("Intelligence bus",
                          w.message,
                          confidence=0.8, valence="contradicts")
@@ -688,7 +692,7 @@ class ReasoningChain:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MULTI-TURN COPILOT
+# MULTI-TURN COPILOT (Legacy)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ContinumCopilot:
@@ -747,7 +751,7 @@ class ContinumCopilot:
         }
 
     def _hypothesis_for(self, intent: str, entities: Dict) -> str:
-        exp = self.session.active_experiment if self.session else "this experiment"
+        exp = getattr(self.session, "active_experiment", "this experiment") if self.session else "this experiment"
         if intent == Intent.WHY_DROPPED:
             seg = entities.get("segments", [{}])[0].get("value", "") if entities.get("segments") else ""
             return f"The treatment caused a metric drop{' in ' + seg if seg else ''} in '{exp}'."
@@ -822,7 +826,7 @@ class ContinumCopilot:
     def _get_prior_text(self) -> str:
         if not self.memory or not self.session:
             return ""
-        exp = self.session.active_experiment
+        exp = getattr(self.session, "active_experiment", None)
         if not exp:
             return ""
         try:
@@ -862,7 +866,7 @@ class ContinumCopilot:
     def _respond_general(self, question: str, bus) -> str:
         insights = bus.all()[-6:] if bus else []
         # Try to generate a meaningful response even for open-ended questions
-        if self.session and self.session.active_experiment:
+        if self.session and getattr(self.session, "active_experiment", None):
             result = _get_result(self.session)
             if result:
                 chain = ReasoningChain()
@@ -925,4 +929,12 @@ __all__ = [
     "Turn",
     "ReasoningChain",
     "Evidence",
+    "reason_why_dropped",
+    "reason_significance",
+    "reason_next_step",
+    "reason_longitudinal",
+    "reason_causal_explain",
+    "reason_cohort",
+    "reason_assumption",
+    "reason_summarise"
 ]

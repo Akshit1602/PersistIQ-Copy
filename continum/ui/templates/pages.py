@@ -360,10 +360,9 @@ DASHBOARD_HTML = """
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">
           <i class="fas fa-comment-dots"></i> Ask Continum
         </div>
-        <select id="ask-engine-select" style="font-size:10px; background:var(--surface2); color:var(--muted); border:1px solid var(--border); border-radius:4px; padding:2px 4px">
-          <option value="copilot">Copilot</option>
-          <option value="askdata">AskData</option>
-        </select>
+        <div style="font-size:10px; color:var(--muted); border:1px solid var(--border); border-radius:4px; padding:2px 6px; background:var(--surface2)">
+          AskData Unified Engine
+        </div>
       </div>
       <div class="ask-input-row">
         <input class="ask-input" id="ask-input" placeholder="Why did conversion drop?" onkeydown="if(event.key==='Enter')sendAsk()">
@@ -606,7 +605,7 @@ function selectExperiment(name) {
 // ── Ask Continum ──────────────────────────────────────────────────────────
 function sendAsk() {
   const input    = document.getElementById('ask-input');
-  const engine   = document.getElementById('ask-engine-select').value;
+  const engine   = 'askdata';
   const respEl   = document.getElementById('ask-response');
   const question = input.value.trim();
   if (!question) return;

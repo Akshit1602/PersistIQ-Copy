@@ -131,11 +131,13 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
     threading.Thread(target=_boot, daemon=True, name="continum-boot").start()
 
     # ── Blueprints ────────────────────────────────────────────────────────────
-    from continum.ui.routes.api     import bp as api_bp
-    from continum.ui.routes.pages   import bp as pages_bp
+    from continum.ui.routes.api      import bp as api_bp
+    from continum.ui.routes.pages    import bp as pages_bp
+    from continum.ui.routes.ask_view import bp as ask_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(pages_bp)
+    app.register_blueprint(ask_bp)
     # execute.py blueprint NOT registered — api.py owns all /api/ routes
     # to prevent duplicate route conflicts that kill SSE connections
 

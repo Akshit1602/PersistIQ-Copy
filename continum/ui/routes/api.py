@@ -857,16 +857,21 @@ def ask():
     app  = _app()
     body = request.get_json(silent=True) or {}
     q    = body.get("question", "").strip()
+    ui_context = body.get("ui_context", {})
     if not q:
         return jsonify({"error": "No question"}), 400
 
-    from continum.runtime.ask import ContinumCopilot
-    # Use a persistent copilot stored on the app for multi-turn
-    if not hasattr(app, "_copilot"):
-        app._copilot = ContinumCopilot(
-            session=app.ses, bus=app.bus, memory=app.mem, db=app.db)
-    app._copilot.session = app.ses  # keep in sync with fork switches
-    response = app._copilot.ask(q)
+    from continum.runtime.askdata_engine import AskDataEngine
+    engine = AskDataEngine(db=app.db)
+    result = engine.ask(
+        q,
+        ui_context=ui_context,
+        session=app.ses,
+        bus=app.bus,
+        memory=app.mem
+    )
+
+    response = result.get("answer") if isinstance(result, dict) else result
     app.aud.record("ask", q[:60], {"intent": "ask"}, session_id=app.ses.session_id)
     return jsonify({"question": q, "response": response})
 
@@ -960,336 +965,40 @@ def ask_chain():
     app  = _app()
     body = request.get_json(silent=True) or {}
     q    = body.get("question", "").strip()
+    ui_context = body.get("ui_context", {})
     if not q:
         return jsonify({"error": "No question provided"}), 400
 
-    # ── Step 1: Pull live data from DB (always, regardless of LLM) ────────────
-    db_facts = {}
-    if app.db:
-        # Discover the actual outcome column name (schema may vary)
-        _outcome_col = "converted_to_order"
-        _value_col   = "order_value"
-        _seg_col     = "account_segment"
-        try:
-            cols = [r[0].lower() for r in app.db.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'silver_inquiries'"
-            ).fetchall()]
-            if cols:
-                # Find outcome column
-                for candidate in ("converted_to_order","is_converted","conversion","ordered",
-                                   "converted","is_order","order_flag"):
-                    if candidate in cols:
-                        _outcome_col = candidate; break
-                # Find value column
-                for candidate in ("order_value","aov","order_total","revenue","amount",
-                                   "order_amount","gmv"):
-                    if candidate in cols:
-                        _value_col = candidate; break
-                # Find segment column
-                for candidate in ("account_segment","segment","customer_segment","tier",
-                                   "customer_tier","user_segment"):
-                    if candidate in cols:
-                        _seg_col = candidate; break
-        except Exception:
-            pass
+    from continum.runtime.askdata_engine import AskDataEngine
+    engine = AskDataEngine(db=app.db)
+    result = engine.ask(
+        q,
+        ui_context=ui_context,
+        session=app.ses,
+        bus=app.bus,
+        memory=app.mem
+    )
 
-        try:
-            row = app.db.execute(f"""
-                SELECT AVG(CAST({_outcome_col} AS DOUBLE)) AS ior,
-                       AVG(CASE WHEN {_outcome_col} THEN {_value_col} END) AS aov,
-                       COUNT(*) AS n,
-                       STDDEV(CAST({_outcome_col} AS DOUBLE)) AS ior_std
-                FROM silver_inquiries WHERE {_outcome_col} IS NOT NULL
-            """).fetchone()
-            if row and row[0]:
-                db_facts["ior"]     = round(float(row[0]), 4)
-                db_facts["aov"]     = round(float(row[1] or 0), 2)
-                db_facts["n"]       = int(row[2])
-                db_facts["ior_std"] = round(float(row[3] or 0), 4)
-        except Exception as e:
-            logger.debug("ask_chain: metrics query failed: %s", e)
+    if not isinstance(result, dict):
+        return jsonify({"question": q, "response": str(result), "chain": {"evidence":[], "synthesis":""}})
 
-        try:
-            rows = app.db.execute(f"""
-                SELECT {_seg_col},
-                       AVG(CAST({_outcome_col} AS DOUBLE)) AS ior,
-                       COUNT(*) AS n
-                FROM silver_inquiries WHERE {_seg_col} IS NOT NULL
-                GROUP BY {_seg_col} ORDER BY ior DESC
-            """).fetchall()
-            db_facts["segments"] = {
-                str(r[0]): {"ior": round(float(r[1]),4), "n": int(r[2])} for r in rows
-            }
-        except Exception:
-            pass
+    final_response = result.get("answer", "")
+    chain = result.get("chain", {"evidence": [], "synthesis": ""})
 
-        try:
-            exp_rows = app.db.execute(f"""
-                SELECT experiment_name, variant,
-                       COUNT(*) AS n,
-                       AVG(CAST({_outcome_col} AS DOUBLE)) AS ior
-                FROM gold_experiment_analysis
-                WHERE experiment_name IS NOT NULL
-                GROUP BY experiment_name, variant
-                ORDER BY experiment_name, variant
-            """).fetchall()
-            exp_data = {}
-            for r in exp_rows:
-                en = str(r[0])
-                if en not in exp_data:
-                    exp_data[en] = {}
-                exp_data[en][str(r[1])] = {"n": int(r[2]), "ior": round(float(r[3]),4)}
-            db_facts["experiments"] = exp_data
-        except Exception:
-            pass
+    app.aud.record("ask_chain", q[:60], {
+        "intent": "grounded_ask", "llm_used": True,
+        "n_evidence": len(chain.get("evidence", [])),
+    }, session_id=app.ses.session_id if app.ses else "")
 
-        try:
-            row = app.db.execute(f"""
-                SELECT AVG(CAST({_outcome_col} AS DOUBLE))
-                FROM silver_inquiries
-                WHERE created_at >= CURRENT_DATE - INTERVAL 1 DAY
-            """).fetchone()
-            if row and row[0]:
-                db_facts["ior_24h"] = round(float(row[0]), 4)
-        except Exception:
-            pass
-
-    # ── Step 2: Session context ────────────────────────────────────────────────
-    session_facts = {}
-    if app.ses:
-        session_facts["active_experiment"] = app.ses.active_experiment or "none"
-        session_facts["modules_run"] = [
-                            (h.get("module","") if isinstance(h, dict)
-                             else getattr(h, "module", getattr(h, "module_key", "")))
-                            for h in (app.ses.execution_history or [])[-8:]
-                        ]
-        exp_result = app.ses.get("experiment_result")
-        if isinstance(exp_result, dict) and exp_result.get("primary"):
-            primary = exp_result["primary"]
-            best = max(primary, key=lambda k: primary[k].get("delta_pp", 0), default="")
-            if best:
-                session_facts["last_result"] = {
-                    "treatment": best,
-                    "delta_pp": primary[best].get("delta_pp", 0),
-                    "p_value":  primary[best].get("p_value", 1),
-                    "sig":      primary[best].get("sig", False),
-                    "decision": exp_result.get("decision", "unknown"),
-                }
-
-    # ── Step 3: Recent bus insights ────────────────────────────────────────────
-    recent_insights = []
-    if app.bus:
-        try:
-            for ins in (app.bus.recent(5) or []):
-                recent_insights.append(f"{ins.source_module}: {ins.message}")
-        except Exception:
-            pass
-
-    # ── Step 4: Build evidence chain (always deterministic) ───────────────────
-    q_lower = q.lower()
-    evidence = []
-    response_parts = []
-
-    # IOR / conversion questions
-    if any(t in q_lower for t in ["ior","conversion","convert","rate"]):
-        if "ior" in db_facts:
-            evidence.append({"source":"live_db","claim":f"Overall IOR = {db_facts['ior']*100:.3f}%  (n={db_facts['n']:,})","confidence":0.95,"valence":"supports"})
-            response_parts.append(f"Current IOR: **{db_facts['ior']*100:.3f}%** across {db_facts['n']:,} inquiries.")
-        if "segments" in db_facts:
-            best_seg = max(db_facts["segments"], key=lambda k: db_facts["segments"][k]["ior"])
-            worst_seg = min(db_facts["segments"], key=lambda k: db_facts["segments"][k]["ior"])
-            evidence.append({"source":"segments","claim":f"Best: {best_seg} ({db_facts['segments'][best_seg]['ior']*100:.2f}%)  Worst: {worst_seg} ({db_facts['segments'][worst_seg]['ior']*100:.2f}%)","confidence":0.90,"valence":"supports"})
-            response_parts.append(f"Best segment: {best_seg} ({db_facts['segments'][best_seg]['ior']*100:.2f}%). Worst: {worst_seg} ({db_facts['segments'][worst_seg]['ior']*100:.2f}%).")
-
-    # Anomaly / drop / spike
-    if any(t in q_lower for t in ["drop","fall","declin","anomal","spike","spike","issue","wrong"]):
-        if "ior_24h" in db_facts and "ior" in db_facts:
-            delta = (db_facts["ior_24h"] - db_facts["ior"]) * 100
-            std   = db_facts.get("ior_std", db_facts["ior"] * 0.05)
-            z     = delta / (std * 100) if std > 0 else 0
-            sev   = "🚨 critical" if abs(z) > 3 else "⚠️ warning" if abs(z) > 2 else "✅ normal"
-            evidence.append({"source":"anomaly_check","claim":f"24h IOR={db_facts['ior_24h']*100:.3f}% vs baseline {db_facts['ior']*100:.3f}% (z={z:+.2f}, {sev})","confidence":0.85,"valence":"contradicts" if abs(z)>2 else "supports"})
-            if abs(z) > 2:
-                response_parts.append(f"{'🚨' if abs(z)>3 else '⚠️'} Anomaly detected: 24h IOR = {db_facts['ior_24h']*100:.3f}% vs baseline {db_facts['ior']*100:.3f}% (z={z:+.2f}).")
-                response_parts.append("Possible causes: SRM in active experiment, data pipeline issue, or genuine traffic mix shift. Run Health Monitor to investigate.")
-            else:
-                response_parts.append(f"No anomaly: 24h IOR ({db_facts['ior_24h']*100:.3f}%) is within normal range of baseline ({db_facts['ior']*100:.3f}%).")
-
-    # Experiment results
-    if any(t in q_lower for t in ["experiment","test","result","significant","ship","work","treatment"]):
-        active_exp = session_facts.get("active_experiment","")
-        if "experiments" in db_facts and active_exp and active_exp in db_facts["experiments"]:
-            exp = db_facts["experiments"][active_exp]
-            ctrl  = exp.get("control", list(exp.values())[0] if exp else {})
-            trt_keys = [k for k in exp if k != "control"]
-            if trt_keys:
-                trt = exp[trt_keys[0]]
-                delta_pp = (trt["ior"] - ctrl["ior"]) * 100
-                evidence.append({"source":"experiment_data","claim":f"{active_exp}: Δ={delta_pp:+.3f}pp  ctrl={ctrl['ior']*100:.3f}%  trt={trt['ior']*100:.3f}%  n={ctrl['n']+trt['n']:,}","confidence":0.90,"valence":"supports" if delta_pp>0 else "contradicts"})
-                response_parts.append(f"Experiment **{active_exp}**: treatment={trt_keys[0]} Δ={delta_pp:+.3f}pp (ctrl={ctrl['ior']*100:.3f}%, trt={trt['ior']*100:.3f}%, n={ctrl['n']+trt['n']:,}).")
-        if session_facts.get("last_result"):
-            r = session_facts["last_result"]
-            evidence.append({"source":"last_analysis","claim":f"Last analysis: {r['treatment']} Δ={r['delta_pp']:+.3f}pp p={r['p_value']:.4f} {'✅ sig' if r['sig'] else '⏳ n.s.'} → {r['decision']}","confidence":0.95,"valence":"supports" if r["delta_pp"]>0 else "contradicts"})
-            response_parts.append(f"Last analysis: {r['treatment']} Δ={r['delta_pp']:+.3f}pp, p={r['p_value']:.4f} {'(significant)' if r['sig'] else '(not significant)'} → decision: **{r['decision']}**.")
-
-    # Next step / recommendation
-    if any(t in q_lower for t in ["next","should","recommend","what to do","what do","suggest","run"]):
-        modules_run = set(session_facts.get("modules_run",[]))
-        chain = [
-            ("power_calculator",   "power_calculator" not in modules_run,   "Run Power Calculator to size the required sample."),
-            ("health_monitor",     "health_monitor" not in modules_run,      "Run Health Monitor to check SRM and guardrails."),
-            ("experiment_analysis","experiment_analysis" not in modules_run, "Run Experiment Analysis for the full statistical readout."),
-            ("causal_analysis",    "causal_analysis" not in modules_run,     "Run Causal Analysis (DiD/ITS/PSM) to strengthen attribution."),
-            ("roi_tracker",        "roi_tracker" not in modules_run,         "Run ROI Tracker to measure post-ship incremental GMV."),
-        ]
-        pending = [(m, r) for m, cond, r in chain if cond]
-        if pending:
-            evidence.append({"source":"session_state","claim":f"Pending: {', '.join(m for m,_ in pending[:3])}","confidence":0.80,"valence":"supports"})
-            response_parts.append("Recommended next steps:")
-            for i, (m, r) in enumerate(pending[:3], 1):
-                response_parts.append(f"  {i}. **{m}**: {r}")
-        else:
-            response_parts.append("All core modules have run. Consider Uplift Modeller for targeted rollout or Decision Engine for ship recommendation.")
-
-    # Segment question
-    if any(t in q_lower for t in ["segment","core","growth","enterprise","individual","platform","mobile","web"]):
-        if "segments" in db_facts:
-            lines = [f"  {seg}: IOR={v['ior']*100:.2f}%  (n={v['n']:,})" for seg,v in db_facts["segments"].items()]
-            evidence.append({"source":"segment_data","claim":"\n".join(lines),"confidence":0.95,"valence":"supports"})
-            response_parts.append("Segment IOR breakdown:")
-            for seg, v in db_facts["segments"].items():
-                bar = "█" * int(v["ior"]*100/3)
-                response_parts.append(f"  {seg:<18} {v['ior']*100:.2f}%  {bar}")
-
-    # Recent insights from bus
-    if any(t in q_lower for t in ["insight","alert","warning","anomal","guardrail"]):
-        if recent_insights:
-            evidence.append({"source":"insight_bus","claim":"\n".join(recent_insights),"confidence":0.75,"valence":"supports"})
-            response_parts.append("Recent system insights:")
-            for ins in recent_insights[:4]:
-                response_parts.append(f"  • {ins}")
-
-    # Fallback if nothing matched
-    if not response_parts:
-        if db_facts.get("ior"):
-            response_parts.append(f"Current state: IOR={db_facts['ior']*100:.3f}%  AOV=${db_facts.get('aov',0):,.0f}  n={db_facts.get('n',0):,}")
-        if session_facts.get("active_experiment"):
-            response_parts.append(f"Active experiment: {session_facts['active_experiment']}")
-        if session_facts.get("modules_run"):
-            response_parts.append(f"Modules run: {', '.join(session_facts['modules_run'][-4:])}")
-        response_parts.append("Ask me about: IOR trends, experiment results, anomalies, segment breakdowns, what to run next.")
-
-    det_response = "\n".join(response_parts)
-
-    # ── Step 5: LLM narrative (grounded, only if loaded) ──────────────────────
-    llm_response = None
-    llm_loaded   = bool(app.llm and hasattr(app.llm, "is_loaded") and app.llm.is_loaded)
-    if not llm_loaded and app.llm is not None:
-        # Check via the manager
-        try:
-            from continum.core.llm.manager import llm_status
-            llm_loaded = llm_status().get("is_loaded", False)
-        except Exception:
-            pass
-
-    if llm_loaded:
-        # 1. Extract and format the segments cleanly first
-        top_segments = list(db_facts.get('segments', {}).items())[:4]
-        segments_list = [f"{k}={v['ior']*100:.2f}%" for k, v in top_segments]
-        segments_str = f"Segments: {', '.join(segments_list)}"
-
-        # 2. Build your final string smoothly
-        try:
-            facts_str = "\n".join([
-                f"IOR: {db_facts.get('ior',0)*100:.3f}%  AOV: ${db_facts.get('aov',0):,.0f}  n: {db_facts.get('n',0):,}",
-                segments_str,
-                f"Active experiment: {session_facts.get('active_experiment','none')}",
-            ])
-            prompt = (
-                f"Analytics AI. Answer from live data only. Be direct and specific.\n"
-                f"Q: {q}\n\n"
-                f"Data: {facts_str}\n\n"
-                f"Findings: {det_response[:400]}\n\n"
-                f"2-3 sentences. Reference numbers. No preamble."
-            )
-            # Run LLM in thread with 15s timeout to prevent hanging
-            import threading as _thr
-            _llm_result = [None]
-            def _llm_call():
-                try:
-                    _llm_result[0] = str(app.llm.ask(prompt))
-                except Exception as _e:
-                    logger.debug("LLM ask thread: %s", _e)
-            _t = _thr.Thread(target=_llm_call, daemon=True)
-            _t.start()
-            _t.join(timeout=15)
-            if _llm_result[0]:
-                llm_response = _llm_result[0]
-        except Exception as e:
-            logger.debug("LLM ask failed: %s", e)
-
-    final_response = llm_response if llm_response else det_response
-
-    # Synthesis line for the evidence chain
-    synthesis = final_response.split("\n")[0] if final_response else ""
-
-    try:
-        app.aud.record("ask_chain", q[:60], {
-            "intent": "grounded_ask", "llm_used": bool(llm_response),
-            "n_evidence": len(evidence),
-        }, session_id=app.ses.session_id if app.ses else "")
-    except Exception:
-        pass
-
-    # Sanitize all values for JSON serialization (numpy types, etc.)
-    def _safe(v):
-        if isinstance(v, (bool, int, float, str, type(None))):
-            return v
-        try:
-            import numpy as np
-            if isinstance(v, np.integer): return int(v)
-            if isinstance(v, np.floating): return float(v)
-            if isinstance(v, np.ndarray): return v.tolist()
-        except ImportError:
-            pass
-        return str(v)
-
-    clean_evidence = []
-    for ev in evidence:
-        try:
-            clean_evidence.append({
-                "source":     str(ev.get("source", "")),
-                "claim":      str(ev.get("claim", ""))[:400],
-                "confidence": float(ev.get("confidence", 0.5)),
-                "valence":    str(ev.get("valence", "supports")),
-            })
-        except Exception:
-            pass
-
-    try:
-        return jsonify({
-            "question": str(q),
-            "response": str(final_response),
-            "chain": {
-                "evidence":  clean_evidence,
-                "synthesis": str(synthesis)[:300],
-            },
-            "intent":     "grounded_ask",
-            "entities":   {},
-            "llm_used":   bool(llm_response),
-            "llm_loaded": bool(llm_loaded),
-        })
-    except Exception as _je:
-        logger.error("ask_chain jsonify failed: %s", _je)
-        return jsonify({
-            "question": str(q),
-            "response": str(final_response)[:2000],
-            "chain":    {"evidence": [], "synthesis": ""},
-            "intent":   "grounded_ask",
-            "llm_used": False,
-            "error":    str(_je),
-        })
+    return jsonify({
+        "question": str(q),
+        "response": str(final_response),
+        "chain": chain,
+        "intent": "grounded_ask",
+        "entities": {},
+        "llm_used": True,
+        "llm_loaded": True,
+    })
 
 
 
