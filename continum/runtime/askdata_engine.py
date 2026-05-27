@@ -302,9 +302,18 @@ def router(state: GraphState):
     if idx >= len(plan):
         return "summarize"
     step = plan[idx]
-    if step in ["refine", "reasoning", "sql", "viz", "insight", "summarize"]:
-        return step
-    return "insight" # Fallback
+    # Map planned steps to node names
+    mapping = {
+        "refine": "refine",
+        "reasoning": "reasoning",
+        "sql": "sql",
+        "viz": "viz_agent",
+        "insight": "insight_agent",
+        "summarize": "summarize"
+    }
+    if step in mapping:
+        return mapping[step]
+    return "insight_agent" # Fallback
 
 def create_askdata_graph(db):
     workflow = StateGraph(GraphState)
@@ -312,29 +321,29 @@ def create_askdata_graph(db):
     workflow.add_node("refine", lambda s: intent_refinement_node(s, db))
     workflow.add_node("reasoning", reasoning_node)
     workflow.add_node("sql", lambda s: sql_node(s, db))
-    workflow.add_node("viz", visualization_node)
-    workflow.add_node("insight", insight_node)
+    workflow.add_node("viz_agent", visualization_node)
+    workflow.add_node("insight_agent", insight_node)
     workflow.add_node("summarize", summarizer_node)
 
     workflow.set_entry_point("orchestrator")
 
     workflow.add_conditional_edges("orchestrator", router, {
-        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
     workflow.add_conditional_edges("refine", router, {
-        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
     workflow.add_conditional_edges("reasoning", router, {
-        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
     workflow.add_conditional_edges("sql", lambda s: "retry" if s.get("error") and s.get("retry_count", 0) < 3 else router(s), {
-        "retry": "sql", "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+        "retry": "sql", "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
-    workflow.add_conditional_edges("viz", router, {
-        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+    workflow.add_conditional_edges("viz_agent", router, {
+        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
-    workflow.add_conditional_edges("insight", router, {
-        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz": "viz", "insight": "insight", "summarize": "summarize"
+    workflow.add_conditional_edges("insight_agent", router, {
+        "refine": "refine", "reasoning": "reasoning", "sql": "sql", "viz_agent": "viz_agent", "insight_agent": "insight_agent", "summarize": "summarize"
     })
     workflow.add_edge("summarize", END)
 
