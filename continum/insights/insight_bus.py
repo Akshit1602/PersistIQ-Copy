@@ -107,7 +107,8 @@ class InsightBus:
             self._insights.append(insight)
             if len(self._insights) > self._max:
                 self._insights = self._insights[-self._max:]
-        for sub in self._subscribers:
+            subs = list(self._subscribers)
+        for sub in subs:
             try:
                 sub(insight)
             except Exception:
@@ -193,7 +194,13 @@ class InsightBus:
             self._insights = []
 
     def subscribe(self, fn: Callable[[Insight], None]) -> None:
-        self._subscribers.append(fn)
+        with self._lock:
+            self._subscribers.append(fn)
+
+    def unsubscribe(self, fn: Callable[[Insight], None]) -> None:
+        with self._lock:
+            if fn in self._subscribers:
+                self._subscribers.remove(fn)
 
     # ── Display ────────────────────────────────────────────────────────────────
 

@@ -1114,6 +1114,43 @@ def next_steps():
         return jsonify({"error": str(e)}), 500
 
 
+@bp.route("/intelligence/stream")
+def intelligence_stream():
+    app = _app()
+    from flask import Response
+    import queue
+
+    def _gen():
+        q = queue.Queue()
+        def _on_insight(i):
+            payload = {
+                "source": i.source_module,
+                "type": i.insight_type.value if hasattr(i.insight_type, "value") else str(i.insight_type),
+                "severity": i.severity.value if hasattr(i.severity, "value") else str(i.severity),
+                "message": i.message,
+                "detail": i.detail,
+                "created_at": i.created_at,
+            }
+            q.put(json.dumps(payload))
+
+        app.bus.subscribe(_on_insight)
+        try:
+            while True:
+                try:
+                    msg = q.get(timeout=30)
+                    yield f"data: {msg}\n\n"
+                except queue.Empty:
+                    yield 'data: {"level":"PING"}\n\n'
+        finally:
+            app.bus.unsubscribe(_on_insight)
+
+    return Response(_gen(), mimetype="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+    })
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # COPILOT  — powers the collapsible right-hand assistant pane.
 #   • guide   : RAG over the README(s) (how-to / "about the tool" questions)

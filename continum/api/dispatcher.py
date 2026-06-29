@@ -50,11 +50,15 @@ def register_module(spec: ModuleSpec) -> None:
 
 def list_modules() -> List[Dict]:
     _build_registry()
-    return [
-        {"name": s.name, "phase": s.phase, "description": s.description,
-         "requires_db": s.requires_db, "requires_llm": s.requires_llm}
-        for s in sorted(_REGISTRY.values(), key=lambda x: (x.phase, x.name))
-    ]
+    modules = []
+    for k, s in _REGISTRY.items():
+        if k.startswith("_") or not isinstance(s, ModuleSpec):
+            continue
+        modules.append({
+            "name": s.name, "phase": s.phase, "description": s.description,
+            "requires_db": s.requires_db, "requires_llm": s.requires_llm
+        })
+    return sorted(modules, key=lambda x: (x["phase"], x["name"]))
 
 
 def get_module(name: str) -> Optional[ModuleSpec]:

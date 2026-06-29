@@ -98,6 +98,8 @@ def orchestrator_node(state: GraphState, db):
     - 'insight': For generating business insights.
 
     Plan the execution based on the user question and context.
+    Be efficient: only include 'sql' or 'viz' if explicitly needed to answer.
+    For simple greeting or non-data questions, just return ['insight'].
     Return ONLY a JSON object with 'plan' key.
 
     User Question: {user_question}

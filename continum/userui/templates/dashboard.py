@@ -20,6 +20,7 @@ DASHBOARD = r"""<!DOCTYPE html>
      that can't reach these CDNs (icons/fonts simply fill in once/if loaded). -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
 <noscript>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -74,8 +75,10 @@ a{color:inherit}
 .gw-btn.active:hover{background:var(--blue-d);transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,99,235,.35)}
 
 /* ══ APP SHELL ══════════════════════════════════════════════════════════ */
-#app{display:none;position:relative;grid-template-columns:226px 1fr var(--rp-w,312px);height:100vh;overflow:hidden}
-#app.copilot-mode{grid-template-columns:226px 1fr 0}
+#app{display:none;position:relative;grid-template-columns:var(--sb-w, 226px) 1fr var(--rp-w,312px);height:100vh;overflow:hidden}
+#app.copilot-mode{grid-template-columns:var(--sb-w, 226px) 1fr 0}
+#app.sb-collapsed { --sb-w: 0px !important; }
+#app.rp-collapsed { --rp-w: 0px !important; }
 
 /* ── Sidebar ── */
 .sb{background:var(--surf);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
@@ -395,7 +398,10 @@ textarea.field-input{resize:vertical;min-height:64px}
 <div id="app">
   <div class="rp-resize" id="rp-resize" title="Drag to resize the chat pane"></div>
   <input type="file" id="readout-file-input" multiple style="display:none" accept=".pdf,.txt,.md,.csv,.json,.docx" onchange="uploadReadout(this.files)">
-  <aside class="sb" id="sidebar">
+  <aside class="sb" id="sidebar" style="position:relative; overflow:visible">
+    <button onclick="toggleSidebar()" style="position:absolute; top:18px; right:-12px; width:24px; height:24px; border-radius:50%; background:var(--surf); border:1px solid var(--bdr); z-index:2000; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm)">
+        <i class="fa-solid fa-chevron-left" id="sb-toggle-icon"></i>
+    </button>
     <div class="sb-brand">
       <div class="sb-mark">C</div>
       <div>
@@ -478,12 +484,16 @@ textarea.field-input{resize:vertical;min-height:64px}
           </div>
         </div>
 
-        <div class="sec-title">Execution console</div>
-        <div class="console-wrap">
-          <div class="console-header">
+        <div class="sec-title" style="display:flex; align-items:center; gap:8px">
+            Execution console
+            <button onclick="toggleConsole()" class="btn btn-ghost" style="padding:2px 6px; font-size:9px" id="console-toggle-btn">Collapse</button>
+        </div>
+        <div class="console-wrap" id="console-wrapper">
+          <div class="console-header" style="cursor:pointer" onclick="toggleConsole()">
             <div class="dot" id="console-dot"></div>
             <span id="console-label">Idle</span>
             <span class="console-status" id="console-status">Ready</span>
+            <i class="fa-solid fa-chevron-up" id="console-chevron" style="margin-left:8px; font-size:10px"></i>
           </div>
           <div class="console-body" id="console-body">
             <div style="color:#64748B;font-size:11px;margin-top:90px;text-align:center">Select a module from any phase and press Run to execute it live against the backend.</div>
@@ -532,6 +542,17 @@ textarea.field-input{resize:vertical;min-height:64px}
         <div id="data-preview"><div style="padding:18px;color:var(--muted2);font-size:11px">Loading dataset…</div></div>
       </div>
 
+      <!-- OUTPUTS VIEW -->
+      <div class="main-section" id="section-outputs">
+        <div class="sec-title">Generated Session Outputs</div>
+        <div class="tbl-wrap">
+          <table class="dt">
+            <thead><tr><th>File</th><th>Type</th><th>Generated At</th><th>Action</th></tr></thead>
+            <tbody id="outputs-tbody"><tr><td colspan="4" style="color:var(--muted2);text-align:center;padding:18px">No outputs yet this session</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- COPILOT FULL PAGE -->
       <div class="main-section" id="section-copilot">
         <div class="copilot-full">
@@ -565,18 +586,25 @@ textarea.field-input{resize:vertical;min-height:64px}
     </div>
   </main>
 
-  <aside class="rp" id="right-panel">
+  <aside class="rp" id="right-panel" style="overflow:visible">
+    <button onclick="toggleRightPanel()" style="position:absolute; top:18px; left:-12px; width:24px; height:24px; border-radius:50%; background:var(--surf); border:1px solid var(--bdr); z-index:2000; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm)">
+        <i class="fa-solid fa-chevron-right" id="rp-toggle-icon"></i>
+    </button>
     <div class="rp-tabs">
       <div class="rp-tab active" onclick="switchTab('insights',this)">Insights</div>
       <div class="rp-tab" onclick="switchTab('narrative',this)">Narrative</div>
       <div class="rp-tab" onclick="switchTab('ask',this)">Ask AI</div>
-      <div class="rp-tab" onclick="switchTab('evidence',this)">Evidence</div>
+      <div class="rp-tab" onclick="switchTab('outputs',this)">Outputs</div>
     </div>
     <div class="rp-body" id="rp-body">
       <div class="rp-panel show" id="tab-insights"><div id="insights-list" style="padding-top:2px"></div></div>
       <div class="rp-panel" id="tab-narrative"><div id="narrative-list"></div></div>
+      <div class="rp-panel" id="tab-outputs">
+        <div style="padding:15px; font-size:11px; color:var(--muted); text-align:center" id="outputs-empty">Run a module to see generated output files</div>
+        <div id="outputs-list" style="padding:10px"></div>
+      </div>
       <div class="rp-panel" id="tab-ask" style="display:flex;flex-direction:column;height:100%">
-        <div style="flex:1;overflow-y:auto" id="ask-history"></div>
+        <div style="flex:1;overflow-y:auto;padding:20px" id="ask-history"></div>
         <div class="ask-resp" id="ask-response"></div>
         <div class="ask-wrap">
           <div class="ask-label">Ask CONTINUM IEP</div>
@@ -586,10 +614,6 @@ textarea.field-input{resize:vertical;min-height:64px}
             <button class="ask-btn" onclick="sendAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
           </div>
         </div>
-      </div>
-      <div class="rp-panel" id="tab-evidence">
-        <div style="padding:11px 13px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--bdr);font-weight:600">Evidence chain for last query</div>
-        <div id="evidence-chain"><div style="padding:18px;color:var(--muted2);font-size:11px;text-align:center">Ask a question to see grounded evidence</div></div>
       </div>
     </div>
   </aside>
@@ -628,15 +652,15 @@ textarea.field-input{resize:vertical;min-height:64px}
 // always fetched live from GET /api/module-config/<key> — never hardcoded.
 // ════════════════════════════════════════════════════════════════════════
 const ROLES = {
-  analyst:            { icon:'fa-chart-line',      name:'Analyst',             nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','copilot','history'] },
-  data_scientist:     { icon:'fa-flask',           name:'Data Scientist',      nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','copilot','history'] },
-  product_manager:    { icon:'fa-table-list',      name:'Product Manager',     nav:['planning','monitoring','analysis','intelligence','data','copilot','history'] },
-  functional_manager: { icon:'fa-users',           name:'Functional Manager',  nav:['copilot','analysis','data','history'] },
-  feature_owner:      { icon:'fa-rocket',          name:'Feature Owner',       nav:['planning','monitoring','analysis','deploy','intelligence','data','copilot','history'] },
-  engineering_manager:{ icon:'fa-gears',           name:'Eng Manager',         nav:['discovery','monitoring','intelligence','data','copilot','history'] },
-  executive:          { icon:'fa-briefcase',       name:'Executive',           nav:['copilot'] },
-  reviewer:           { icon:'fa-magnifying-glass',name:'Reviewer',            nav:['analysis','monitoring','data','copilot','history'] },
-  administrator:      { icon:'fa-shield-halved',   name:'Administrator',       nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','copilot','history'] },
+  analyst:            { icon:'fa-chart-line',      name:'Analyst',             nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','outputs','copilot','run_history'] },
+  data_scientist:     { icon:'fa-flask',           name:'Data Scientist',      nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','outputs','copilot','run_history'] },
+  product_manager:    { icon:'fa-table-list',      name:'Product Manager',     nav:['planning','monitoring','analysis','intelligence','data','outputs','copilot','run_history'] },
+  functional_manager: { icon:'fa-users',           name:'Functional Manager',  nav:['copilot','analysis','data','outputs','run_history'] },
+  feature_owner:      { icon:'fa-rocket',          name:'Feature Owner',       nav:['planning','monitoring','analysis','deploy','intelligence','data','outputs','copilot','run_history'] },
+  engineering_manager:{ icon:'fa-gears',           name:'Eng Manager',         nav:['discovery','monitoring','intelligence','data','outputs','copilot','run_history'] },
+  executive:          { icon:'fa-briefcase',       name:'Executive',           nav:['copilot','outputs'] },
+  reviewer:           { icon:'fa-magnifying-glass',name:'Reviewer',            nav:['analysis','monitoring','data','outputs','copilot','run_history'] },
+  administrator:      { icon:'fa-shield-halved',   name:'Administrator',       nav:['discovery','planning','monitoring','analysis','deploy','intelligence','data','outputs','copilot','run_history'] },
 };
 
 const NAV_DEFS = {
@@ -647,8 +671,9 @@ const NAV_DEFS = {
   deploy:       { label:'Deploy & targeting',       icon:'fa-rocket',                 phase:'phase_4' },
   intelligence: { label:'Intelligence & tools',     icon:'fa-brain',                  phase:null },
   data:         { label:'Data',                     icon:'fa-table-cells-large',      phase:null },
+  outputs:      { label:'Outputs',                  icon:'fa-file-arrow-down',        phase:null },
   copilot:      { label:'AI Copilot',               icon:'fa-wand-magic-sparkles',    phase:null },
-  history:      { label:'Run history',              icon:'fa-clock-rotate-left',      phase:null },
+  run_history:  { label:'Run history',              icon:'fa-clock-rotate-left',      phase:null },
 };
 
 // Icon + short description per module key (purely cosmetic — backend truth
@@ -822,6 +847,7 @@ async function enterPlatform() {
   }
 
   await bootstrapData();
+  startIntelligenceStream();
 }
 
 function buildNav(sections) {
@@ -1039,13 +1065,26 @@ function showSection(sec) {
 async function selectExperiment(name) {
   activeExperiment = name;
   document.getElementById('sb-exp').textContent = name || '—';
+  const sel = document.getElementById('exp-select');
+  if (sel) {
+      if (!name) sel.style.borderColor = 'var(--red)';
+      else sel.style.borderColor = '';
+  }
   if (name) {
     try { await Api.selectExperiment(name); } catch(e) { console.warn(e); }
   }
 }
 
 function runSelected() {
-  if (!activeExperiment) { alert('Select an experiment from the dropdown first.'); return; }
+  if (!activeExperiment) {
+      const sel = document.getElementById('exp-select');
+      if (sel) {
+          sel.style.borderColor = 'var(--red)';
+          sel.focus();
+      }
+      alert('Select an experiment from the dropdown first.');
+      return;
+  }
   openModuleConfig('experiment_analysis');
 }
 
@@ -1055,7 +1094,19 @@ function runSelected() {
 // ════════════════════════════════════════════════════════════════════════
 async function openModuleConfig(key) {
   selectedModuleKey = key;
+
+  // Show description in the execution console area before modal opens
+  const consoleLabel = document.getElementById('console-label');
+  const consoleBody = document.getElementById('console-body');
+  if (consoleLabel) consoleLabel.textContent = humanize(key);
+  if (consoleBody) consoleBody.innerHTML = '<div style="padding:20px; color:var(--muted)">Fetching module details...</div>';
+
   const cfg = await Api.moduleConfig(key);
+
+  if (consoleBody) {
+      consoleBody.innerHTML = `<div style="padding:20px; color:var(--blue); font-size:13px; font-weight:600">${cfg.description || 'No description available.'}</div>`
+          + `<div style="padding:0 20px; color:var(--muted); font-size:11px">Configure this module in the popup and click Run.</div>`;
+  }
   liveConfigCache[key] = cfg;
 
   document.getElementById('modal-title').textContent = humanize(key);
@@ -1222,6 +1273,8 @@ function streamRun(runId, moduleKey) {
       const parts = msg.split('||');
       const fname = parts[0].replace(/^\s+/, '');
       const fpath = parts[1] || '';
+
+      // Update Console
       const filesBox = document.getElementById('console-files');
       filesBox.style.display = 'block';
       const chip = document.createElement('a');
@@ -1229,6 +1282,42 @@ function streamRun(runId, moduleKey) {
       chip.href = '/api/file?path=' + encodeURIComponent(fpath);
       chip.target = '_blank';
       filesBox.appendChild(chip);
+
+      // Update Outputs Tab (Right Panel)
+      const outList = document.getElementById('outputs-list');
+      const outEmpty = document.getElementById('outputs-empty');
+      if (outEmpty) outEmpty.style.display = 'none';
+      const outItem = document.createElement('div');
+      outItem.style.padding = '8px 12px';
+      outItem.style.borderBottom = '1px solid var(--bdr)';
+      outItem.style.display = 'flex';
+      outItem.style.alignItems = 'center';
+      outItem.style.gap = '10px';
+      outItem.innerHTML = `
+        <i class="fa-solid fa-file-arrow-down" style="color:var(--blue)"></i>
+        <div style="flex:1">
+          <div style="font-weight:600; font-size:12px; color:var(--txt)">${escapeHtml(fname.trim())}</div>
+          <div style="font-size:10px; color:var(--muted)">${new Date().toLocaleTimeString()}</div>
+        </div>
+        <a href="/api/file?path=${encodeURIComponent(fpath)}" target="_blank" class="btn btn-ghost" style="padding:4px 8px; font-size:10px">Download</a>
+      `;
+      if (outList) outList.prepend(outItem);
+
+      // Update Outputs Section (Left Nav)
+      const outTbody = document.getElementById('outputs-tbody');
+      if (outTbody) {
+        if (outTbody.innerHTML.includes('No outputs yet')) outTbody.innerHTML = '';
+        const tr = document.createElement('tr');
+        const ext = fname.split('.').pop().toUpperCase();
+        tr.innerHTML = `
+          <td><b>${escapeHtml(fname.trim())}</b></td>
+          <td>${ext}</td>
+          <td>${new Date().toLocaleTimeString()}</td>
+          <td><a href="/api/file?path=${encodeURIComponent(fpath)}" target="_blank" class="btn btn-ghost" style="padding:4px 8px; font-size:10px">Download</a></td>
+        `;
+        outTbody.prepend(tr);
+      }
+
       return;
     }
 
@@ -1349,11 +1438,59 @@ async function refreshNarrative() {
     }
     list.innerHTML = stream.map(n => `
       <div class="narr-item">
-        <div class="narr-src">${n.source||'observation'}</div>
-        <div class="narr-txt">${n.text||''}</div>
+        <div class="narr-src">${escapeHtml(n.source||'observation')}</div>
+        <div class="narr-txt">${escapeHtml(n.text||'')}</div>
         <div class="narr-ts">${(n.created_at||'').slice(0,16)}</div>
       </div>`).join('');
   } catch(e) { console.warn('narrative failed', e); }
+}
+
+let intelligenceES = null;
+function startIntelligenceStream() {
+  if (intelligenceES) intelligenceES.close();
+  intelligenceES = new EventSource('/api/intelligence/stream');
+  intelligenceES.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    if (data.level === 'PING') return;
+
+    // Process Insight
+    const insList = document.getElementById('insights-list');
+    const narrList = document.getElementById('narrative-list');
+
+    // Narrative if type is 'narrative'
+    if (data.type === 'narrative') {
+      const nItem = document.createElement('div');
+      nItem.className = 'narr-item';
+      nItem.style.animation = 'fadeIn 0.4s ease';
+      nItem.innerHTML = `
+        <div class="narr-src">${escapeHtml(data.source || 'observation')}</div>
+        <div class="narr-txt">${escapeHtml(data.message || '')}</div>
+        <div class="narr-ts">${(data.created_at || '').slice(0, 16)}</div>`;
+      if (narrList && (narrList.innerHTML.includes('No narrative yet') || narrList.innerHTML.trim() === '')) narrList.innerHTML = '';
+      if (narrList) {
+          narrList.prepend(nItem);
+          while (narrList.children.length > 20) narrList.lastChild.remove();
+      }
+    }
+
+    // Always add to Insights
+    const iItem = document.createElement('div');
+    iItem.className = 'ins-item sev-' + (data.severity || 'info').toLowerCase();
+    iItem.style.animation = 'fadeIn 0.4s ease';
+    iItem.innerHTML = `
+      <div class="ins-src">${escapeHtml(data.source || '')} · ${(data.created_at || '').slice(0, 16)}</div>
+      <div class="ins-msg">${escapeHtml(data.message || '')}</div>
+      ${data.detail ? `<div class="ins-det">${escapeHtml(data.detail)}</div>` : ''}`;
+    if (insList && insList.innerHTML.includes('No insights yet')) insList.innerHTML = '';
+    if (insList) {
+        insList.prepend(iItem);
+        while (insList.children.length > 30) insList.lastChild.remove();
+    }
+  };
+  intelligenceES.onerror = () => {
+    intelligenceES.close();
+    setTimeout(startIntelligenceStream, 5000);
+  };
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1370,15 +1507,30 @@ function _cpTable(rows, cols){
   cols = (cols && cols.length) ? cols : Object.keys(rows[0]);
   const head = cols.map(c=>'<th>'+escapeHtml(c)+'</th>').join('');
   const body = rows.slice(0,12).map(r=>'<tr>'+cols.map(c=>'<td>'+escapeHtml(r[c])+'</td>').join('')+'</tr>').join('');
-  return '<div class="tbl-wrap" style="margin-top:9px;max-height:240px;overflow:auto"><table class="dt"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  return '<div class="tbl-wrap" style="max-height:300px;overflow:auto"><table class="dt"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
-function _cpMsgHtml(m){
+function _cpAccordion(title, content, id) {
+  return `
+    <div style="margin-top:10px; border:1px solid var(--bdr); border-radius:8px; overflow:hidden">
+      <div onclick="const el=document.getElementById('${id}'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; window.dispatchEvent(new Event('resize'));"
+           style="background:var(--surf2); padding:8px 12px; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px">
+        <i class="fa-solid fa-chevron-down" style="font-size:9px"></i> ${title}
+      </div>
+      <div id="${id}" style="display:none; border-top:1px solid var(--bdr); background:var(--surf)">
+        ${content}
+      </div>
+    </div>`;
+}
+
+function _cpMsgHtml(m, idx){
   if(m.role === 'user')
     return '<div class="chat-msg user"><div class="chat-bubble">'+escapeHtml(m.text)+'</div></div>';
+
   let inner = '<div class="chat-ai-label"><i class="fa-solid fa-wand-magic-sparkles"></i> CONTINUM Copilot'
     + (m.meta && m.meta.mode ? ' <span class="conf-badge">'+escapeHtml(m.meta.mode)+'</span>' : '')
     + '</div><div class="chat-bubble">'+(m.thinking ? '<i style="opacity:.7">Thinking…</i>' : fmtMd(m.text))+'</div>';
+
   if(m.confirm){
     if(m.confirm.deploy_warning)
       inner += '<div style="margin-top:8px;padding:9px 11px;border-radius:8px;background:var(--amber-lt);border:1px solid var(--amber);color:var(--amber);font-size:11px;line-height:1.5">'+fmtMd(m.confirm.deploy_warning)+'</div>';
@@ -1386,10 +1538,34 @@ function _cpMsgHtml(m){
       + '<button onclick="copilotConfirm()" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer">Yes, use '+escapeHtml(m.confirm.module_name)+'</button>'
       + '<button onclick="copilotDecline()" style="background:var(--surf2);color:var(--muted);border:1px solid var(--bdr);border-radius:8px;padding:7px 14px;font-size:11.5px;cursor:pointer">No, just answer</button></div>';
   }
-  if(m.meta && m.meta.table && m.meta.table.length) inner += _cpTable(m.meta.table, m.meta.columns);
+
+  // SQL Accordion
+  if(m.meta && m.meta.sql) {
+    inner += _cpAccordion('View generated SQL', `<pre style="padding:12px; font-family:'JetBrains Mono'; font-size:11px; background:#0B1220; color:#CBD5E1; margin:0; white-space:pre-wrap">${escapeHtml(m.meta.sql)}</pre>`, 'sql-' + idx);
+  }
+
+  // Table Accordion
+  if(m.meta && m.meta.table && m.meta.table.length) {
+    inner += _cpAccordion(`View result table (${m.meta.table.length} rows)`, _cpTable(m.meta.table, m.meta.columns), 'tbl-' + idx);
+  }
+
+  // Visualizations
+  if(m.meta && m.meta.visualizations && m.meta.visualizations.length) {
+    m.meta.visualizations.forEach((viz, vIdx) => {
+        const vizId = `viz-${idx}-${vIdx}`;
+        const vizHtml = `<div id="${vizId}" style="width:100%; height:300px; background:var(--surf)"></div>`;
+        inner += _cpAccordion('View Visualization', vizHtml, 'viz-box-' + idx + '-' + vIdx);
+        setTimeout(() => {
+            if(window.Plotly) Plotly.newPlot(vizId, viz.data, viz.layout, {responsive: true, displayModeBar: false});
+            else console.warn('Plotly not loaded');
+        }, 100);
+    });
+  }
+
   if(m.meta && m.meta.next_steps && m.meta.next_steps.length)
     inner += '<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">'
       + m.meta.next_steps.map(s=>'<button class="quick-btn" data-q="'+escapeAttr(escapeHtml(s))+'" onclick="sendQuick(this.dataset.q)">'+escapeHtml(s)+'</button>').join('') + '</div>';
+
   return '<div class="chat-msg ai">'+inner+'</div>';
 }
 
@@ -1404,7 +1580,7 @@ function renderChat(){
         : '';
       return;
     }
-    box.innerHTML = CHAT.history.map(_cpMsgHtml).join('');
+    box.innerHTML = CHAT.history.map((m, i) => _cpMsgHtml(m, i)).join('');
     box.scrollTop = box.scrollHeight;
   });
   const resp = document.getElementById('ask-response'); if(resp){ resp.classList.remove('show'); resp.innerHTML = ''; }
@@ -1421,11 +1597,19 @@ async function copilotSubmit(question, opts){
   else { CHAT.history.push({role:'user', text:question}); CHAT.lastQ = question; }
   const ph = {role:'ai', thinking:true}; CHAT.history.push(ph);
   CHAT.busy = true; renderChat();
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out after 60 seconds')), 60000)
+  );
+
   try{
     const extra = {};
     if(opts.confirm_tool) extra.confirm_tool = opts.confirm_tool;
     if(opts.decline)      extra.decline = true;
-    const d = await Api.copilotAsk(CHAT.lastQ, 'auto', extra);
+    const d = await Promise.race([
+        Api.copilotAsk(CHAT.lastQ, 'auto', extra),
+        timeoutPromise
+    ]);
     CHAT.history = CHAT.history.filter(function(m){ return m !== ph; });
     if(d.mode === 'confirm' && d.pending_tool){
       CHAT.pending = { key:d.pending_tool.key, module_name:d.pending_tool.module_name, kind:d.pending_tool.kind, deploy_warning:d.deploy_warning };
@@ -1433,8 +1617,15 @@ async function copilotSubmit(question, opts){
     } else {
       CHAT.pending = null;
       CHAT.history.push({role:'ai', text:(d.response || d.error || '(no response)'),
-        meta:{ table:d.table||[], columns:d.columns||[],
-          next_steps:((d.suggestions && d.suggestions.length) ? d.suggestions : (d.next_steps||[])), mode:d.mode }});
+        meta:{
+          table:d.table||[],
+          columns:d.columns||[],
+          sql: d.sql,
+          visualizations: d.visualizations || [],
+          next_steps:((d.suggestions && d.suggestions.length) ? d.suggestions : (d.next_steps||[])),
+          mode:d.mode
+        }
+      });
     }
   }catch(e){
     CHAT.history = CHAT.history.filter(function(m){ return m !== ph; });
@@ -1443,11 +1634,32 @@ async function copilotSubmit(question, opts){
   CHAT.busy = false; renderChat();
 }
 
-function copilotConfirm(){ if(CHAT.pending) copilotSubmit('', {confirm_tool: CHAT.pending.key}); }
+function copilotConfirm(){
+  if(CHAT.pending) {
+      showSection('dashboard');
+      const body = document.getElementById('console-body');
+      if (body) {
+          body.innerHTML = `<div style="padding:15px; color:var(--blue); font-size:12px"><b>Executing ${CHAT.pending.module_name}...</b></div>`;
+      }
+      copilotSubmit('', {confirm_tool: CHAT.pending.key});
+  }
+}
 function copilotDecline(){ copilotSubmit('', {decline:true}); }
 
 // Both surfaces + quick chips funnel into the one shared conversation.
-function sendAsk(){ const i=document.getElementById('ask-input'); const q=(i.value||'').trim(); if(!q) return; i.value=''; copilotSubmit(q); }
+function sendAsk(){
+  const i=document.getElementById('ask-input');
+  const q=(i.value||'').trim();
+  if(!q) return;
+  if (!activeExperiment && (q.toLowerCase().includes('experiment') || q.toLowerCase().includes('result') || q.toLowerCase().includes('this'))) {
+      alert('Please select an experiment first so I have context to answer your question.');
+      const sel = document.getElementById('exp-select');
+      if (sel) { sel.style.borderColor = 'var(--red)'; sel.focus(); }
+      return;
+  }
+  i.value='';
+  copilotSubmit(q);
+}
 function sendCopilot(){ const i=document.getElementById('copilot-input'); const q=(i.value||'').trim(); if(!q) return; i.value=''; copilotSubmit(q); }
 function sendQuick(q){ copilotSubmit(q); }
 function renderEvidence(){ /* /api/copilot/ask does not return an evidence chain */ }
@@ -1473,13 +1685,22 @@ async function loadDataView(){
     if(d.error){ box.innerHTML = '<div class="grid-error">'+escapeHtml(d.error)+'</div>'; return; }
     const ctx = document.getElementById('ds-context'); if(ctx) ctx.textContent = d.domain_context ? ('— '+d.domain_context) : '';
     const tables = d.tables || [];
+    // Sort tables so Silver/Gold are first
+    tables.sort((a,b) => {
+        const order = ['gold_experiment_analysis', 'silver_inquiries', 'silver_users', 'silver_orders', 'silver_quotes'];
+        const ai = order.indexOf(a.table), bi = order.indexOf(b.table);
+        if (ai === -1 && bi === -1) return a.table.localeCompare(b.table);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+    });
     box.innerHTML = tables.length ? tables.map(function(t,i){
       const cols = t.columns || (t.rows&&t.rows[0] ? Object.keys(t.rows[0]) : []);
       const head = cols.map(function(c){ return '<th>'+escapeHtml(c)+'</th>'; }).join('');
-      const body = (t.rows||[]).slice(0,5).map(function(r){
+      const body = (t.rows||[]).slice(0,10).map(function(r){
         return '<tr>'+cols.map(function(c){ return '<td>'+escapeHtml(r[c]==null?'':r[c])+'</td>'; }).join('')+'</tr>'; }).join('');
-      const title = (t.name?escapeHtml(t.name):('Table '+(i+1))) + ' · ' + (t.n_rows!=null?t.n_rows:(t.rows||[]).length) + ' rows';
-      return '<div class="sec-title" style="margin-top:16px">'+title+'</div>'
+      const title = (t.table?escapeHtml(t.table):('Table '+(i+1))) + ' · ' + (t.n_rows!=null?t.n_rows:(t.rows||[]).length) + ' rows';
+      return '<div class="sec-title" style="margin-top:16px; font-weight:800; color:var(--blue)">'+title+'</div>'
         + '<div class="tbl-wrap" style="overflow:auto"><table class="dt"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
     }).join('') : '<div style="padding:18px;color:var(--muted2);font-size:11px">No tables in this dataset.</div>';
   }catch(e){ box.innerHTML = '<div class="grid-error">Could not load the data preview.</div>'; }
@@ -1495,6 +1716,43 @@ async function switchDataset(name){
 // READOUT UPLOAD — attach a readout doc to the Copilot library; the chatbot
 // then answers grounded in it (/api/copilot/readout/upload).
 // ════════════════════════════════════════════════════════════════════════
+function toggleSidebar() {
+  const app = document.getElementById('app');
+  const icon = document.getElementById('sb-toggle-icon');
+  app.classList.toggle('sb-collapsed');
+  const collapsed = app.classList.contains('sb-collapsed');
+  icon.className = collapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+  if (collapsed) {
+      document.getElementById('sidebar').style.minWidth = '0';
+      document.getElementById('sidebar').style.width = '0';
+  } else {
+      document.getElementById('sidebar').style.minWidth = '';
+      document.getElementById('sidebar').style.width = '';
+  }
+}
+
+function toggleRightPanel() {
+  const app = document.getElementById('app');
+  const icon = document.getElementById('rp-toggle-icon');
+  app.classList.toggle('rp-collapsed');
+  const collapsed = app.classList.contains('rp-collapsed');
+  icon.className = collapsed ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right';
+}
+
+function toggleConsole() {
+  const body = document.getElementById('console-body');
+  const files = document.getElementById('console-files');
+  const chevron = document.getElementById('console-chevron');
+  const btn = document.getElementById('console-toggle-btn');
+  const isCollapsed = body.style.display === 'none';
+
+  body.style.display = isCollapsed ? 'block' : 'none';
+  if (files.innerHTML !== '') files.style.display = isCollapsed ? 'block' : 'none';
+
+  chevron.className = isCollapsed ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+  btn.textContent = isCollapsed ? 'Collapse' : 'Expand';
+}
+
 function triggerReadoutUpload(){ const i = document.getElementById('readout-file-input'); if(i) i.click(); }
 async function uploadReadout(files){
   if(!files || !files.length) return;
@@ -1547,7 +1805,6 @@ async function uploadReadout(files){
     try { localStorage.setItem('rpWidth', lastW); } catch(e){}
   });
 })();
-setInterval(() => { if (document.getElementById('app').style.display !== 'none') { refreshInsights(); } }, 20000);
 </script>
 
 </body>

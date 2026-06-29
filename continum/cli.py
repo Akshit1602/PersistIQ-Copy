@@ -18,7 +18,7 @@ def _setup_logging(verbose: bool = False) -> None:
 
 
 def cmd_ui(args) -> None:
-    from continum.ui.app import run
+    from continum.userui.app import run
     run(host=args.host, port=args.port, data_dir=args.data, debug=args.debug)
 
 
@@ -204,7 +204,7 @@ def cmd_list_experiments(args) -> None:
 
 
 def cmd_list_modules(args) -> None:
-    from continum.api.dispatcher import list_modules, _build_registry
+    from continum.toolinterface import list_modules, _build_registry
     _build_registry()
     mods = list_modules()
     print(f"\n  {'Phase':<10} {'Module':<30} {'Description'[:50]}")
