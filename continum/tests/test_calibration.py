@@ -26,7 +26,7 @@ TOLERANCE_PP  = 0.06    # ±6pp tolerance on rates (generous for Monte Carlo)
 class TestTypeIError:
 
     def test_proportion_test_type1_nominal_n(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         rng = np.random.default_rng(0)
         rejections = 0
         for _ in range(N_SIMS_SLOW):
@@ -40,7 +40,7 @@ class TestTypeIError:
             f"Type-I error = {fpr:.3f}, expected ~{ALPHA} ±{TOLERANCE_PP}")
 
     def test_proportion_test_type1_small_n(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         rng = np.random.default_rng(1)
         rejections = sum(
             1 for _ in range(N_SIMS_SLOW)
@@ -51,7 +51,7 @@ class TestTypeIError:
         assert fpr <= ALPHA + 0.04, f"Type-I error too high at small n: {fpr:.3f}"
 
     def test_means_test_type1(self):
-        from continum.core.experimentation.statistics import means_test
+        from continum.experimentation.stats.statistics import means_test
         rng = np.random.default_rng(2)
         rejections = sum(
             1 for _ in range(N_SIMS_FAST)
@@ -63,7 +63,7 @@ class TestTypeIError:
             f"Means test FPR = {fpr:.3f}")
 
     def test_bonferroni_correction_reduces_fpr(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         rng = np.random.default_rng(3)
         rej_nom, rej_bonf = 0, 0
         alpha_bonf = ALPHA / 3
@@ -85,7 +85,7 @@ class TestTypeIError:
 class TestPower:
 
     def test_power_at_designed_n(self):
-        from continum.core.experimentation.statistics import (
+        from continum.experimentation.stats.statistics import (
             proportion_test, compute_sample_size,
         )
         baseline = 0.18
@@ -103,7 +103,7 @@ class TestPower:
             f"Empirical power = {empirical_power:.3f}, expected ≥ {POWER_TARGET - 0.07}")
 
     def test_larger_effect_has_higher_power(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         rng = np.random.default_rng(11)
         n   = 2000
         def _emp_power(mde):
@@ -118,7 +118,7 @@ class TestPower:
             f"Larger effect should have more power: {p_large:.3f} vs {p_small:.3f}")
 
     def test_more_n_monotonically_increases_power(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         rng = np.random.default_rng(12)
         powers = []
         for n in [100, 300, 1000, 3000]:
@@ -149,7 +149,7 @@ class TestCupedCalibration:
         return pre_c, pre_t, post_c, post_t
 
     def test_variance_reduction_matches_rho_squared(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng      = np.random.default_rng(20)
         rho      = 0.70
         expected = rho**2 * 100   # ~49%
@@ -163,7 +163,7 @@ class TestCupedCalibration:
             f"CUPED variance reduction = {avg_reduction:.1f}%, expected ~{expected:.1f}%")
 
     def test_cuped_type1_error_not_inflated(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng = np.random.default_rng(21)
         rejections = 0
         for _ in range(N_SIMS_FAST):
@@ -176,7 +176,7 @@ class TestCupedCalibration:
             f"CUPED type-I error = {fpr:.3f}, expected ≤ {ALPHA + TOLERANCE_PP}")
 
     def test_cuped_point_estimate_unbiased(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng = np.random.default_rng(22)
         deltas = []
         for _ in range(N_SIMS_FAST):
@@ -188,7 +188,7 @@ class TestCupedCalibration:
             f"CUPED estimator biased: mean δ = {avg_delta:.5f}")
 
     def test_no_variance_reduction_without_covariate(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng = np.random.default_rng(23)
         reductions = []
         for _ in range(30):
@@ -210,7 +210,7 @@ class TestCupedCalibration:
 class TestBayesianCalibration:
 
     def test_prob_treat_better_calibrated_under_null(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         rng   = np.random.default_rng(30)
         probs = []
         for s in range(N_SIMS_MEDIUM):
@@ -223,7 +223,7 @@ class TestBayesianCalibration:
             f"Mean P(T>C) under null = {avg:.4f}, expected 0.50 ±0.04")
 
     def test_prob_treat_better_high_for_large_effect(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         rng   = np.random.default_rng(31)
         probs = []
         for s in range(100):
@@ -236,7 +236,7 @@ class TestBayesianCalibration:
             f"Mean P(T>C) for +5pp effect = {avg:.4f}, expected > 0.90")
 
     def test_hdi_coverage(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         rng     = np.random.default_rng(32)
         true_delta = 0.02
         coverage_count = 0
@@ -252,7 +252,7 @@ class TestBayesianCalibration:
             f"HDI 95% coverage = {coverage:.3f}, expected ≥ 0.85")
 
     def test_expected_loss_ordering_correct(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         # Positive
         r_pos = beta_binomial_test(5000, 1000, 5000, 1150, seed=1)  # +3pp
         assert r_pos["expected_loss_ship"] < r_pos["expected_loss_hold"]
@@ -268,7 +268,7 @@ class TestBayesianCalibration:
 class TestSequentialCalibration:
 
     def test_msprt_type1_error_at_final_look(self):
-        from continum.core.experimentation.sequential import compute_e_value, e_value_to_p
+        from continum.experimentation.stats.sequential import compute_e_value, e_value_to_p
         rng  = np.random.default_rng(40)
         rej  = 0
         threshold = 1.0 / ALPHA
@@ -283,7 +283,7 @@ class TestSequentialCalibration:
             f"mSPRT type-I error = {fpr:.3f}, expected ≤ {ALPHA + TOLERANCE_PP}")
 
     def test_msprt_valid_under_repeated_peeking(self):
-        from continum.core.experimentation.sequential import SequentialTester
+        from continum.experimentation.stats.sequential import SequentialTester
         rng       = np.random.default_rng(41)
         threshold = 1.0 / ALPHA
         ever_rejected = 0
@@ -311,7 +311,7 @@ class TestSequentialCalibration:
             f"expected ≤ {ALPHA + TOLERANCE_PP}")
 
     def test_confidence_sequence_valid_simultaneously(self):
-        from continum.core.experimentation.sequential import confidence_sequence
+        from continum.experimentation.stats.sequential import confidence_sequence
         rng      = np.random.default_rng(42)
         true_d   = 0.0   # null
         ns       = [200, 500, 1000, 2000]
@@ -329,7 +329,7 @@ class TestSequentialCalibration:
                 f"expected ≥ {1 - ALPHA - TOLERANCE_PP:.3f}")
 
     def test_obrien_fleming_alpha_spending_monotone(self):
-        from continum.core.experimentation.sequential import obrien_fleming_boundary
+        from continum.experimentation.stats.sequential import obrien_fleming_boundary
         fracs  = [0.20, 0.40, 0.60, 0.80, 1.00]
         bounds = obrien_fleming_boundary(5, fracs, alpha=ALPHA)
         spends = [b["alpha_spent_total"] for b in bounds]
@@ -345,7 +345,7 @@ class TestSequentialCalibration:
 class TestBootstrapCoverage:
 
     def test_bca_ci_contains_true_delta(self):
-        from continum.core.experimentation.cuped import bootstrap_ci
+        from continum.experimentation.stats.cuped import bootstrap_ci
         rng       = np.random.default_rng(50)
         true_d    = 200.0    # treatment has AOV 4200 vs 4000
         coverage  = 0
@@ -359,7 +359,7 @@ class TestBootstrapCoverage:
         assert emp >= 0.85, f"BCa coverage = {emp:.3f}, expected ≥ 0.85"
 
     def test_bootstrap_ci_for_proportion(self):
-        from continum.core.experimentation.cuped import bootstrap_ci
+        from continum.experimentation.stats.cuped import bootstrap_ci
         rng      = np.random.default_rng(51)
         true_d   = 0.02   # +2pp
         coverage = 0
@@ -380,35 +380,35 @@ class TestBootstrapCoverage:
 class TestNumericalStability:
 
     def test_proportion_test_zero_conversions(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         r = proportion_test(1000, 0, 1000, 0)
         assert r["p_value"] == 1.0
         assert not np.isnan(r["z_stat"])
 
     def test_proportion_test_all_conversions(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         r = proportion_test(1000, 1000, 1000, 999)
         assert not np.isnan(r["p_value"])
         assert not np.isinf(r["z_stat"])
 
     def test_proportion_test_single_observation(self):
-        from continum.core.experimentation.statistics import proportion_test
+        from continum.experimentation.stats.statistics import proportion_test
         r = proportion_test(1, 0, 1, 1)
         assert 0 <= r["p_value"] <= 1
 
     def test_means_test_identical_arrays(self):
-        from continum.core.experimentation.statistics import means_test
+        from continum.experimentation.stats.statistics import means_test
         arr = np.full(100, 4000.0)
         r   = means_test(arr, arr)
         assert "error" in r or r["p_value"] == 1.0
 
     def test_means_test_single_value_arrays(self):
-        from continum.core.experimentation.statistics import means_test
+        from continum.experimentation.stats.statistics import means_test
         r = means_test(np.array([1.0]), np.array([2.0]))
         assert "error" in r   # not enough data
 
     def test_cuped_extreme_correlation(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng   = np.random.default_rng(60)
         n     = 300
         pre_c = rng.normal(0.18, 0.05, n)
@@ -422,7 +422,7 @@ class TestNumericalStability:
         assert r.variance_adjusted >= 0
 
     def test_cuped_zero_variance_covariate(self):
-        from continum.core.experimentation.cuped import apply_cuped
+        from continum.experimentation.stats.cuped import apply_cuped
         rng = np.random.default_rng(61)
         y_c = rng.normal(0.18, 0.05, 200)
         y_t = rng.normal(0.20, 0.05, 200)
@@ -433,29 +433,29 @@ class TestNumericalStability:
         assert r.theta == pytest.approx(0.0, abs=1e-6)
 
     def test_srm_single_variant(self):
-        from continum.core.experimentation.srm_detector import detect_srm
+        from continum.experimentation.stats.srm_detector import detect_srm
         r = detect_srm({"control": 5000})
         # df=0, undefined but must not raise
         assert r is not None
 
     def test_srm_zero_observations(self):
-        from continum.core.experimentation.srm_detector import detect_srm
+        from continum.experimentation.stats.srm_detector import detect_srm
         r = detect_srm({"control": 0, "treatment": 0})
         assert not r.srm_detected
 
     def test_bayesian_zero_conversions(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         r = beta_binomial_test(1000, 0, 1000, 0)
         assert 0 <= r["prob_treat_better"] <= 1
         assert not np.isnan(r["delta_posterior_mean"])
 
     def test_bayesian_extreme_conversions(self):
-        from continum.core.experimentation.bayesian import beta_binomial_test
+        from continum.experimentation.stats.bayesian import beta_binomial_test
         r = beta_binomial_test(1000, 1000, 1000, 999)
         assert 0 <= r["prob_treat_better"] <= 1
 
     def test_bootstrap_single_unique_value(self):
-        from continum.core.experimentation.cuped import bootstrap_ci
+        from continum.experimentation.stats.cuped import bootstrap_ci
         ctrl  = np.ones(100)   # all same value
         treat = np.ones(100) * 1.1
         r = bootstrap_ci(ctrl, treat, n_boot=100, seed=1)
@@ -463,12 +463,12 @@ class TestNumericalStability:
         assert not np.isnan(r["observed"])
 
     def test_sequential_empty_arms(self):
-        from continum.core.experimentation.sequential import compute_e_value
+        from continum.experimentation.stats.sequential import compute_e_value
         e = compute_e_value(0, 0, 0, 0)
         assert e == 1.0  # no information = no evidence
 
     def test_delta_method_zero_denominator(self):
-        from continum.core.experimentation.cuped import delta_method_ratio
+        from continum.experimentation.stats.cuped import delta_method_ratio
         rng   = np.random.default_rng(62)
         num_c = rng.exponential(100, 200)
         num_t = rng.exponential(110, 200)
@@ -479,7 +479,7 @@ class TestNumericalStability:
 
     def test_profile_dataframe_all_null_column(self):
         import pandas as pd
-        from continum.core.monitoring.detectors import profile_dataframe
+        from continum.experimentation.monitoring.detectors import profile_dataframe
         df = pd.DataFrame({
             "all_null": [None] * 100,
             "normal":   list(range(100)),
@@ -489,7 +489,7 @@ class TestNumericalStability:
 
     def test_detect_volume_anomaly_constant_series(self):
         import pandas as pd
-        from continum.core.monitoring.detectors import detect_volume_anomaly
+        from continum.experimentation.monitoring.detectors import detect_volume_anomaly
         idx  = pd.date_range("2025-01-01", periods=40, freq="D")
         vals = pd.Series([500.0] * 40, index=idx)
         r    = detect_volume_anomaly(vals)
@@ -505,7 +505,7 @@ class TestSRMCalibration:
 
     def test_srm_false_positive_rate_at_alpha_001(self):
         rng = np.random.default_rng(70)
-        from continum.core.experimentation.srm_detector import detect_srm
+        from continum.experimentation.stats.srm_detector import detect_srm
         fp = 0
         for _ in range(N_SIMS_SLOW):
             n      = int(rng.integers(500, 5000))
@@ -516,7 +516,7 @@ class TestSRMCalibration:
         assert fpr <= 0.02, f"SRM FPR at α=0.01: {fpr:.4f} (expected ≤ 0.02)"
 
     def test_srm_power_high_for_large_imbalance(self):
-        from continum.core.experimentation.srm_detector import detect_srm
+        from continum.experimentation.stats.srm_detector import detect_srm
         detections = sum(
             1 for _ in range(N_SIMS_FAST)
             if detect_srm({"control": 5000, "treatment": 4000}, alpha=0.01).srm_detected
@@ -525,7 +525,7 @@ class TestSRMCalibration:
         assert power > 0.95, f"SRM detection rate for 20% imbalance = {power:.3f}"
 
     def test_srm_severity_correlates_with_imbalance(self):
-        from continum.core.experimentation.srm_detector import detect_srm, SRMSeverity
+        from continum.experimentation.stats.srm_detector import detect_srm, SRMSeverity
         mild_imbalance  = detect_srm({"control": 1000, "treatment": 950},  alpha=0.01)
         severe_imbalance = detect_srm({"control": 1000, "treatment": 500}, alpha=0.01)
         severity_rank = {"none": 0, "mild": 1, "moderate": 2, "severe": 3}
