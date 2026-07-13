@@ -12,17 +12,18 @@ Changes from upstream:
 
 The node logic and graph topology are otherwise unchanged.
 """
+
 import json
 import logging
 import re
-import pandas as pd
 from io import StringIO
-from typing import TypedDict, List, Optional
+from typing import List, Optional, TypedDict
 
-from langgraph.graph import StateGraph, END
+import pandas as pd
+from langgraph.graph import END, StateGraph
 
-from .metadata import get_metadata
 from .llm import get_chat_llm
+from .metadata import get_metadata
 
 logger = logging.getLogger("continum.askdata.graph_logic")
 
@@ -63,7 +64,115 @@ def _clean_sql(raw: str) -> str:
     return text.strip()
 
 
+# --- Plan normalization (keeps the viz branch reachable) ---
+#
+# The orchestrator LLM emits a free-text plan. Two failure modes silently break
+# the graph: (a) a token that isn't one of our routable agents (e.g. "visualize",
+# "chart", "summarise") dead-ends the conditional router, and (b) the LLM simply
+# omits "viz" for a question that clearly wants a chart. _normalize_plan maps
+# synonyms to the canonical agent names, drops unknown tokens, guarantees
+# 'refine' precedes 'sql', and forces 'viz' in when the user asked for a visual
+# or whenever new data is fetched (the viz node's own guard then decides whether
+# a chart actually helps). This is the structural half of "visualizations never
+# show"; the deterministic fallback in visualization_node is the other half.
+
+_KNOWN_AGENTS = ("refine", "sql", "viz", "insight")
+
+_AGENT_SYNONYMS = {
+    "refine": "refine",
+    "refinement": "refine",
+    "intent": "refine",
+    "sql": "sql",
+    "query": "sql",
+    "data": "sql",
+    "viz": "viz",
+    "visualization": "viz",
+    "visualisation": "viz",
+    "visualize": "viz",
+    "visualise": "viz",
+    "chart": "viz",
+    "plot": "viz",
+    "graph": "viz",
+    "insight": "insight",
+    "insights": "insight",
+    "analysis": "insight",
+    "explain": "insight",
+    "recommend": "insight",
+    "recommendation": "insight",
+}
+
+_VIZ_INTENT = re.compile(
+    r"\b(chart|plot|graph|visuali[sz]e|visuali[sz]ation|trend|over time|"
+    r"by (month|week|day|segment|variant|group|category|region|cohort)|"
+    r"distribution|breakdown|compare|comparison|per )\b",
+    re.IGNORECASE,
+)
+
+
+def _normalize_plan(plan, user_question: str) -> List[str]:
+    raw = plan if isinstance(plan, list) else [plan]
+    out: List[str] = []
+    for tok in raw:
+        canon = _AGENT_SYNONYMS.get(str(tok).strip().lower())
+        if canon and canon not in out:
+            out.append(canon)
+
+    # 'refine' is MANDATORY before 'sql' (the orchestrator prompt says so, but the
+    # LLM sometimes forgets) — insert it so the sql node gets a refined question.
+    if "sql" in out and "refine" not in out:
+        out.insert(out.index("sql"), "refine")
+
+    wants_viz = bool(_VIZ_INTENT.search(user_question or ""))
+    # New data is being fetched → always attempt a chart (the node guard + the
+    # deterministic fallback decide if one is actually shown). Also honor an
+    # explicit "chart/plot/trend/..." request even on a data-less follow-up.
+    if ("sql" in out or wants_viz) and "viz" not in out:
+        # viz comes after sql/refine but the node only needs a dataframe, so append.
+        out.append("viz")
+
+    return out or ["refine", "sql", "viz"]
+
+
+def _fallback_chart(df) -> Optional[dict]:
+    """Build a sensible default Plotly config when the LLM declines a chart but the
+    data is clearly chartable (caller guarantees >=2 rows, >=2 cols, a numeric col).
+
+    Picks a time column for a line chart if present, else the first categorical
+    column for a bar chart, against the first numeric column.
+    """
+    try:
+        numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+        non_numeric = [c for c in df.columns if c not in numeric_cols]
+        if not numeric_cols:
+            return None
+        y = numeric_cols[0]
+        # Prefer a date/time-like column for the x axis (→ line chart).
+        time_cols = [
+            c
+            for c in df.columns
+            if re.search(r"date|time|day|week|month|period", str(c), re.IGNORECASE)
+        ]
+        if time_cols:
+            x, ctype = time_cols[0], "line"
+        elif non_numeric:
+            x, ctype = non_numeric[0], "bar"
+        else:
+            # all-numeric: chart the second column against the first.
+            x, ctype = df.columns[0], "bar"
+            y = numeric_cols[1] if len(numeric_cols) > 1 else numeric_cols[0]
+        cfg = {"type": ctype, "x": str(x), "y": str(y), "title": f"{y} by {x}"}
+        # Add a series split if a second categorical column exists.
+        extra_cat = [c for c in non_numeric if c != x]
+        if extra_cat:
+            cfg["color"] = str(extra_cat[0])
+        return cfg
+    except Exception:
+        logger.exception("fallback chart construction failed")
+        return None
+
+
 # --- Node Functions ---
+
 
 def orchestrator_node(state: GraphState):
     logger.info("Entering orchestrator_node")
@@ -101,14 +210,14 @@ def orchestrator_node(state: GraphState):
         reset_content = reset_response.content.strip()
         if "```json" in reset_content:
             reset_content = reset_content.split("```json")[1].split("```")[0].strip()
-        reset_action = json.loads(reset_content).get('action', 'RETAIN')
+        reset_action = json.loads(reset_content).get("action", "RETAIN")
     except Exception as e:
         logger.warning(f"Failed to parse reset action: {e}")
-        reset_action = 'RETAIN'
+        reset_action = "RETAIN"
 
     logger.info(f"Reset action determined: {reset_action}")
-    current_history = history if reset_action == 'RETAIN' else ""
-    current_context = structured_context if reset_action == 'RETAIN' else "{}"
+    current_history = history if reset_action == "RETAIN" else ""
+    current_context = structured_context if reset_action == "RETAIN" else "{}"
 
     prompt = f"""
     You are an orchestrator for a {domain_context} data assistant.
@@ -149,7 +258,8 @@ def orchestrator_node(state: GraphState):
         logger.warning(f"Failed to parse orchestrator plan: {e}")
         plan = ["refine", "sql", "viz"]
 
-    logger.info(f"Final plan: {plan}")
+    plan = _normalize_plan(plan, user_question)
+    logger.info(f"Final plan (normalized): {plan}")
     return {
         "plan": plan,
         "history": current_history,
@@ -278,10 +388,12 @@ def sql_node(state: GraphState, db_connection):
         - Round numerical values to 2 decimal places.
         """
 
-    response = llm.invoke([
-        ("system", system_msg),
-        ("human", user_prompt),
-    ])
+    response = llm.invoke(
+        [
+            ("system", system_msg),
+            ("human", user_prompt),
+        ]
+    )
     logger.info(f"SQL generation response: {response.content.strip()}")
 
     sql_query = _clean_sql(response.content)
@@ -317,17 +429,37 @@ def visualization_node(state: GraphState):
         return {"current_step_index": state["current_step_index"] + 1}
 
     df = pd.read_json(StringIO(df_json))
-    if df.empty:
+    # Deterministic guard: a chart only makes sense for a comparable set of values.
+    # Skip it for empty results, a single row, a single scalar/column, or a result
+    # with no numeric column to plot — those read better as text/table than a chart.
+    n_rows, n_cols = df.shape
+    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    if df.empty or n_rows < 2 or n_cols < 2 or not numeric_cols:
+        logger.info(
+            "visualization_node: skipping chart (rows=%s cols=%s numeric=%s)",
+            n_rows,
+            n_cols,
+            len(numeric_cols),
+        )
         return {"visualizations": [], "current_step_index": state["current_step_index"] + 1}
 
-    data_sample = df.head(5).to_dict(orient='records')
+    data_sample = df.head(5).to_dict(orient="records")
     column_info = df.dtypes.apply(lambda x: str(x)).to_dict()
 
     viz_prompt = f"""
-    You are a data visualization expert. Suggest Plotly Express charts (line, bar, pie).
+    You are a data visualization expert. Suggest a Plotly Express chart (line, bar, pie)
+    ONLY when a chart genuinely helps the user read the answer.
+
     User Question: {user_question}
     Data Sample: {data_sample}
     Columns: {column_info}
+
+    Return an EMPTY list [] (no chart) when a visual would not help, e.g.:
+    - the answer is a single value / single row, or a yes-no / textual answer
+    - there is no meaningful category-vs-metric or time-vs-metric relationship to show
+    - the data is just an ID list or a raw record dump with no comparison
+    - a table already conveys the answer more clearly than a chart would
+    Prefer NO chart over a weak or misleading one.
 
     Mapping Rules:
     - For a trend over time -> use 'line' (x = the date/time column, y = the numeric metric).
@@ -350,10 +482,12 @@ def visualization_node(state: GraphState):
     Return ONLY the JSON list of objects with: 'type', 'x', 'y', 'values', 'names', 'color', 'title'.
     """
 
-    response = llm.invoke([
-        ("system", "Return ONLY a JSON list of Plotly chart configurations."),
-        ("human", viz_prompt),
-    ])
+    response = llm.invoke(
+        [
+            ("system", "Return ONLY a JSON list of Plotly chart configurations."),
+            ("human", viz_prompt),
+        ]
+    )
     logger.info(f"Visualization response: {response.content.strip()}")
 
     try:
@@ -363,8 +497,23 @@ def visualization_node(state: GraphState):
         elif content.startswith("```"):
             content = content[3:-3].strip()
         configs = json.loads(content)
+        if not isinstance(configs, list):
+            configs = [configs] if isinstance(configs, dict) else []
     except Exception:
+        logger.warning("visualization_node: could not parse chart config; using fallback")
         configs = []
+
+    # Deterministic fallback: the data passed the chartable guard above, so if the
+    # LLM declined (or returned junk) build a sensible default rather than showing
+    # nothing. This is the fix for "visualizations don't show up at all" — a weak
+    # LLM response no longer silently drops the chart.
+    if not configs:
+        fb = _fallback_chart(df)
+        if fb is not None:
+            logger.info(
+                "visualization_node: LLM returned no chart; using deterministic fallback %s", fb
+            )
+            configs = [fb]
 
     return {
         "visualizations": configs,
@@ -381,7 +530,10 @@ def insight_node(state: GraphState):
     domain_context = metadata["domain_context"]
 
     if not df_json:
-        return {"insight": "No data available.", "current_step_index": state["current_step_index"] + 1}
+        return {
+            "insight": "No data available.",
+            "current_step_index": state["current_step_index"] + 1,
+        }
 
     df = pd.read_json(StringIO(df_json))
 
@@ -538,10 +690,17 @@ def summarizer_node(state: GraphState):
 
 # --- Router Functions ---
 
+
 def router(state: GraphState):
     logger.info("Entering router")
     plan = state["plan"]
     idx = state["current_step_index"]
+
+    # Skip any token that isn't a routable agent (defense-in-depth on top of
+    # _normalize_plan) so an unexpected plan entry can never dead-end the graph.
+    while idx < len(plan) and plan[idx] not in _KNOWN_AGENTS:
+        logger.warning("router: skipping unknown plan token %r", plan[idx])
+        idx += 1
 
     if idx >= len(plan):
         logger.info("Plan complete, routing to summarize.")
@@ -553,6 +712,7 @@ def router(state: GraphState):
 
 
 # --- Graph Construction ---
+
 
 def route_from_orchestrator(state: GraphState):
     return router(state)

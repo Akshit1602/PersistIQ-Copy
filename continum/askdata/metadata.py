@@ -12,6 +12,7 @@ To add a dataset: drop the file(s) in ``datasets/`` and add an entry to
 The active dataset is chosen via the ``ACTIVE_DATASET`` env var (default
 ``sample`` — the A/B experimentation campaign data).
 """
+
 import copy
 import os
 from pathlib import Path
@@ -21,6 +22,7 @@ _DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
 
 METADATA = {
     "shell": {
+        "display_name": "Shell Retail",
         "domain_context": "expert data analyst for Shell Retail (India)",
         "files": [
             {
@@ -99,6 +101,7 @@ METADATA = {
         ],
     },
     "sample": {
+        "display_name": "Retail Campaign (Sample)",
         "domain_context": "expert business analyst for experimental retail campaign testing, specialized in A/B test analysis and cohort performance metrics",
         "files": [
             {
@@ -151,6 +154,7 @@ METADATA = {
         ],
     },
     "experiments": {
+        "display_name": "Xometry",
         "source": "duckdb",
         "domain_context": (
             "expert experimentation analyst for MatchView web A/B tests "
@@ -212,6 +216,12 @@ def get_active_dataset_name() -> str:
 
 def list_datasets() -> list:
     return list(METADATA.keys())
+
+
+def get_display_name(dataset_name: str) -> str:
+    """Human-facing label for a dataset (falls back to a titled key)."""
+    entry = METADATA.get(dataset_name) or {}
+    return entry.get("display_name") or dataset_name.replace("_", " ").title()
 
 
 def get_metadata(dataset_name: str | None = None) -> dict:

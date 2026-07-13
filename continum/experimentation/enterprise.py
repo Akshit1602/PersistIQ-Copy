@@ -15,8 +15,8 @@ from continum.crosscutting.runtime_config import RUNTIME_DATA_DIR, ensure_runtim
 logger = logging.getLogger("continum.experimentation.enterprise")
 
 ensure_runtime_data_dir()
-AUDIT_FILE      = os.path.join(RUNTIME_DATA_DIR, ".continum_audit.ndjson")
-SNAPSHOT_DIR    = os.path.join(RUNTIME_DATA_DIR, ".continum_snapshots")
+AUDIT_FILE = os.path.join(RUNTIME_DATA_DIR, ".continum_audit.ndjson")
+SNAPSHOT_DIR = os.path.join(RUNTIME_DATA_DIR, ".continum_snapshots")
 GOVERNANCE_FILE = os.path.join(RUNTIME_DATA_DIR, ".continum_governance.json")
 
 
@@ -24,29 +24,33 @@ GOVERNANCE_FILE = os.path.join(RUNTIME_DATA_DIR, ".continum_governance.json")
 # AUDIT LOG
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AuditEntry:
-    entry_id:    str
-    timestamp:   str
-    actor:       str            # "system" | "analyst:<name>" | "ui"
-    action:      str            # "module_run" | "session_fork" | "ship_approved" | ...
-    subject:     str            # what the action was performed on
-    details:     Dict[str, Any]
-    session_id:  str            = ""
-    ok:          bool           = True
-    hash:        str            = ""
+    entry_id: str
+    timestamp: str
+    actor: str  # "system" | "analyst:<name>" | "ui"
+    action: str  # "module_run" | "session_fork" | "ship_approved" | ...
+    subject: str  # what the action was performed on
+    details: Dict[str, Any]
+    session_id: str = ""
+    ok: bool = True
+    hash: str = ""
 
     def to_dict(self) -> Dict:
         return self.__dict__.copy()
 
     def compute_hash(self) -> str:
-        content = json.dumps({
-            "entry_id": self.entry_id,
-            "timestamp": self.timestamp,
-            "actor":  self.actor,
-            "action": self.action,
-            "subject":self.subject,
-        }, sort_keys=True)
+        content = json.dumps(
+            {
+                "entry_id": self.entry_id,
+                "timestamp": self.timestamp,
+                "actor": self.actor,
+                "action": self.action,
+                "subject": self.subject,
+            },
+            sort_keys=True,
+        )
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
@@ -115,7 +119,7 @@ class AuditLog:
         lines = [f"  {'Timestamp':<22}  {'Actor':<12}  {'Action':<22}  Subject"]
         lines.append(f"  {'─' * 72}")
         for e in rows:
-            ts  = str(e.get("timestamp", ""))[:19]
+            ts = str(e.get("timestamp", ""))[:19]
             act = str(e.get("actor", ""))[:12]
             act_str = str(e.get("action", ""))[:22]
             subj = str(e.get("subject", ""))[:30]
@@ -128,16 +132,17 @@ class AuditLog:
 # GOVERNANCE LAYER
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ShipApproval:
     experiment_id: str
-    requested_by:  str
-    requested_at:  str
-    status:        str              # "pending" | "approved" | "rejected"
-    reviewed_by:   str              = ""
-    reviewed_at:   str              = ""
-    comment:       str              = ""
-    conditions:    List[str]        = field(default_factory=list)
+    requested_by: str
+    requested_at: str
+    status: str  # "pending" | "approved" | "rejected"
+    reviewed_by: str = ""
+    reviewed_at: str = ""
+    comment: str = ""
+    conditions: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict:
         return self.__dict__.copy()
@@ -146,7 +151,7 @@ class ShipApproval:
 class GovernanceLayer:
 
     def __init__(self, path: str = GOVERNANCE_FILE, audit: Optional[AuditLog] = None):
-        self.path  = Path(path)
+        self.path = Path(path)
         self.audit = audit or AuditLog()
         self._approvals: Dict[str, ShipApproval] = {}
         self._load()
@@ -184,10 +189,10 @@ class GovernanceLayer:
         a = self._approvals.get(experiment_id)
         if not a:
             return None
-        a.status      = "approved"
+        a.status = "approved"
         a.reviewed_by = reviewed_by
         a.reviewed_at = datetime.utcnow().isoformat()
-        a.comment     = comment
+        a.comment = comment
         self._save()
         self.audit.record(
             action="ship_approved",
@@ -206,10 +211,10 @@ class GovernanceLayer:
         a = self._approvals.get(experiment_id)
         if not a:
             return None
-        a.status      = "rejected"
+        a.status = "rejected"
         a.reviewed_by = reviewed_by
         a.reviewed_at = datetime.utcnow().isoformat()
-        a.comment     = comment
+        a.comment = comment
         self._save()
         self.audit.record(
             action="ship_rejected",
@@ -249,6 +254,7 @@ class GovernanceLayer:
 # EXECUTION SNAPSHOT
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ExecutionSnapshot:
 
     def __init__(self, directory: str = SNAPSHOT_DIR):
@@ -259,12 +265,16 @@ class ExecutionSnapshot:
         snap_id = f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4())[:6]}"
         data = {
             "snapshot_id": snap_id,
-            "label":       label,
-            "taken_at":    datetime.utcnow().isoformat(),
-            "session":     session.to_dict(),
-            "insights":    [
-                {"type": i.insight_type, "severity": i.severity,
-                 "source": i.source_module, "message": i.message}
+            "label": label,
+            "taken_at": datetime.utcnow().isoformat(),
+            "session": session.to_dict(),
+            "insights": [
+                {
+                    "type": i.insight_type,
+                    "severity": i.severity,
+                    "source": i.source_module,
+                    "message": i.message,
+                }
                 for i in (bus.all() if bus else [])
             ],
         }
@@ -283,13 +293,15 @@ class ExecutionSnapshot:
             try:
                 with open(path, encoding="utf-8") as f:
                     d = json.load(f)
-                snapshots.append({
-                    "snapshot_id": d.get("snapshot_id"),
-                    "label":       d.get("label"),
-                    "taken_at":    d.get("taken_at", "")[:19],
-                    "session_id":  d.get("session", {}).get("session_id"),
-                    "n_runs":      len(d.get("session", {}).get("execution_history", [])),
-                })
+                snapshots.append(
+                    {
+                        "snapshot_id": d.get("snapshot_id"),
+                        "label": d.get("label"),
+                        "taken_at": d.get("taken_at", "")[:19],
+                        "session_id": d.get("session", {}).get("session_id"),
+                        "n_runs": len(d.get("session", {}).get("execution_history", [])),
+                    }
+                )
             except Exception:
                 pass
         return snapshots
@@ -310,6 +322,7 @@ class ExecutionSnapshot:
 # COMPLIANCE REPORT
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def generate_compliance_report(
     experiment_id: str,
     session=None,
@@ -320,26 +333,23 @@ def generate_compliance_report(
     governance = governance or GovernanceLayer(audit=audit)
 
     audit_trail = audit.read_for_subject(experiment_id)
-    approval    = governance.get_approval(experiment_id)
+    approval = governance.get_approval(experiment_id)
 
     session_runs = []
     if session:
-        session_runs = [
-            r.to_dict() for r in session.execution_history
-            if hasattr(r, "to_dict")
-        ]
+        session_runs = [r.to_dict() for r in session.execution_history if hasattr(r, "to_dict")]
 
     return {
-        "report_id":     str(uuid4())[:8],
-        "generated_at":  datetime.utcnow().isoformat(),
+        "report_id": str(uuid4())[:8],
+        "generated_at": datetime.utcnow().isoformat(),
         "experiment_id": experiment_id,
-        "analyst":       session.client_name if session else "unknown",
-        "session_id":    session.session_id if session else "unknown",
-        "audit_trail":   audit_trail,
-        "approval":      approval.to_dict() if approval else None,
-        "session_runs":  session_runs,
+        "analyst": session.client_name if session else "unknown",
+        "session_id": session.session_id if session else "unknown",
+        "audit_trail": audit_trail,
+        "approval": approval.to_dict() if approval else None,
+        "session_runs": session_runs,
         "n_audit_entries": len(audit_trail),
-        "ship_status":   approval.status if approval else "not_requested",
+        "ship_status": approval.status if approval else "not_requested",
     }
 
 
@@ -347,9 +357,9 @@ def generate_compliance_report(
 # GLOBAL SINGLETONS
 # ─────────────────────────────────────────────────────────────────────────────
 
-_AUDIT:      Optional[AuditLog]      = None
+_AUDIT: Optional[AuditLog] = None
 _GOVERNANCE: Optional[GovernanceLayer] = None
-_SNAPSHOTS:  Optional[ExecutionSnapshot] = None
+_SNAPSHOTS: Optional[ExecutionSnapshot] = None
 
 
 def get_audit() -> AuditLog:
@@ -374,8 +384,13 @@ def get_snapshots() -> ExecutionSnapshot:
 
 
 __all__ = [
-    "AuditLog", "GovernanceLayer", "ExecutionSnapshot",
-    "AuditEntry", "ShipApproval",
-    "get_audit", "get_governance", "get_snapshots",
+    "AuditLog",
+    "GovernanceLayer",
+    "ExecutionSnapshot",
+    "AuditEntry",
+    "ShipApproval",
+    "get_audit",
+    "get_governance",
+    "get_snapshots",
     "generate_compliance_report",
 ]

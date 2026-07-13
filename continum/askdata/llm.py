@@ -13,13 +13,16 @@ selected from credentials by :mod:`continum.crosscutting.llm`:
 Credentials come from real env vars, a repo-root ``.env``, or
 ``.streamlit/secrets.toml`` (handled centrally by ``core.llm.config``).
 """
+
 from __future__ import annotations
 
 import logging
 import os
 
 from continum.crosscutting.llm import (
-    load_credentials, active_provider, openai_model,
+    active_provider,
+    load_credentials,
+    openai_model,
 )
 
 logger = logging.getLogger("continum.askdata.llm")
@@ -35,6 +38,7 @@ class _Unconfigured:
     Raises on use so callers can fall back (README answers) or surface a clear
     'configure OpenAI' message rather than producing garbage.
     """
+
     provider = "unconfigured"
 
     def invoke(self, *args, **kwargs):
@@ -49,16 +53,19 @@ def get_chat_llm():
 
     if provider == "azure":
         from langchain_openai import AzureChatOpenAI
+
         return AzureChatOpenAI(
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             azure_endpoint=os.getenv("OPENAI_API_BASE") or os.getenv("AZURE_OPENAI_ENDPOINT"),
-            deployment_name=os.getenv("OPENAI_DEPLOYMENT_NAME") or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+            deployment_name=os.getenv("OPENAI_DEPLOYMENT_NAME")
+            or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
             openai_api_version=os.getenv("OPENAI_API_VERSION", "2024-05-01-preview"),
             temperature=0,
         )
 
     if provider == "openai":
         from langchain_openai import ChatOpenAI
+
         return ChatOpenAI(model=openai_model(), temperature=0)
 
     return _Unconfigured()

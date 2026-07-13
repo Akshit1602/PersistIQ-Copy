@@ -5,9 +5,6 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import numpy as np
-import pandas as pd
-
 logger = logging.getLogger("continum.askdata.ask_engine")
 
 
@@ -15,35 +12,88 @@ logger = logging.getLogger("continum.askdata.ask_engine")
 # INTENT DETECTION
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class AskIntent(str, Enum):
-    METRIC_LOOKUP     = "metric_lookup"
+    METRIC_LOOKUP = "metric_lookup"
     EXPERIMENT_RESULT = "experiment_result"
-    COMPARISON        = "comparison"
-    ANOMALY           = "anomaly"
-    FORECAST          = "forecast"
-    CAUSAL            = "causal"
-    RECOMMENDATION    = "recommendation"
-    KNOWLEDGE         = "knowledge"
-    UNKNOWN           = "unknown"
+    COMPARISON = "comparison"
+    ANOMALY = "anomaly"
+    FORECAST = "forecast"
+    CAUSAL = "causal"
+    RECOMMENDATION = "recommendation"
+    KNOWLEDGE = "knowledge"
+    UNKNOWN = "unknown"
 
 
 _INTENT_PATTERNS: Dict[AskIntent, List[str]] = {
-    AskIntent.METRIC_LOOKUP:     ["what is", "current ior", "current aov", "baseline",
-                                   "how much", "what was", "show me", "tell me the"],
-    AskIntent.EXPERIMENT_RESULT: ["did.*work", "result", "significant", "p.value",
-                                   "lift", "delta", "treatment", "control"],
-    AskIntent.COMPARISON:        ["best", "worst", "which.*better", "compare",
-                                   "vs", "versus", "top", "rank"],
-    AskIntent.ANOMALY:           ["why.*drop", "why.*spike", "anomaly", "unusual",
-                                   "wrong", "issue", "problem", "alert"],
-    AskIntent.FORECAST:          ["will", "forecast", "predict", "next month", "future",
-                                   "trend", "projection"],
-    AskIntent.CAUSAL:            ["cause", "why did", "effect of", "because",
-                                   "driven by", "explanation"],
-    AskIntent.RECOMMENDATION:    ["what should", "recommend", "next step", "run next",
-                                   "suggest", "advice", "what to do"],
-    AskIntent.KNOWLEDGE:         ["learned", "learning", "past", "previous",
-                                   "history", "similar", "before"],
+    AskIntent.METRIC_LOOKUP: [
+        "what is",
+        "current ior",
+        "current aov",
+        "baseline",
+        "how much",
+        "what was",
+        "show me",
+        "tell me the",
+    ],
+    AskIntent.EXPERIMENT_RESULT: [
+        "did.*work",
+        "result",
+        "significant",
+        "p.value",
+        "lift",
+        "delta",
+        "treatment",
+        "control",
+    ],
+    AskIntent.COMPARISON: [
+        "best",
+        "worst",
+        "which.*better",
+        "compare",
+        "vs",
+        "versus",
+        "top",
+        "rank",
+    ],
+    AskIntent.ANOMALY: [
+        "why.*drop",
+        "why.*spike",
+        "anomaly",
+        "unusual",
+        "wrong",
+        "issue",
+        "problem",
+        "alert",
+    ],
+    AskIntent.FORECAST: [
+        "will",
+        "forecast",
+        "predict",
+        "next month",
+        "future",
+        "trend",
+        "projection",
+    ],
+    AskIntent.CAUSAL: ["cause", "why did", "effect of", "because", "driven by", "explanation"],
+    AskIntent.RECOMMENDATION: [
+        "what should",
+        "recommend",
+        "next step",
+        "run next",
+        "suggest",
+        "advice",
+        "what to do",
+    ],
+    AskIntent.KNOWLEDGE: [
+        "learned",
+        "learning",
+        "past",
+        "previous",
+        "history",
+        "similar",
+        "before",
+    ],
 }
 
 
@@ -62,6 +112,7 @@ def detect_intent(question: str) -> AskIntent:
 # DATA RETRIEVAL BY INTENT
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _retrieve_metric_data(db, question: str) -> Dict:
     data: Dict = {}
     q = question.lower()
@@ -76,10 +127,10 @@ def _retrieve_metric_data(db, question: str) -> Dict:
                 FROM silver_inquiries
             """).fetchone()
             if row:
-                data["ior"]     = round(float(row[0] or 0), 4)
-                data["n"]       = int(row[1])
-                data["since"]   = str(row[2])[:10]
-                data["until"]   = str(row[3])[:10]
+                data["ior"] = round(float(row[0] or 0), 4)
+                data["n"] = int(row[1])
+                data["since"] = str(row[2])[:10]
+                data["until"] = str(row[3])[:10]
 
         if "aov" in q or "order value" in q or "revenue" in q:
             row = db.execute("""
@@ -87,9 +138,9 @@ def _retrieve_metric_data(db, question: str) -> Dict:
                 FROM silver_inquiries WHERE converted_to_order = true AND order_value > 0
             """).fetchone()
             if row:
-                data["aov"]        = round(float(row[0] or 0), 2)
-                data["total_gmv"]  = round(float(row[1] or 0), 2)
-                data["n_orders"]   = int(row[2])
+                data["aov"] = round(float(row[0] or 0), 2)
+                data["total_gmv"] = round(float(row[1] or 0), 2)
+                data["n_orders"] = int(row[2])
 
         if "volume" in q or "traffic" in q or "inquiries" in q:
             row = db.execute("""
@@ -137,8 +188,8 @@ def _retrieve_experiment_data(db, question: str) -> Dict:
                 WHERE experiment_name = '{exp_name}'
                 GROUP BY variant
             """).df()
-            data["experiment"]    = exp_name
-            data["variants"]      = df.to_dict("records")
+            data["experiment"] = exp_name
+            data["variants"] = df.to_dict("records")
 
         # Most recent experiments
         recent = db.execute("""
@@ -167,18 +218,19 @@ def _retrieve_comparison_data(db, question: str) -> Dict:
 
         results = []
         for exp in df["experiment_name"].unique():
-            sub  = df[df["experiment_name"] == exp]
-            ctrl = sub[sub["variant"].str.lower().isin(["control","ctrl","baseline"])]
-            trt  = sub[~sub["variant"].str.lower().isin(["control","ctrl","baseline"])]
+            sub = df[df["experiment_name"] == exp]
+            ctrl = sub[sub["variant"].str.lower().isin(["control", "ctrl", "baseline"])]
+            trt = sub[~sub["variant"].str.lower().isin(["control", "ctrl", "baseline"])]
             if not ctrl.empty and not trt.empty:
                 delta = float(trt["ior"].mean()) - float(ctrl["ior"].mean())
-                results.append({"experiment": exp, "delta_pp": round(delta * 100, 4),
-                                  "n": int(sub["n"].sum())})
+                results.append(
+                    {"experiment": exp, "delta_pp": round(delta * 100, 4), "n": int(sub["n"].sum())}
+                )
 
         results.sort(key=lambda x: x["delta_pp"], reverse=True)
         data["experiment_rankings"] = results
         if results:
-            data["best_experiment"]  = results[0]["experiment"]
+            data["best_experiment"] = results[0]["experiment"]
             data["worst_experiment"] = results[-1]["experiment"]
             data["portfolio_win_rate"] = round(
                 sum(1 for r in results if r["delta_pp"] > 0) / len(results), 3
@@ -204,14 +256,14 @@ def _retrieve_anomaly_data(db, question: str) -> Dict:
         """).fetchone()
         if row and row[0] and row2 and row2[0]:
             mean_7d = float(row[0])
-            std_7d  = float(row[1] or mean_7d * 0.1)
-            ior_1d  = float(row2[0])
-            z       = (ior_1d - mean_7d) / std_7d if std_7d > 0 else 0
+            std_7d = float(row[1] or mean_7d * 0.1)
+            ior_1d = float(row2[0])
+            z = (ior_1d - mean_7d) / std_7d if std_7d > 0 else 0
             data["ior_7d_mean"] = round(mean_7d, 4)
-            data["ior_1d"]      = round(ior_1d, 4)
-            data["z_score"]     = round(z, 2)
+            data["ior_1d"] = round(ior_1d, 4)
+            data["z_score"] = round(z, 2)
             data["anomaly_flag"] = abs(z) > 2.0
-            data["direction"]   = "spike" if z > 2 else "drop" if z < -2 else "normal"
+            data["direction"] = "spike" if z > 2 else "drop" if z < -2 else "normal"
     except Exception as e:
         logger.debug("anomaly retrieval failed: %s", e)
     return data
@@ -236,32 +288,34 @@ def _retrieve_knowledge_data(db, question: str) -> Dict:
                     w in str(r.get(col, "")).lower()
                     for col in ["key_learning", "outcome", "tags", "experiment_name"]
                     for w in q_words
-                ), axis=1
+                ),
+                axis=1,
             )
             matches = df.nlargest(3, "_score").to_dict("records")
-            data["learnings"]  = matches
-            data["n_total"]    = len(df)
+            data["learnings"] = matches
+            data["n_total"] = len(df)
     except Exception as e:
         logger.debug("knowledge retrieval failed: %s", e)
     return data
 
 
 _RETRIEVAL_FN = {
-    AskIntent.METRIC_LOOKUP:     _retrieve_metric_data,
+    AskIntent.METRIC_LOOKUP: _retrieve_metric_data,
     AskIntent.EXPERIMENT_RESULT: _retrieve_experiment_data,
-    AskIntent.COMPARISON:        _retrieve_comparison_data,
-    AskIntent.ANOMALY:           _retrieve_anomaly_data,
-    AskIntent.FORECAST:          _retrieve_metric_data,
-    AskIntent.CAUSAL:            _retrieve_experiment_data,
-    AskIntent.RECOMMENDATION:    _retrieve_comparison_data,
-    AskIntent.KNOWLEDGE:         _retrieve_knowledge_data,
-    AskIntent.UNKNOWN:           _retrieve_metric_data,
+    AskIntent.COMPARISON: _retrieve_comparison_data,
+    AskIntent.ANOMALY: _retrieve_anomaly_data,
+    AskIntent.FORECAST: _retrieve_metric_data,
+    AskIntent.CAUSAL: _retrieve_experiment_data,
+    AskIntent.RECOMMENDATION: _retrieve_comparison_data,
+    AskIntent.KNOWLEDGE: _retrieve_knowledge_data,
+    AskIntent.UNKNOWN: _retrieve_metric_data,
 }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTEXT ASSEMBLER
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _assemble_context(
     intent: AskIntent,
@@ -289,7 +343,7 @@ def _assemble_context(
         parts.append(f"  Mode: {getattr(session, 'mode', 'synthetic')}")
         history = getattr(session, "execution_history", [])
         if history:
-            recent = [h.get("module","") for h in history[-5:]]
+            recent = [h.get("module", "") for h in history[-5:]]
             parts.append(f"  Recent modules run: {', '.join(recent)}")
 
     # InsightBus
@@ -305,6 +359,7 @@ def _assemble_context(
 # ASK ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class AnalyticsGroundedAskEngine:
 
     def __init__(self):
@@ -312,11 +367,11 @@ class AnalyticsGroundedAskEngine:
 
     def ask(
         self,
-        question:   str,
-        db:         Any = None,
-        session:    Any = None,
-        llm:        Any = None,
-        bus:        Any = None,
+        question: str,
+        db: Any = None,
+        session: Any = None,
+        llm: Any = None,
+        bus: Any = None,
     ) -> Dict:
         trace: List[str] = []
 
@@ -341,8 +396,7 @@ class AnalyticsGroundedAskEngine:
             try:
                 recent = bus.recent(10)
                 bus_insights = [
-                    {"type": str(i.insight_type.value), "message": i.message}
-                    for i in recent
+                    {"type": str(i.insight_type.value), "message": i.message} for i in recent
                 ]
                 trace.append(f"Collected {len(bus_insights)} bus insights")
             except Exception:
@@ -361,7 +415,8 @@ class AnalyticsGroundedAskEngine:
         # Step 7: Publish to bus
         if bus is not None:
             try:
-                from continum.insights.insight_bus import InsightType, InsightSeverity
+                from continum.insights.insight_bus import InsightSeverity, InsightType
+
                 bus.emit(
                     source="ask_engine",
                     insight_type=InsightType.INFO,
@@ -373,29 +428,35 @@ class AnalyticsGroundedAskEngine:
                 pass
 
         return {
-            "question":        question,
-            "intent":          intent.value,
-            "answer":          answer,
-            "data":            retrieved,
+            "question": question,
+            "intent": intent.value,
+            "answer": answer,
+            "data": retrieved,
             "reasoning_trace": trace,
         }
 
     def _reasoning_trace(
         self,
-        intent:    AskIntent,
-        data:      Dict,
-        question:  str,
+        intent: AskIntent,
+        data: Dict,
+        question: str,
     ) -> List[str]:
         steps: List[str] = []
 
         if intent == AskIntent.METRIC_LOOKUP:
             if "ior" in data:
-                steps.append(f"Current IOR: {data['ior']:.4%} over {data.get('n',0):,} observations")
+                steps.append(
+                    f"Current IOR: {data['ior']:.4%} over {data.get('n',0):,} observations"
+                )
             if "aov" in data:
-                steps.append(f"Current AOV: ${data['aov']:,.0f} from {data.get('n_orders',0):,} orders")
+                steps.append(
+                    f"Current AOV: ${data['aov']:,.0f} from {data.get('n_orders',0):,} orders"
+                )
             if "segment_iors" in data:
                 top_seg = max(data["segment_iors"], key=data["segment_iors"].get)
-                steps.append(f"Highest IOR segment: {top_seg} ({data['segment_iors'][top_seg]:.4%})")
+                steps.append(
+                    f"Highest IOR segment: {top_seg} ({data['segment_iors'][top_seg]:.4%})"
+                )
 
         elif intent == AskIntent.ANOMALY:
             if data.get("anomaly_flag"):
@@ -411,27 +472,33 @@ class AnalyticsGroundedAskEngine:
             rankings = data.get("experiment_rankings", [])
             if rankings:
                 steps.append(f"Portfolio win rate: {data.get('portfolio_win_rate',0):.0%}")
-                steps.append(f"Best: {rankings[0]['experiment']} ({rankings[0]['delta_pp']:+.2f}pp)")
+                steps.append(
+                    f"Best: {rankings[0]['experiment']} ({rankings[0]['delta_pp']:+.2f}pp)"
+                )
                 if len(rankings) > 1:
-                    steps.append(f"Worst: {rankings[-1]['experiment']} ({rankings[-1]['delta_pp']:+.2f}pp)")
+                    steps.append(
+                        f"Worst: {rankings[-1]['experiment']} ({rankings[-1]['delta_pp']:+.2f}pp)"
+                    )
 
         elif intent == AskIntent.KNOWLEDGE:
             learnings = data.get("learnings", [])
             if learnings:
                 steps.append(f"Found {len(learnings)} relevant learning(s) in repository")
                 for l in learnings[:2]:
-                    steps.append(f"  [{l.get('id','')}] {l.get('experiment_name','')}: "
-                                  f"{str(l.get('key_learning',''))[:80]}")
+                    steps.append(
+                        f"  [{l.get('id','')}] {l.get('experiment_name','')}: "
+                        f"{str(l.get('key_learning',''))[:80]}"
+                    )
 
         return steps
 
     def _synthesise_answer(
         self,
-        question:    str,
-        intent:      AskIntent,
-        context:     str,
-        reasoning:   List[str],
-        llm:         Any,
+        question: str,
+        intent: AskIntent,
+        context: str,
+        reasoning: List[str],
+        llm: Any,
     ) -> str:
         reasoning_text = "\n".join(f"  {r}" for r in reasoning) or "  (No specific data retrieved)"
 

@@ -3,16 +3,20 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-import numpy as np
 import pandas as pd
 
+from continum.experimentation.artifacts import MetricDelta, SliceFinding
 from continum.experimentation.stats.statistics import proportion_test
-from continum.experimentation.artifacts import SliceFinding, MetricDelta
 
 logger = logging.getLogger("continum.analysis.segment")
 
-STANDARD_DIMENSIONS = ["account_segment", "platform", "category",
-                        "country", "shipping_address_country"]
+STANDARD_DIMENSIONS = [
+    "account_segment",
+    "platform",
+    "category",
+    "country",
+    "shipping_address_country",
+]
 
 
 def run_segment_analysis(
@@ -35,13 +39,15 @@ def run_segment_analysis(
         return []
     treatment = treatments[0]
 
-    ctrl_df  = df[df["variant"] == control_variant]
+    ctrl_df = df[df["variant"] == control_variant]
     treat_df = df[df["variant"] == treatment]
 
     # Overall effect
     overall_pr = proportion_test(
-        len(ctrl_df), int(ctrl_df["converted_to_order"].fillna(0).sum()),
-        len(treat_df), int(treat_df["converted_to_order"].fillna(0).sum()),
+        len(ctrl_df),
+        int(ctrl_df["converted_to_order"].fillna(0).sum()),
+        len(treat_df),
+        int(treat_df["converted_to_order"].fillna(0).sum()),
     )
     overall_delta = overall_pr["delta_pp"]
 
@@ -56,8 +62,10 @@ def run_segment_analysis(
                 continue
 
             pr = proportion_test(
-                len(c_sub), int(c_sub["converted_to_order"].fillna(0).sum()),
-                len(t_sub), int(t_sub["converted_to_order"].fillna(0).sum()),
+                len(c_sub),
+                int(c_sub["converted_to_order"].fillna(0).sum()),
+                len(t_sub),
+                int(t_sub["converted_to_order"].fillna(0).sum()),
                 alpha,
             )
 
@@ -83,26 +91,29 @@ def run_segment_analysis(
             )
 
             # Simpson's paradox: slice effect sign contradicts overall
-            simpsons = (
-                pr["delta_pp"] * overall_delta < 0
-                and abs(pr["delta_pp"]) > 0.001
+            simpsons = pr["delta_pp"] * overall_delta < 0 and abs(pr["delta_pp"]) > 0.001
+
+            slices.append(
+                SliceFinding(
+                    experiment_id=experiment_id,
+                    metric_name="inquiry_order_rate",
+                    dimension_name=dim,
+                    dimension_value=str(level),
+                    n_slice=len(c_sub) + len(t_sub),
+                    delta=delta,
+                    is_heterogeneous=pr["is_significant"],
+                    simpsons_paradox_flag=simpsons,
+                    interaction_p_value=pr["p_value"],
+                )
             )
 
-            slices.append(SliceFinding(
-                experiment_id=experiment_id,
-                metric_name="inquiry_order_rate",
-                dimension_name=dim,
-                dimension_value=str(level),
-                n_slice=len(c_sub) + len(t_sub),
-                delta=delta,
-                is_heterogeneous=pr["is_significant"],
-                simpsons_paradox_flag=simpsons,
-                interaction_p_value=pr["p_value"],
-            ))
-
     if slices:
-        logger.info("Segment analysis: %d slices across %d dimensions for %s",
-                    len(slices), len(dimensions), experiment_id)
+        logger.info(
+            "Segment analysis: %d slices across %d dimensions for %s",
+            len(slices),
+            len(dimensions),
+            experiment_id,
+        )
     return slices
 
 

@@ -1,4 +1,5 @@
 """Semantic layer: ontology models + metric registry + dimension catalog (merged)."""
+
 from __future__ import annotations
 
 # ===== merged from core/semantic_layer/ontology.py =====
@@ -8,44 +9,45 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, validator
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ENUMERATIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class MetricType(str, Enum):
-    RATE  = "rate"
-    MEAN  = "mean"
+    RATE = "rate"
+    MEAN = "mean"
     COUNT = "count"
-    SUM   = "sum"
+    SUM = "sum"
     RATIO = "ratio"
 
 
 class MetricDirection(str, Enum):
     HIGHER_IS_BETTER = "higher_is_better"
-    LOWER_IS_BETTER  = "lower_is_better"
-    NEUTRAL          = "neutral"
+    LOWER_IS_BETTER = "lower_is_better"
+    NEUTRAL = "neutral"
 
 
 class DimensionType(str, Enum):
     CATEGORICAL = "categorical"
-    CONTINUOUS  = "continuous"
-    DATETIME    = "datetime"
+    CONTINUOUS = "continuous"
+    DATETIME = "datetime"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PRIMITIVE CONCEPTS (consumed by the metric registry + dimension catalog)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Dimension(BaseModel):
-    name:           str                       = Field(..., description="snake_case, globally unique")
-    display_name:   str
+    name: str = Field(..., description="snake_case, globally unique")
+    display_name: str
     dimension_type: DimensionType
-    allowed_values: Optional[List[str]]       = None   # None = open-ended
-    value_aliases:  Dict[str, str]            = Field(default_factory=dict)   # "ENT" → "Enterprise"
-    owner:          str
-    version:        int                       = 1
-    deprecated:     bool                      = False
+    allowed_values: Optional[List[str]] = None  # None = open-ended
+    value_aliases: Dict[str, str] = Field(default_factory=dict)  # "ENT" → "Enterprise"
+    owner: str
+    version: int = 1
+    deprecated: bool = False
 
     @validator("name")
     def name_must_be_snake_case(cls, v: str) -> str:
@@ -63,21 +65,21 @@ class Dimension(BaseModel):
 
 
 class Metric(BaseModel):
-    name:                  str                     = Field(..., description="globally unique, snake_case")
-    display_name:          str
-    description:           str
-    metric_type:           MetricType
-    numerator_event:       str                     = Field(..., description="event_type that increments numerator")
-    denominator_event:     Optional[str]           = None        # None for counts/sums
-    direction:             MetricDirection
-    unit:                  str                     = Field(..., description="% | $ | count | days | seconds")
-    guardrail_min:         Optional[float]         = None
-    guardrail_max:         Optional[float]         = None
-    owner:                 str
-    dependent_dimensions:  List[str]               = Field(default_factory=list)
-    version:               int                     = 1
-    deprecated:            bool                    = False
-    superseded_by:         Optional[str]           = None        # metric name if deprecated
+    name: str = Field(..., description="globally unique, snake_case")
+    display_name: str
+    description: str
+    metric_type: MetricType
+    numerator_event: str = Field(..., description="event_type that increments numerator")
+    denominator_event: Optional[str] = None  # None for counts/sums
+    direction: MetricDirection
+    unit: str = Field(..., description="% | $ | count | days | seconds")
+    guardrail_min: Optional[float] = None
+    guardrail_max: Optional[float] = None
+    owner: str
+    dependent_dimensions: List[str] = Field(default_factory=list)
+    version: int = 1
+    deprecated: bool = False
+    superseded_by: Optional[str] = None  # metric name if deprecated
 
     @validator("name")
     def name_must_be_snake_case(cls, v: str) -> str:
@@ -94,13 +96,14 @@ class Metric(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 __all__ = [
-    "MetricType", "MetricDirection", "DimensionType",
-    "Dimension", "Metric",
+    "MetricType",
+    "MetricDirection",
+    "DimensionType",
+    "Dimension",
+    "Metric",
 ]
 
 # ===== merged from core/semantic_layer/metric_registry.py =====
-from typing import Dict
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +111,6 @@ from typing import Dict
 # ─────────────────────────────────────────────────────────────────────────────
 
 METRIC_REGISTRY: Dict[str, Metric] = {
-
     "inquiry_order_rate": Metric(
         name="inquiry_order_rate",
         display_name="Inquiry to Order Rate (IOR)",
@@ -121,11 +123,10 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         denominator_event="inquiry_created",
         direction=MetricDirection.HIGHER_IS_BETTER,
         unit="%",
-        guardrail_min=0.10,     # hard floor — never let IOR drop below 10%
+        guardrail_min=0.10,  # hard floor — never let IOR drop below 10%
         owner="growth_team",
         dependent_dimensions=["account_segment", "platform", "category"],
     ),
-
     "avg_order_value": Metric(
         name="avg_order_value",
         display_name="Average Order Value (AOV)",
@@ -137,7 +138,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="revenue_team",
         dependent_dimensions=["account_segment", "category", "country"],
     ),
-
     "revenue_per_inquiry": Metric(
         name="revenue_per_inquiry",
         display_name="Revenue per Inquiry",
@@ -150,7 +150,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="revenue_team",
         dependent_dimensions=["account_segment", "category"],
     ),
-
     "quote_to_order_time": Metric(
         name="quote_to_order_time",
         display_name="Quote to Order Time",
@@ -163,7 +162,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="ops_team",
         dependent_dimensions=["account_segment", "category"],
     ),
-
     "daily_inquiry_volume": Metric(
         name="daily_inquiry_volume",
         display_name="Daily Inquiry Volume",
@@ -176,7 +174,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="ops_team",
         dependent_dimensions=["platform", "category", "country"],
     ),
-
     "order_cancellation_rate": Metric(
         name="order_cancellation_rate",
         display_name="Order Cancellation Rate",
@@ -186,11 +183,10 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         denominator_event="order_placed",
         direction=MetricDirection.LOWER_IS_BETTER,
         unit="%",
-        guardrail_max=0.15,     # hard ceiling — cancellation must not exceed 15%
+        guardrail_max=0.15,  # hard ceiling — cancellation must not exceed 15%
         owner="ops_team",
         dependent_dimensions=["account_segment", "category"],
     ),
-
     "new_buyer_activation_rate": Metric(
         name="new_buyer_activation_rate",
         display_name="New Buyer Activation Rate",
@@ -206,20 +202,18 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="growth_team",
         dependent_dimensions=["platform", "country"],
     ),
-
     "repeat_order_rate": Metric(
         name="repeat_order_rate",
         display_name="Repeat Order Rate",
         description="Fraction of buyers who place a second order within 90 days of their first.",
         metric_type=MetricType.RATE,
         numerator_event="order_placed",
-        denominator_event="order_placed",   # 2nd relative to 1st
+        denominator_event="order_placed",  # 2nd relative to 1st
         direction=MetricDirection.HIGHER_IS_BETTER,
         unit="%",
         owner="growth_team",
         dependent_dimensions=["account_segment"],
     ),
-
     "checkout_completion_rate": Metric(
         name="checkout_completion_rate",
         display_name="Checkout Completion Rate",
@@ -232,7 +226,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="product_team",
         dependent_dimensions=["platform", "account_segment"],
     ),
-
     "session_inquiry_rate": Metric(
         name="session_inquiry_rate",
         display_name="Session to Inquiry Rate",
@@ -245,7 +238,6 @@ METRIC_REGISTRY: Dict[str, Metric] = {
         owner="product_team",
         dependent_dimensions=["platform"],
     ),
-
     "feedback_sentiment_score": Metric(
         name="feedback_sentiment_score",
         display_name="Buyer Feedback Sentiment Score",
@@ -268,8 +260,6 @@ __all__ = [
 ]
 
 # ===== merged from core/semantic_layer/dimension_catalog.py =====
-from typing import Dict
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -277,7 +267,6 @@ from typing import Dict
 # ─────────────────────────────────────────────────────────────────────────────
 
 DIMENSION_CATALOG: Dict[str, Dimension] = {
-
     "account_segment": Dimension(
         name="account_segment",
         display_name="Account Segment",
@@ -294,7 +283,6 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         },
         owner="analytics_team",
     ),
-
     "platform": Dimension(
         name="platform",
         display_name="Platform",
@@ -311,12 +299,11 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         },
         owner="analytics_team",
     ),
-
     "country": Dimension(
         name="country",
         display_name="Country",
         dimension_type=DimensionType.CATEGORICAL,
-        allowed_values=None,    # open — too many to enumerate
+        allowed_values=None,  # open — too many to enumerate
         value_aliases={
             "United States": "US",
             "United Kingdom": "UK",
@@ -326,7 +313,6 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         },
         owner="analytics_team",
     ),
-
     "category": Dimension(
         name="category",
         display_name="Process Category",
@@ -335,7 +321,6 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         value_aliases={},
         owner="catalog_team",
     ),
-
     "device_type": Dimension(
         name="device_type",
         display_name="Device Type",
@@ -348,7 +333,6 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         },
         owner="analytics_team",
     ),
-
     "price_tier": Dimension(
         name="price_tier",
         display_name="Price Tier",
@@ -357,7 +341,6 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
         value_aliases={},
         owner="revenue_team",
     ),
-
     "channel": Dimension(
         name="channel",
         display_name="Acquisition Channel",
@@ -376,4 +359,3 @@ DIMENSION_CATALOG: Dict[str, Dimension] = {
 __all__ = [
     "DIMENSION_CATALOG",
 ]
-

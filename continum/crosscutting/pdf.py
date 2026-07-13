@@ -1,38 +1,42 @@
 from __future__ import annotations
 
 import logging
-import os
-from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger("continum.crosscutting.pdf")
 
 # ── ReportLab (optional) ──────────────────────────────────────────────────────
 try:
+    from reportlab.lib.colors import HexColor, black, white  # noqa: F401
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.colors import HexColor, white, black
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-        HRFlowable, KeepTogether,
+        HRFlowable,
+        KeepTogether,  # noqa: F401
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
     )
+
     _PDF_OK = True
 except ImportError:
     _PDF_OK = False
 
 # Default brand palette
 PDF_PALETTE = {
-    "accent":     "#7c3aed",
-    "dark_bg":    "#0f172a",
+    "accent": "#7c3aed",
+    "dark_bg": "#0f172a",
     "light_text": "#f1f5f9",
-    "mid_text":   "#94a3b8",
-    "border":     "#334155",
-    "positive":   "#22c55e",
-    "negative":   "#ef4444",
-    "warning":    "#f59e0b",
+    "mid_text": "#94a3b8",
+    "border": "#334155",
+    "positive": "#22c55e",
+    "negative": "#ef4444",
+    "warning": "#f59e0b",
 }
 
 PAGE_W, PAGE_H = A4 if _PDF_OK else (595, 842)
@@ -57,46 +61,61 @@ def render_document_pdf(
 # PDF backend
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _render_pdf(title, subtitle, sections, output_path, metadata, accent_color):
     try:
         accent = HexColor(accent_color)
         doc = SimpleDocTemplate(
             output_path,
             pagesize=A4,
-            leftMargin=MARGIN, rightMargin=MARGIN,
-            topMargin=MARGIN,  bottomMargin=MARGIN,
+            leftMargin=MARGIN,
+            rightMargin=MARGIN,
+            topMargin=MARGIN,
+            bottomMargin=MARGIN,
         )
 
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             "ContinumTitle",
             parent=styles["Title"],
-            fontSize=22, leading=28,
-            textColor=accent, spaceAfter=4,
+            fontSize=22,
+            leading=28,
+            textColor=accent,
+            spaceAfter=4,
             fontName="Helvetica-Bold",
         )
         sub_style = ParagraphStyle(
             "ContinumSub",
             parent=styles["Normal"],
-            fontSize=11, leading=14,
-            textColor=HexColor("#64748b"), spaceAfter=12,
+            fontSize=11,
+            leading=14,
+            textColor=HexColor("#64748b"),
+            spaceAfter=12,
         )
         h2_style = ParagraphStyle(
             "ContinumH2",
             parent=styles["Heading2"],
-            fontSize=13, leading=16, spaceBefore=14, spaceAfter=4,
-            textColor=accent, fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=16,
+            spaceBefore=14,
+            spaceAfter=4,
+            textColor=accent,
+            fontName="Helvetica-Bold",
         )
         body_style = ParagraphStyle(
             "ContinumBody",
             parent=styles["Normal"],
-            fontSize=10, leading=14, spaceAfter=4,
+            fontSize=10,
+            leading=14,
+            spaceAfter=4,
             textColor=HexColor("#1e293b"),
         )
         meta_style = ParagraphStyle(
             "ContinumMeta",
             parent=styles["Normal"],
-            fontSize=9, leading=12, textColor=HexColor("#475569"),
+            fontSize=9,
+            leading=12,
+            textColor=HexColor("#475569"),
         )
 
         story = []
@@ -114,17 +133,25 @@ def _render_pdf(title, subtitle, sections, output_path, metadata, accent_color):
                 for k, v in metadata.items()
             ]
             meta_table = Table(meta_data, colWidths=["35%", "65%"])
-            meta_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (0, -1), HexColor("#f8fafc")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), HexColor("#475569")),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ROWBACKGROUNDS", (0, 0), (-1, -1),
-                 [HexColor("#f8fafc"), HexColor("#ffffff")]),
-                ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#e2e8f0")),
-                ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#e2e8f0")),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]))
+            meta_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (0, -1), HexColor("#f8fafc")),
+                        ("TEXTCOLOR", (0, 0), (-1, -1), HexColor("#475569")),
+                        ("FONTSIZE", (0, 0), (-1, -1), 9),
+                        (
+                            "ROWBACKGROUNDS",
+                            (0, 0),
+                            (-1, -1),
+                            [HexColor("#f8fafc"), HexColor("#ffffff")],
+                        ),
+                        ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#e2e8f0")),
+                        ("INNERGRID", (0, 0), (-1, -1), 0.25, HexColor("#e2e8f0")),
+                        ("TOPPADDING", (0, 0), (-1, -1), 4),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ]
+                )
+            )
             story.append(meta_table)
             story.append(Spacer(1, 10))
 
@@ -138,8 +165,9 @@ def _render_pdf(title, subtitle, sections, output_path, metadata, accent_color):
             if not body or not body.strip():
                 continue
             story.append(Paragraph(_safe(heading), h2_style))
-            story.append(HRFlowable(width="100%", thickness=0.5,
-                                    color=HexColor("#e2e8f0"), spaceAfter=4))
+            story.append(
+                HRFlowable(width="100%", thickness=0.5, color=HexColor("#e2e8f0"), spaceAfter=4)
+            )
             for line in body.split("\n"):
                 stripped = line.strip()
                 if not stripped:
@@ -168,6 +196,7 @@ def _safe(text: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # TXT fallback
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _render_txt(title, subtitle, sections, output_path, metadata):
     txt_path = str(output_path).replace(".pdf", ".txt")

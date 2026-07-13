@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import duckdb
 import pandas as pd
@@ -12,6 +12,7 @@ logger = logging.getLogger("continum.datastore.loader")
 
 def load_csvs(data_dir: str) -> Dict[str, pd.DataFrame]:
     from continum.contextmate.synthetic_generator import ensure_sample_data
+
     ensure_sample_data(data_dir)
     p = Path(data_dir)
     datasets = {}
@@ -23,10 +24,10 @@ def load_csvs(data_dir: str) -> Dict[str, pd.DataFrame]:
 
 
 def register_bronze(db: duckdb.DuckDBPyConnection, datasets: Dict[str, pd.DataFrame]) -> None:
-    db.register("bronze_users_raw",       datasets["users"])
-    db.register("bronze_accounts_raw",    datasets["accounts"])
-    db.register("bronze_quotes_raw",      datasets["quotes"])
-    db.register("bronze_orders_raw",      datasets["orders"])
+    db.register("bronze_users_raw", datasets["users"])
+    db.register("bronze_accounts_raw", datasets["accounts"])
+    db.register("bronze_quotes_raw", datasets["quotes"])
+    db.register("bronze_orders_raw", datasets["orders"])
     db.register("bronze_experiments_raw", datasets["experiments"])
     logger.info("Bronze layer registered (%d tables)", 5)
 
@@ -249,6 +250,10 @@ def setup_database(data_dir: str = "./sample_data") -> duckdb.DuckDBPyConnection
 
 
 __all__ = [
-    "load_csvs", "register_bronze", "build_silver_layer",
-    "build_gold_layer", "list_experiments", "setup_database",
+    "load_csvs",
+    "register_bronze",
+    "build_silver_layer",
+    "build_gold_layer",
+    "list_experiments",
+    "setup_database",
 ]

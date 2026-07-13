@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import sys
-import time
 import threading
+import time
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Iterator, List, Optional
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -12,16 +11,16 @@ from typing import Iterator, List, Optional
 # ─────────────────────────────────────────────────────────────────────────────
 
 _COLORS = {
-    "reset":   "\033[0m",
-    "bold":    "\033[1m",
-    "dim":     "\033[2m",
-    "green":   "\033[32m",
-    "yellow":  "\033[33m",
-    "red":     "\033[31m",
-    "cyan":    "\033[36m",
+    "reset": "\033[0m",
+    "bold": "\033[1m",
+    "dim": "\033[2m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "red": "\033[31m",
+    "cyan": "\033[36m",
     "magenta": "\033[35m",
-    "blue":    "\033[34m",
-    "white":   "\033[37m",
+    "blue": "\033[34m",
+    "white": "\033[37m",
 }
 
 
@@ -37,13 +36,14 @@ def _c(color: str, text: str, force: bool = False) -> str:
 # EXECUTION CONSOLE
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class ExecutionConsole:
 
     def __init__(self, module_name: str = "continum", verbose: bool = True):
         self.module_name = module_name
-        self.verbose     = verbose
-        self._start      = time.monotonic()
-        self._tasks:     List[dict] = []
+        self.verbose = verbose
+        self._start = time.monotonic()
+        self._tasks: List[dict] = []
 
     def _ts(self) -> str:
         elapsed = time.monotonic() - self._start
@@ -52,7 +52,7 @@ class ExecutionConsole:
     def _print(self, level: str, msg: str, color: str = "reset") -> None:
         if not self.verbose:
             return
-        ts    = self._ts()
+        ts = self._ts()  # noqa: F841
         label = _c(color, f"[{level:<4}]", force=False)
         print(f"  {label} {msg}", flush=True)
 
@@ -91,9 +91,9 @@ class ExecutionConsole:
     def end_task(self, task_name: str, ok: bool = True, note: str = "") -> None:
         for t in self._tasks:
             if t["name"] == task_name and t["ok"] is None:
-                t["ok"]      = ok
+                t["ok"] = ok
                 t["elapsed"] = round(time.monotonic() - t["start"], 3)
-                t["note"]    = note
+                t["note"] = note
                 break
         icon = "✅" if ok else "❌"
         elapsed_str = ""
@@ -107,16 +107,19 @@ class ExecutionConsole:
     def show_dag(self) -> None:
         if not self._tasks:
             return
-        ok_count   = sum(1 for t in self._tasks if t.get("ok") is True)
+        ok_count = sum(1 for t in self._tasks if t.get("ok") is True)
         fail_count = sum(1 for t in self._tasks if t.get("ok") is False)
-        total      = len(self._tasks)
+        total = len(self._tasks)
         print(f"\n  {'─' * 68}", flush=True)
-        print(f"  DAG Summary:  {ok_count}/{total} tasks OK  "
-              f"{'⚠️  ' + str(fail_count) + ' failed' if fail_count else '✅ All clean'}", flush=True)
+        print(
+            f"  DAG Summary:  {ok_count}/{total} tasks OK  "
+            f"{'⚠️  ' + str(fail_count) + ' failed' if fail_count else '✅ All clean'}",
+            flush=True,
+        )
         for t in self._tasks:
-            icon    = "✅" if t.get("ok") else ("❌" if t.get("ok") is False else "⏳")
+            icon = "✅" if t.get("ok") else ("❌" if t.get("ok") is False else "⏳")
             elapsed = f"{t.get('elapsed', 0):.3f}s" if "elapsed" in t else "…"
-            note    = f"  {t.get('note', '')}" if t.get("note") else ""
+            note = f"  {t.get('note', '')}" if t.get("note") else ""
             print(f"    {icon}  {t['name']:<32}  {elapsed}{note}", flush=True)
         print(f"  {'─' * 68}\n", flush=True)
 
@@ -183,11 +186,24 @@ def reset_console(module_name: str = "continum") -> ExecutionConsole:
 
 # Convenience module-level functions — modules can do:
 #   from continum.crosscutting.console import con_info, con_warn
-def con_info(msg: str)    -> None: get_console().info(msg)
-def con_warn(msg: str)    -> None: get_console().warn(msg)
-def con_error(msg: str)   -> None: get_console().error(msg)
-def con_success(msg: str) -> None: get_console().success(msg)
-def con_debug(msg: str)   -> None: get_console().debug(msg)
+def con_info(msg: str) -> None:
+    get_console().info(msg)
+
+
+def con_warn(msg: str) -> None:
+    get_console().warn(msg)
+
+
+def con_error(msg: str) -> None:
+    get_console().error(msg)
+
+
+def con_success(msg: str) -> None:
+    get_console().success(msg)
+
+
+def con_debug(msg: str) -> None:
+    get_console().debug(msg)
 
 
 __all__ = [

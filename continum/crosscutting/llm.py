@@ -1,4 +1,5 @@
 """Continum LLM client (OpenAI/Azure) + credentials + lifecycle manager (merged)."""
+
 from __future__ import annotations
 
 # ===== merged from core/llm/config.py =====
@@ -41,6 +42,7 @@ def load_credentials() -> None:
         root = _repo_root()
         try:
             from dotenv import load_dotenv
+
             p = root / ".env"
             if p.exists():
                 load_dotenv(p, override=False)
@@ -48,6 +50,7 @@ def load_credentials() -> None:
             pass
         try:
             import tomllib  # Python 3.11+
+
             p = root / ".streamlit" / "secrets.toml"
             if p.exists():
                 with open(p, "rb") as fh:
@@ -63,10 +66,12 @@ def load_credentials() -> None:
 def active_provider() -> str:
     """Return the LLM backend to use: 'azure' | 'openai' | 'unconfigured'."""
     load_credentials()
-    if (os.getenv("OPENAI_API_TYPE", "").lower() == "azure"
-            and os.getenv("OPENAI_API_KEY")
-            and (os.getenv("OPENAI_API_BASE") or os.getenv("AZURE_OPENAI_ENDPOINT"))
-            and (os.getenv("OPENAI_DEPLOYMENT_NAME") or os.getenv("AZURE_OPENAI_DEPLOYMENT"))):
+    if (
+        os.getenv("OPENAI_API_TYPE", "").lower() == "azure"
+        and os.getenv("OPENAI_API_KEY")
+        and (os.getenv("OPENAI_API_BASE") or os.getenv("AZURE_OPENAI_ENDPOINT"))
+        and (os.getenv("OPENAI_DEPLOYMENT_NAME") or os.getenv("AZURE_OPENAI_DEPLOYMENT"))
+    ):
         return "azure"
     if os.getenv("OPENAI_API_KEY"):
         return "openai"
@@ -109,7 +114,6 @@ Configure with ``OPENAI_API_KEY`` (+ optional ``OPENAI_MODEL``) in a repo-root
 
 import json
 import logging
-import os
 import threading
 from typing import Any, Dict, Optional
 
@@ -120,9 +124,9 @@ logger = logging.getLogger("continum.crosscutting.llm")
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_CONFIG: Dict[str, Any] = {
-    "model_id":       "gpt-4o-mini",   # default; overridden by OPENAI_MODEL env
+    "model_id": "gpt-4o-mini",  # default; overridden by OPENAI_MODEL env
     "max_new_tokens": 2048,
-    "temperature":    0.3,
+    "temperature": 0.3,
 }
 
 # Grounding system prompt — ensures the model ONLY uses provided data
@@ -136,14 +140,13 @@ GROUNDING_SYSTEM = (
     "Write in plain business language. Do not use emojis, icons, or decorative symbols."
 )
 
-_NOT_CONFIGURED = (
-    "[LLM not configured — set OPENAI_API_KEY in .streamlit/secrets.toml or .env]"
-)
+_NOT_CONFIGURED = "[LLM not configured — set OPENAI_API_KEY in .streamlit/secrets.toml or .env]"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OPENAI CLIENT
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class LLMClient:
     """OpenAI / Azure OpenAI chat client with Continum's historical method surface."""
@@ -152,11 +155,14 @@ class LLMClient:
         load_credentials()
         cfg = config or AGENT_CONFIG
         self.max_new_tokens = cfg.get("max_new_tokens", 2048)
-        self.temperature    = cfg.get("temperature", 0.3)
-        self.provider       = active_provider()
+        self.temperature = cfg.get("temperature", 0.3)
+        self.provider = active_provider()
         if self.provider == "azure":
-            self.model_id = (os.getenv("OPENAI_DEPLOYMENT_NAME")
-                             or os.getenv("AZURE_OPENAI_DEPLOYMENT") or "gpt-4o")
+            self.model_id = (
+                os.getenv("OPENAI_DEPLOYMENT_NAME")
+                or os.getenv("AZURE_OPENAI_DEPLOYMENT")
+                or "gpt-4o"
+            )
         else:
             self.model_id = openai_model()
         self._chat = None
@@ -169,16 +175,19 @@ class LLMClient:
         prov = active_provider()
         if prov == "azure":
             from langchain_openai import AzureChatOpenAI
+
             return AzureChatOpenAI(
                 openai_api_key=os.getenv("OPENAI_API_KEY"),
                 azure_endpoint=os.getenv("OPENAI_API_BASE") or os.getenv("AZURE_OPENAI_ENDPOINT"),
-                deployment_name=os.getenv("OPENAI_DEPLOYMENT_NAME") or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                deployment_name=os.getenv("OPENAI_DEPLOYMENT_NAME")
+                or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
                 openai_api_version=os.getenv("OPENAI_API_VERSION", "2024-05-01-preview"),
                 temperature=self.temperature,
                 max_tokens=self.max_new_tokens,
             )
         if prov == "openai":
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
                 model=self.model_id,
                 temperature=self.temperature,
@@ -267,10 +276,10 @@ class LLMClient:
 
     def status(self) -> Dict:
         return {
-            "model_id":       self.model_id,
-            "is_loaded":      self.is_loaded,
-            "device":         self.provider,   # 'openai' | 'azure' | 'unconfigured'
-            "provider":       self.provider,
+            "model_id": self.model_id,
+            "is_loaded": self.is_loaded,
+            "device": self.provider,  # 'openai' | 'azure' | 'unconfigured'
+            "provider": self.provider,
             "max_new_tokens": self.max_new_tokens,
         }
 
@@ -285,12 +294,13 @@ __all__ = ["LLMClient", "TransformersClient", "AGENT_CONFIG", "GROUNDING_SYSTEM"
 # ===== merged from core/llm/manager.py =====
 import logging
 import threading
-from typing import Optional
 
 logger = logging.getLogger("continum.crosscutting.llm")
 
 _INSTANCE: Optional["TransformersClient"] = None  # type: ignore
-_MGR_LOCK = threading.Lock()   # distinct from the credentials _LOCK above (merge: avoid re-entrant deadlock)
+_MGR_LOCK = (
+    threading.Lock()
+)  # distinct from the credentials _LOCK above (merge: avoid re-entrant deadlock)
 
 
 def get_llm():
@@ -321,17 +331,18 @@ def unload_llm():
 def llm_status() -> dict:
     if _INSTANCE is None:
         return {
-            "available":    False,
-            "is_loaded":    False,
-            "model_id":     None,
-            "device":       None,
+            "available": False,
+            "is_loaded": False,
+            "model_id": None,
+            "device": None,
             "max_new_tokens": 0,
-            "message":      "LLM not initialised. Call /api/llm/load to start.",
+            "message": "LLM not initialised. Call /api/llm/load to start.",
         }
     s = _INSTANCE.status()
     s["available"] = True
     s["message"] = (
-        f"Model loaded on {s['device']}." if s["is_loaded"]
+        f"Model loaded on {s['device']}."
+        if s["is_loaded"]
         else "Model not loaded — will load on first use."
     )
     return s
@@ -344,4 +355,3 @@ __all__ = [
     "unload_llm",
     "llm_status",
 ]
-

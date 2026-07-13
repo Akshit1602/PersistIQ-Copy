@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import random
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("continum.askdata.narrative_runtime")
@@ -11,6 +10,7 @@ logger = logging.getLogger("continum.askdata.narrative_runtime")
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _g(obj, *keys, default=None):
     for k in keys:
@@ -35,12 +35,13 @@ def _pick(*options: str) -> str:
 # NARRATIVE RUNTIME
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class NarrativeRuntime:
 
     def __init__(self, bus=None, session=None, memory=None):
-        self.bus     = bus
+        self.bus = bus
         self.session = session
-        self.memory  = memory
+        self.memory = memory
 
     # ── After a module completes ───────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ class NarrativeRuntime:
         text = _TRANSITIONS.get(key)
         if not text:
             from_name = from_module.replace("_", " ")
-            to_name   = to_module.replace("_", " ")
+            to_name = to_module.replace("_", " ")
             text = f"With {from_name} behind us, let's move on to {to_name}."
         self._publish(text, source="transition")
         return text
@@ -90,31 +91,35 @@ class NarrativeRuntime:
 
         exp = s.active_experiment
         metrics = s.active_metrics
-        n_runs  = len(s.execution_history)
-        result  = s.get("experiment_result")
+        n_runs = len(s.execution_history)
+        result = s.get("experiment_result")
 
         # No experiment selected
         if not exp:
-            thoughts.extend([
-                "No experiment selected. Start by loading data or picking an experiment from the dropdown.",
-                "The schema discovery module can help map your data before running any analysis.",
-                "Once an experiment is selected, I can tell you whether it's significant and why.",
-            ])
+            thoughts.extend(
+                [
+                    "No experiment selected. Start by loading data or picking an experiment from the dropdown.",
+                    "The schema discovery module can help map your data before running any analysis.",
+                    "Once an experiment is selected, I can tell you whether it's significant and why.",
+                ]
+            )
             return thoughts
 
         # Experiment selected, no analysis run
         if exp and not s.last_run("experiment_analysis"):
-            thoughts.extend([
-                f"Experiment '{exp}' is loaded but not yet analysed. Run the A/B Readout when ready.",
-                f"I haven't seen the results for '{exp}' yet. The A/B Readout will tell us whether it moved the needle.",
-                f"'{exp}' is selected. When you run the readout, I'll tell you whether the effect is real.",
-            ])
+            thoughts.extend(
+                [
+                    f"Experiment '{exp}' is loaded but not yet analysed. Run the A/B Readout when ready.",
+                    f"I haven't seen the results for '{exp}' yet. The A/B Readout will tell us whether it moved the needle.",
+                    f"'{exp}' is selected. When you run the readout, I'll tell you whether the effect is real.",
+                ]
+            )
 
         # Analysis run, results available
         if result:
             primary = _g(result, "primary_delta")
-            dp  = float(_g(primary, "delta_pp") or 0)
-            pv  = float(_g(primary, "p_value") or 1)
+            dp = float(_g(primary, "delta_pp") or 0)
+            pv = float(_g(primary, "p_value") or 1)
             sig = bool(_g(primary, "is_significant") or False)
             srm = bool(_g(result, "srm_detected") or False)
 
@@ -145,9 +150,7 @@ class NarrativeRuntime:
             warnings = b.warnings()
             if warnings:
                 w = warnings[-1]
-                thoughts.append(
-                    f"Active warning from {w.source_module}: {w.message}"
-                )
+                thoughts.append(f"Active warning from {w.source_module}: {w.message}")
 
         # Memory observations
         if self.memory and n_runs > 0:
@@ -183,9 +186,9 @@ class NarrativeRuntime:
         if s is None:
             return "Session started."
 
-        n_runs  = len(s.execution_history)
-        exp     = s.active_experiment
-        n_mem   = self.memory.experiment_count() if self.memory else 0
+        n_runs = len(s.execution_history)
+        exp = s.active_experiment
+        n_mem = self.memory.experiment_count() if self.memory else 0
 
         if n_runs == 0 and not exp:
             text = (
@@ -201,10 +204,7 @@ class NarrativeRuntime:
                 f"{exp and 'Active experiment: ' + exp + '.' or ''}"
             )
         else:
-            text = (
-                f"Session {s.session_id} open. "
-                f"Experiment '{exp}' selected. Ready."
-            )
+            text = f"Session {s.session_id} open. " f"Experiment '{exp}' selected. Ready."
 
         self._publish(text, source="session")
         return text
@@ -214,7 +214,8 @@ class NarrativeRuntime:
     def _publish(self, text: str, source: str = "narrative") -> None:
         if self.bus and text:
             try:
-                from continum.insights.insight_bus import InsightType, InsightSeverity
+                from continum.insights.insight_bus import InsightSeverity, InsightType
+
                 self.bus.emit(
                     source_module=source,
                     message=text,
@@ -229,11 +230,12 @@ class NarrativeRuntime:
             return []
         try:
             from continum.insights.insight_bus import InsightType
+
             items = self.bus.by_type(InsightType.NARRATIVE)[-n:]
             return [
                 {
-                    "text":       i.message,
-                    "source":     i.source_module,
+                    "text": i.message,
+                    "source": i.source_module,
                     "created_at": i.created_at[:19],
                 }
                 for i in reversed(items)
@@ -246,10 +248,11 @@ class NarrativeRuntime:
 # MODULE-SPECIFIC NARRATORS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _narrate_schema_discovery(result, session, memory) -> str:
     tables = _g(result, "tables_discovered", default=0) or 0
     metrics = _g(result, "metrics_inferred", default=[]) or []
-    n_m     = len(metrics) if isinstance(metrics, list) else 0
+    n_m = len(metrics) if isinstance(metrics, list) else 0
     return (
         f"Schema discovery mapped {tables} table(s). "
         f"{'Inferred ' + str(n_m) + ' candidate metric(s). ' if n_m else ''}"
@@ -258,13 +261,13 @@ def _narrate_schema_discovery(result, session, memory) -> str:
 
 
 def _narrate_experiment_analysis(result, session, memory) -> str:
-    r       = _g(result, "result") or result
+    r = _g(result, "result") or result
     primary = _g(r, "primary_delta")
-    dp      = float(_g(primary, "delta_pp") or 0)
-    pv      = float(_g(primary, "p_value") or 1)
-    sig     = bool(_g(primary, "is_significant") or False)
-    srm     = bool(_g(r, "srm_detected") or False)
-    exp     = _g(r, "experiment_name") or (session.active_experiment if session else "")
+    dp = float(_g(primary, "delta_pp") or 0)
+    pv = float(_g(primary, "p_value") or 1)
+    sig = bool(_g(primary, "is_significant") or False)
+    srm = bool(_g(r, "srm_detected") or False)
+    exp = _g(r, "experiment_name") or (session.active_experiment if session else "")
 
     if srm:
         return (
@@ -293,7 +296,7 @@ def _narrate_causal_analysis(result, session, memory) -> str:
     n = len(estimates)
     if not n:
         return "Causal analysis completed. No estimates were produced — check data requirements."
-    methods   = [_g(e, "method", default="?") for e in estimates[:3]]
+    methods = [_g(e, "method", default="?") for e in estimates[:3]]
     agreement = _check_estimate_agreement(estimates)
     return (
         f"Ran {n} causal method(s): {', '.join(methods)}. "
@@ -316,14 +319,14 @@ def _check_estimate_agreement(estimates: list) -> str:
 
 
 def _narrate_power_calculator(result, session, memory) -> str:
-    n_req  = _g(result, "n_total") or _g(result, "result", default={})
+    n_req = _g(result, "n_total") or _g(result, "result", default={})
     if hasattr(n_req, "n_total"):
         n_req = n_req.n_total
     if isinstance(n_req, dict):
         n_req = n_req.get("n_total")
     n_req = int(n_req or 0)
-    days  = _g(result, "days_required") or 0
-    mde   = _g(result, "mde_rel") or 0
+    days = _g(result, "days_required") or 0
+    mde = _g(result, "mde_rel") or 0
 
     if n_req:
         return (
@@ -336,8 +339,8 @@ def _narrate_power_calculator(result, session, memory) -> str:
 
 def _narrate_health_monitor(result, session, memory) -> str:
     violations = _g(result, "guardrail_violations", default=[]) or []
-    srm        = _g(result, "srm_detected", default=False)
-    n_v        = len(violations)
+    srm = _g(result, "srm_detected", default=False)
+    n_v = len(violations)
 
     if srm:
         return (
@@ -375,12 +378,12 @@ def _narrate_learnings_repository(result, session, memory) -> str:
 
 
 _MODULE_NARRATORS = {
-    "schema_discovery":     _narrate_schema_discovery,
-    "experiment_analysis":  _narrate_experiment_analysis,
-    "causal_analysis":      _narrate_causal_analysis,
-    "power_calculator":     _narrate_power_calculator,
-    "health_monitor":       _narrate_health_monitor,
-    "opportunity_sizing":   _narrate_opportunity_sizing,
+    "schema_discovery": _narrate_schema_discovery,
+    "experiment_analysis": _narrate_experiment_analysis,
+    "causal_analysis": _narrate_causal_analysis,
+    "power_calculator": _narrate_power_calculator,
+    "health_monitor": _narrate_health_monitor,
+    "opportunity_sizing": _narrate_opportunity_sizing,
     "learnings_repository": _narrate_learnings_repository,
 }
 
@@ -390,22 +393,35 @@ _MODULE_NARRATORS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TRANSITIONS = {
-    ("schema_discovery",    "power_calculator"):
-        "With the schema mapped, we can now size the experiment properly.",
-    ("schema_discovery",    "opportunity_sizing"):
-        "Schema's clear. Let's quantify the revenue opportunity before committing to an experiment.",
-    ("opportunity_sizing",  "power_calculator"):
-        "Opportunity is sized. Now we need to know how long to run the experiment.",
-    ("power_calculator",    "brief_generator"):
-        "Sample size is set. Time to formalise the hypothesis into a brief.",
-    ("brief_generator",     "health_monitor"):
-        "Brief is ready. If the experiment is live, let's check its health.",
-    ("health_monitor",      "experiment_analysis"):
-        "Health looks good. Moving to the full readout.",
-    ("experiment_analysis", "causal_analysis"):
-        "A/B analysis is done. Let's validate the finding with causal methods.",
-    ("causal_analysis",     "learnings_repository"):
-        "Causal estimates are in. Let's store this before we move on.",
+    (
+        "schema_discovery",
+        "power_calculator",
+    ): "With the schema mapped, we can now size the experiment properly.",
+    (
+        "schema_discovery",
+        "opportunity_sizing",
+    ): "Schema's clear. Let's quantify the revenue opportunity before committing to an experiment.",
+    (
+        "opportunity_sizing",
+        "power_calculator",
+    ): "Opportunity is sized. Now we need to know how long to run the experiment.",
+    (
+        "power_calculator",
+        "brief_generator",
+    ): "Sample size is set. Time to formalise the hypothesis into a brief.",
+    (
+        "brief_generator",
+        "health_monitor",
+    ): "Brief is ready. If the experiment is live, let's check its health.",
+    ("health_monitor", "experiment_analysis"): "Health looks good. Moving to the full readout.",
+    (
+        "experiment_analysis",
+        "causal_analysis",
+    ): "A/B analysis is done. Let's validate the finding with causal methods.",
+    (
+        "causal_analysis",
+        "learnings_repository",
+    ): "Causal estimates are in. Let's store this before we move on.",
 }
 
 
@@ -421,9 +437,12 @@ def get_narrative(bus=None, session=None, memory=None) -> NarrativeRuntime:
     if _NARRATIVE is None:
         _NARRATIVE = NarrativeRuntime(bus=bus, session=session, memory=memory)
     else:
-        if bus     is not None: _NARRATIVE.bus     = bus
-        if session is not None: _NARRATIVE.session = session
-        if memory  is not None: _NARRATIVE.memory  = memory
+        if bus is not None:
+            _NARRATIVE.bus = bus
+        if session is not None:
+            _NARRATIVE.session = session
+        if memory is not None:
+            _NARRATIVE.memory = memory
     return _NARRATIVE
 
 

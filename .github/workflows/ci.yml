@@ -1,0 +1,155 @@
+name: Continum CI
+
+on:
+  push:
+    branches: [main, develop, akshit-dev, feat/gemini-migration, chore/lint-normalization, chore/repo-governance]
+  pull_request:
+    branches: [main, develop, akshit-dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ── Unit + calibration tests ──────────────────────────────────────────────
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install duckdb pandas numpy scipy scikit-learn statsmodels \
+                      pydantic reportlab pytest pytest-cov
+
+      - name: Run unit tests
+        run: |
+          python -m pytest continum/tests/test_statistics.py \
+            -v --tb=short \
+            --cov=continum/experimentation/stats \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+      - name: Run calibration tests
+        run: |
+          python -m pytest continum/tests/test_calibration.py \
+            -v --tb=short \
+            -m "not slow"
+
+      - name: Syntax check all modules
+        run: |
+          python -c "
+          import py_compile, glob, sys
+          files = glob.glob('continum/**/*.py', recursive=True)
+          errors = []
+          for f in files:
+              try:
+                  py_compile.compile(f, doraise=True)
+              except py_compile.PyCompileError as e:
+                  errors.append(str(e))
+          if errors:
+              print('Syntax errors:')
+              for e in errors:
+                  print(' ', e)
+              sys.exit(1)
+          print(f'All {len(files)} files pass syntax check')
+          "
+
+  # ── Import smoke test ─────────────────────────────────────────────────────
+  imports:
+    name: Import smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic
+      - name: Test all public imports
+        run: |
+          python -c "
+          from continum.experimentation.stats.statistics import proportion_test, means_test, compute_sample_size
+          from continum.experimentation.stats.cuped import apply_cuped, bootstrap_ci, delta_method_ratio
+          from continum.experimentation.stats.bayesian import beta_binomial_test, bayesian_multi_arm
+          from continum.experimentation.stats.sequential import SequentialTester, compute_e_value
+          from continum.experimentation.stats.srm_detector import detect_srm
+          from continum.experimentation.stats.guardrails import run_guardrail_checks
+          from continum.experimentation.monitoring.detectors import detect_volume_anomaly, detect_distribution_shift
+          from continum.experimentation.monitoring.monitors import PipelineHealthMonitor, WatchtowerMonitor
+          from continum.experimentation.narrative import generate_executive_narrative
+          from continum.experimentation.metric_planner import METRICS_KB, gen_metrics_bundle
+          from continum.datastore.lineage import ExecutionRegistry
+          from continum.toolinterface import list_modules, _build_registry
+          _build_registry()
+          mods = list_modules()
+          assert len(mods) >= 18, f'Expected >= 18 modules, got {len(mods)}'
+          print(f'All imports OK — {len(mods)} modules registered')
+          "
+
+  # ── Pipeline integration test ─────────────────────────────────────────────
+  integration:
+    name: Pipeline integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic statsmodels
+      - name: End-to-end pipeline test
+        run: |
+          python -c "
+          import sys, numpy as np, pandas as pd, duckdb
+          sys.path.insert(0, '.')
+
+          # Generate minimal synthetic data
+          from continum.contextmate.synthetic_generator import generate_all
+          datasets = generate_all('./test_data', n_users=500, seed=42)
+
+          # Set up DB
+          db = duckdb.connect(':memory:')
+          rng = np.random.default_rng(42)
+          n = 600
+          df = pd.DataFrame({
+              'experiment_name':    'ci_test_exp',
+              'variant':            rng.choice(['control','treatment'], n),
+              'converted_to_order': rng.binomial(1, 0.18, n),
+              'order_value':        rng.exponential(4000, n),
+              'created_at':         pd.date_range('2025-01-01', periods=n, freq='h'),
+              'account_segment':    rng.choice(['Core','Growth','Enterprise','Individuals'], n),
+          })
+          db.register('gold_experiment_analysis', df)
+
+          # Run full pipeline
+          from continum.experimentation.analysis_dag import run_experiment_analysis_pipeline
+          result = run_experiment_analysis_pipeline(
+              experiment_id='ci_test_exp',
+              experiment_name='ci_test_exp',
+              db=db, llm=None, save_result=False,
+          )
+          r = result.get('result')
+          assert r is not None, f'Pipeline returned no result: {result.get(\"error\")}'
+          assert 0 <= r.primary_delta.p_value <= 1
+          assert r.verdict is not None
+          assert r.ship_recommendation is not None
+          print(f'Pipeline OK: verdict={r.verdict.value} p={r.primary_delta.p_value:.4f}')
+
+          import shutil; shutil.rmtree('./test_data', ignore_errors=True)
+          "

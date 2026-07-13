@@ -15,10 +15,11 @@ def bootstrap_from_connection(
     **credentials,
 ) -> ContinumState:
     import duckdb
+
     if db is None:
         db = duckdb.connect(":memory:")
 
-    ingestion_mode = IngestionMode(mode)
+    ingestion_mode = IngestionMode(mode)  # noqa: F841
 
     state = ContinumState()
     state.org.set_client_config(

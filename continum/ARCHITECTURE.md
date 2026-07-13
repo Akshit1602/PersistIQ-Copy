@@ -23,7 +23,7 @@ User UI ─▶ intentanalyser.py ─▶ orchestrator.py ─┬─▶ askdata/ �
 | `toolinterface.py` | Tool-Calling Interface | Module registry + `run_module` (single file) |
 | `askdata/` | AskData (SQL/Viz/Insight agents) | LangGraph engine; the 3 agents are `sql_node`/`visualization_node`/`insight_node` sections in `graph_logic.py`; `ask_engine.py`, `flow.py`, `readout.py`, `narrative_runtime.py` |
 | `experimentation/` | Experimentation Module Family | `analysis_dag`, `metric_planner`, `artifacts`, `enterprise`, `compare`, + `stats/ causal/ analytics/ monitoring/ post_analysis/` |
-| `insights/` | (post-run intelligence) | `insight_bus`, `cognition`, `patterns`, `recommendations`, `session` |
+| `insights/` | (post-run intelligence) | `insight_bus`, `patterns`, `session` (dead `cognition` + `recommendations` modules removed 2026-06-27) |
 | `crosscutting/` | (shared leaf utils) | `llm.py` (client+config+manager), `console.py`, `pdf.py`, `runtime_config.py` |
 | `tests/` | — | pytest suite (142 tests) |
 

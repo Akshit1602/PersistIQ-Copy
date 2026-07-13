@@ -17,14 +17,15 @@ MEMORY_DB_PATH = os.path.join(RUNTIME_DATA_DIR, "continum_memory.duckdb")
 class CrossExperimentMemory:
 
     def __init__(self, db_path: str = MEMORY_DB_PATH, in_memory: bool = False):
-        self.db_path   = db_path
-        self._db       = None
+        self.db_path = db_path
+        self._db = None
         self._in_memory = in_memory
-        self._conn     = None  # persistent connection for in-memory mode
+        self._conn = None  # persistent connection for in-memory mode
         self._init_db()
 
     def _connect(self):
         import duckdb
+
         if self._in_memory:
             if self._conn is None:
                 self._conn = duckdb.connect(":memory:")
@@ -85,7 +86,8 @@ class CrossExperimentMemory:
                     tags             VARCHAR
                 )
             """)
-            if not self._in_memory: db.close()
+            if not self._in_memory:
+                db.close()
             if not self._in_memory:
                 logger.info("CrossExperimentMemory initialised at %s", self.db_path)
         except Exception as e:
@@ -125,37 +127,41 @@ class CrossExperimentMemory:
 
             primary = _get(result, "primary_delta")
             delta_pp = float(_get(primary, "delta_pp", default=0.0) or 0.0)
-            p_value  = float(_get(primary, "p_value", default=1.0) or 1.0)
-            is_sig   = bool(_get(primary, "is_significant", default=False))
-            n_total  = int(
-                (_get(primary, "n_control", default=0) or 0) +
-                (_get(primary, "n_treatment", default=0) or 0)
+            p_value = float(_get(primary, "p_value", default=1.0) or 1.0)
+            is_sig = bool(_get(primary, "is_significant", default=False))
+            n_total = int(
+                (_get(primary, "n_control", default=0) or 0)
+                + (_get(primary, "n_treatment", default=0) or 0)
             )
-            verdict  = str(_get(result, "verdict", default="") or "")
+            verdict = str(_get(result, "verdict", default="") or "")
             ship_rec = str(_get(result, "ship_recommendation", default="") or "")
-            metric   = str(_get(result, "primary_metric", default="") or "")
-            srm      = bool(_get(result, "srm_detected", default=False))
+            metric = str(_get(result, "primary_metric", default="") or "")
+            srm = bool(_get(result, "srm_detected", default=False))
 
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO experiment_memory VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, [
-                experiment_id,
-                experiment_name,
-                datetime.utcnow().isoformat(),
-                phase,
-                verdict,
-                ship_rec,
-                metric,
-                delta_pp,
-                p_value,
-                is_sig,
-                n_total,
-                srm,
-                json.dumps(tags or []),
-                narrative[:2000],
-                "{}",
-            ])
-            if not self._in_memory: db.close()
+            """,
+                [
+                    experiment_id,
+                    experiment_name,
+                    datetime.utcnow().isoformat(),
+                    phase,
+                    verdict,
+                    ship_rec,
+                    metric,
+                    delta_pp,
+                    p_value,
+                    is_sig,
+                    n_total,
+                    srm,
+                    json.dumps(tags or []),
+                    narrative[:2000],
+                    "{}",
+                ],
+            )
+            if not self._in_memory:
+                db.close()
             logger.info("Experiment %s recorded to memory", experiment_id)
             return True
         except Exception as e:
@@ -174,11 +180,24 @@ class CrossExperimentMemory:
     ) -> None:
         try:
             db = self._connect()
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO anomaly_memory VALUES (?,?,?,?,?,?,?,?,?)
-            """, [experiment_id, datetime.utcnow().isoformat(), anomaly_type,
-                  metric, severity, description, z_score, pct_change, False])
-            if not self._in_memory: db.close()
+            """,
+                [
+                    experiment_id,
+                    datetime.utcnow().isoformat(),
+                    anomaly_type,
+                    metric,
+                    severity,
+                    description,
+                    z_score,
+                    pct_change,
+                    False,
+                ],
+            )
+            if not self._in_memory:
+                db.close()
         except Exception as e:
             logger.debug("record_anomaly failed: %s", e)
 
@@ -192,11 +211,21 @@ class CrossExperimentMemory:
     ) -> None:
         try:
             db = self._connect()
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO metric_memory VALUES (?,?,?,?,?,?)
-            """, [experiment_id, metric_name, baseline_value, observed_delta,
-                  is_significant, datetime.utcnow().isoformat()])
-            if not self._in_memory: db.close()
+            """,
+                [
+                    experiment_id,
+                    metric_name,
+                    baseline_value,
+                    observed_delta,
+                    is_significant,
+                    datetime.utcnow().isoformat(),
+                ],
+            )
+            if not self._in_memory:
+                db.close()
         except Exception as e:
             logger.debug("record_metric failed: %s", e)
 
@@ -209,11 +238,20 @@ class CrossExperimentMemory:
     ) -> None:
         try:
             db = self._connect()
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO learning_memory VALUES (?,?,?,?,?)
-            """, [experiment_id, datetime.utcnow().isoformat(), category,
-                  learning[:2000], json.dumps(tags or [])])
-            if not self._in_memory: db.close()
+            """,
+                [
+                    experiment_id,
+                    datetime.utcnow().isoformat(),
+                    category,
+                    learning[:2000],
+                    json.dumps(tags or []),
+                ],
+            )
+            if not self._in_memory:
+                db.close()
         except Exception as e:
             logger.debug("record_learning failed: %s", e)
 
@@ -225,10 +263,12 @@ class CrossExperimentMemory:
             words = [w.lower() for w in topic.split() if len(w) > 2]
             if not words:
                 return []
-            conditions = " OR ".join([
-                f"LOWER(experiment_name) LIKE '%{w}%' OR LOWER(narrative) LIKE '%{w}%'"
-                for w in words[:5]
-            ])
+            conditions = " OR ".join(
+                [
+                    f"LOWER(experiment_name) LIKE '%{w}%' OR LOWER(narrative) LIKE '%{w}%'"
+                    for w in words[:5]
+                ]
+            )
             rows = db.execute(f"""
                 SELECT experiment_id, experiment_name, recorded_at, verdict,
                        ship_recommendation, primary_metric, delta_pp, p_value,
@@ -238,10 +278,20 @@ class CrossExperimentMemory:
                 ORDER BY recorded_at DESC
                 LIMIT {limit}
             """).fetchall()
-            if not self._in_memory: db.close()
-            cols = ["experiment_id", "experiment_name", "recorded_at", "verdict",
-                    "ship_recommendation", "primary_metric", "delta_pp", "p_value",
-                    "is_significant", "narrative"]
+            if not self._in_memory:
+                db.close()
+            cols = [
+                "experiment_id",
+                "experiment_name",
+                "recorded_at",
+                "verdict",
+                "ship_recommendation",
+                "primary_metric",
+                "delta_pp",
+                "p_value",
+                "is_significant",
+                "narrative",
+            ]
             return [dict(zip(cols, r)) for r in rows]
         except Exception as e:
             logger.debug("search_similar failed: %s", e)
@@ -251,7 +301,7 @@ class CrossExperimentMemory:
         try:
             db = self._connect()
             filters = []
-            params  = []
+            params = []
             if metric:
                 filters.append("LOWER(learning) LIKE ?")
                 params.append(f"%{metric.lower()}%")
@@ -259,14 +309,18 @@ class CrossExperimentMemory:
                 filters.append("LOWER(category) = ?")
                 params.append(category.lower())
             where = f"WHERE {' AND '.join(filters)}" if filters else ""
-            rows = db.execute(f"""
+            rows = db.execute(
+                f"""
                 SELECT experiment_id, recorded_at, category, learning, tags
                 FROM learning_memory
                 {where}
                 ORDER BY recorded_at DESC
                 LIMIT {limit}
-            """, params).fetchall()
-            if not self._in_memory: db.close()
+            """,
+                params,
+            ).fetchall()
+            if not self._in_memory:
+                db.close()
             cols = ["experiment_id", "recorded_at", "category", "learning", "tags"]
             return [dict(zip(cols, r)) for r in rows]
         except Exception as e:
@@ -287,7 +341,8 @@ class CrossExperimentMemory:
                 ORDER BY n_experiments DESC, sig_rate DESC
                 LIMIT {limit}
             """).fetchall()
-            if not self._in_memory: db.close()
+            if not self._in_memory:
+                db.close()
             cols = ["metric_name", "n_experiments", "avg_delta", "sig_rate"]
             return [dict(zip(cols, r)) for r in rows]
         except Exception as e:
@@ -305,8 +360,16 @@ class CrossExperimentMemory:
                 ORDER BY detected_at DESC
                 LIMIT {limit}
             """).fetchall()
-            if not self._in_memory: db.close()
-            cols = ["experiment_id", "detected_at", "anomaly_type", "metric", "severity", "description"]
+            if not self._in_memory:
+                db.close()
+            cols = [
+                "experiment_id",
+                "detected_at",
+                "anomaly_type",
+                "metric",
+                "severity",
+                "description",
+            ]
             return [dict(zip(cols, r)) for r in rows]
         except Exception as e:
             logger.debug("get_recent_anomalies failed: %s", e)
@@ -316,7 +379,8 @@ class CrossExperimentMemory:
         try:
             db = self._connect()
             n = db.execute("SELECT COUNT(*) FROM experiment_memory").fetchone()[0]
-            if not self._in_memory: db.close()
+            if not self._in_memory:
+                db.close()
             return int(n)
         except Exception:
             return 0

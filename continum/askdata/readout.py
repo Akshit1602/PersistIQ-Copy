@@ -1,7 +1,7 @@
 """
-Readout library for the Continum Copilot — the "clean post-analysis flow".
+Saved outputs the Continum Copilot can reference — the "clean post-analysis flow".
 
-Two sources feed a per-app library the Copilot can reference:
+Two sources feed the per-app outputs the Copilot can reference:
   * uploaded   — a PDF/DOCX/text the user drops in       (``add_uploaded``)
   * generated  — the PDF/text an analysis module produces (``add_generated``)
 
@@ -14,6 +14,7 @@ enhancement, not wired here.
 State lives on the Flask ``app`` (``app._readouts``) like the AskData engine, so
 it is process-scoped and survives across turns without a database.
 """
+
 from __future__ import annotations
 
 import io
@@ -24,8 +25,8 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("continum.askdata.readout")
 
-_MAX_CHARS = 20000        # cap stored text per readout
-_PROMPT_BUDGET = 12000    # total readout text folded into one answer prompt
+_MAX_CHARS = 20000  # cap stored text per readout
+_PROMPT_BUDGET = 12000  # total readout text folded into one answer prompt
 
 # Extensions we treat as text-bearing readouts when auto-registering module output.
 _GENERATED_EXTS = (".pdf", ".txt", ".md")
@@ -37,6 +38,7 @@ def extract_text(filename: str, data: bytes) -> str:
     if name.endswith(".pdf"):
         try:
             from pypdf import PdfReader
+
             reader = PdfReader(io.BytesIO(data))
             parts = []
             for page in reader.pages:
@@ -51,6 +53,7 @@ def extract_text(filename: str, data: bytes) -> str:
     if name.endswith(".docx"):
         try:
             import docx
+
             doc = docx.Document(io.BytesIO(data))
             return "\n".join(p.text for p in doc.paragraphs).strip()
         except Exception as e:
@@ -64,6 +67,7 @@ def extract_text(filename: str, data: bytes) -> str:
 
 
 # ── Store ────────────────────────────────────────────────────────────────────
+
 
 def get_store(app) -> List[Dict[str, Any]]:
     s = getattr(app, "_readouts", None)
@@ -79,7 +83,7 @@ def _add(app, name: str, text: str, source: str, **meta) -> Dict[str, Any]:
     item: Dict[str, Any] = {
         "id": f"r{len(store) + 1}_{int(time.time()) % 100000}",
         "name": name,
-        "source": source,                 # "uploaded" | "generated"
+        "source": source,  # "uploaded" | "generated"
         "n_chars": len(text),
         "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "text": text,
@@ -93,7 +97,9 @@ def add_uploaded(app, filename: str, data: bytes) -> Dict[str, Any]:
     return _add(app, filename or "readout", extract_text(filename, data), "uploaded")
 
 
-def add_generated(app, path: str, *, module: str = "", run_id: str = "") -> Optional[Dict[str, Any]]:
+def add_generated(
+    app, path: str, *, module: str = "", run_id: str = ""
+) -> Optional[Dict[str, Any]]:
     """Register a module-generated output file (PDF/text) as a readout. Skips
     non-text artefacts (png/csv/json) and files already registered by path."""
     ext = os.path.splitext(path)[1].lower()
@@ -111,8 +117,9 @@ def add_generated(app, path: str, *, module: str = "", run_id: str = "") -> Opti
     text = extract_text(path, data)
     if not text:
         return None
-    return _add(app, os.path.basename(path), text, "generated",
-                path=path, module=module, run_id=run_id)
+    return _add(
+        app, os.path.basename(path), text, "generated", path=path, module=module, run_id=run_id
+    )
 
 
 def add_generated_text(app, name: str, text: str, **meta) -> Optional[Dict[str, Any]]:
@@ -128,10 +135,11 @@ def result_to_text(result: Any, summary: str = "", module: str = "") -> str:
     """Render a module run's result into readable readout text (best-effort:
     dataclass / dict / object → 'key: value' lines, with nested scalars)."""
     import dataclasses
+
     lines: List[str] = []
     if module:
         lines.append(f"{module} readout")
-    if summary and not summary.lstrip().startswith("["):   # skip bare key-list summaries
+    if summary and not summary.lstrip().startswith("["):  # skip bare key-list summaries
         lines.append(f"Summary: {summary}")
     d = None
     try:
@@ -152,14 +160,16 @@ def result_to_text(result: Any, summary: str = "", module: str = "") -> str:
             elif isinstance(v, dict):
                 sub = {kk: vv for kk, vv in v.items() if isinstance(vv, (str, int, float, bool))}
                 if sub:
-                    lines.append(f"- {k}: " + ", ".join(f"{kk}={vv}" for kk, vv in list(sub.items())[:10]))
+                    lines.append(
+                        f"- {k}: " + ", ".join(f"{kk}={vv}" for kk, vv in list(sub.items())[:10])
+                    )
     elif result is not None:
         lines.append(str(result)[:1500])
     return "\n".join(lines).strip()
 
 
 def list_readouts(app) -> List[Dict[str, Any]]:
-    """Public, text-free view of the library (for the UI / list endpoint)."""
+    """Public, text-free view of the saved outputs (for the UI / list endpoint)."""
     return [{k: v for k, v in it.items() if k != "text"} for it in get_store(app)]
 
 
@@ -172,14 +182,52 @@ def clear(app) -> int:
 
 # ── Q&A grounding ──────────────────────────────────────────────────────────────
 
-_QA_NOUNS = ("readout", "report", "the document", "this document", "the pdf",
-             "uploaded", "the doc", "the analysis", "the writeup", "write-up")
-_QA_VERBS = ("summar", "what ", "why ", "explain", "finding", "takeaway",
-             "recap", "overview", "tl;dr", "tldr", "insight", "key point",
-             "compare", "tell me about", "describe", "highlight", "conclu",
-             "what's in", "whats in")
-_ACTIONS = ("run ", "launch", "generate", "create", "produce", "build ",
-            "activate", "deploy", "re-run", "rerun", "kick off")
+_QA_NOUNS = (
+    "readout",
+    "report",
+    "the document",
+    "this document",
+    "the pdf",
+    "uploaded",
+    "the doc",
+    "the analysis",
+    "the writeup",
+    "write-up",
+)
+_QA_VERBS = (
+    "summar",
+    "what ",
+    "why ",
+    "explain",
+    "finding",
+    "takeaway",
+    "recap",
+    "overview",
+    "tl;dr",
+    "tldr",
+    "insight",
+    "key point",
+    "compare",
+    "tell me about",
+    "describe",
+    "highlight",
+    "conclu",
+    "what's in",
+    "whats in",
+)
+_ACTIONS = (
+    "run ",
+    "launch",
+    "generate",
+    "create",
+    "produce",
+    "build ",
+    "activate",
+    "deploy",
+    "re-run",
+    "rerun",
+    "kick off",
+)
 
 # Report-language that implies a readout even without an explicit noun (these
 # rarely describe a raw SQL dataset), so "what were the key findings?" routes to
@@ -193,18 +241,23 @@ def is_readout_question(q: str) -> bool:
     ql = (q or "").lower()
     if any(a in ql for a in _ACTIONS):
         return False
-    if any(s in ql for s in _STRONG):            # report-language -> readout
+    if any(s in ql for s in _STRONG):  # report-language -> readout
         return True
     return any(n in ql for n in _QA_NOUNS) and any(v in ql for v in _QA_VERBS)
 
 
 def answer(app, question: str) -> Dict[str, Any]:
-    """Answer a question grounded ONLY in the readout library."""
+    """Answer a question grounded ONLY in the saved outputs."""
     store = get_store(app)
     if not store:
-        return {"response": ("No readouts yet. Upload a readout (PDF/DOCX/text) or run an "
-                             "analysis module, then ask me about it."),
-                "mode": "readout", "used": []}
+        return {
+            "response": (
+                "No readouts yet. Upload a readout (PDF/DOCX/text) or run an "
+                "analysis module, then ask me about it."
+            ),
+            "mode": "readout",
+            "used": [],
+        }
 
     # Most-recent-first, within the prompt budget.
     blocks: List[str] = []
@@ -221,9 +274,14 @@ def answer(app, question: str) -> Dict[str, Any]:
         budget -= len(chunk)
 
     if not blocks:
-        return {"response": ("The readout(s) I have don't contain extractable text "
-                             "(they may be scanned images). Try a text-based PDF or DOCX."),
-                "mode": "readout", "used": []}
+        return {
+            "response": (
+                "The readout(s) I have don't contain extractable text "
+                "(they may be scanned images). Try a text-based PDF or DOCX."
+            ),
+            "mode": "readout",
+            "used": [],
+        }
 
     context = "\n\n".join(blocks)
     prompt = (
@@ -235,18 +293,28 @@ def answer(app, question: str) -> Dict[str, Any]:
     )
     try:
         from continum.askdata.llm import get_chat_llm
+
         text = str(get_chat_llm().invoke(prompt).content).strip()
     except Exception as e:
         logger.warning("readout answer LLM failed: %s", e)
-        text = ("I found the readout(s) but couldn't reach the language model to read them "
-                "just now. Try again in a moment.")
+        text = (
+            "I found the readout(s) but couldn't reach the language model to read them "
+            "just now. Try again in a moment."
+        )
     if used:
         text += "\n\n_Grounded in: " + ", ".join(used) + "_"
     return {"response": text, "mode": "readout", "used": used}
 
 
 __all__ = [
-    "extract_text", "get_store", "add_uploaded", "add_generated",
-    "add_generated_text", "result_to_text",
-    "list_readouts", "clear", "is_readout_question", "answer",
+    "extract_text",
+    "get_store",
+    "add_uploaded",
+    "add_generated",
+    "add_generated_text",
+    "result_to_text",
+    "list_readouts",
+    "clear",
+    "is_readout_question",
+    "answer",
 ]

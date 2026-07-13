@@ -5,15 +5,13 @@ import logging
 import re
 from collections import OrderedDict
 from datetime import datetime
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-from continum.crosscutting.runtime_config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 import pandas as pd
 
-from continum.crosscutting.pdf import render_document_pdf, PDF_PALETTE
+from continum.crosscutting.pdf import PDF_PALETTE, render_document_pdf
+from continum.crosscutting.runtime_config import RUNTIME_DATA_DIR, ensure_runtime_data_dir
 
 logger = logging.getLogger("continum.contextmate.discovery")
 
@@ -22,32 +20,33 @@ logger = logging.getLogger("continum.contextmate.discovery")
 # ─────────────────────────────────────────────────────────────────────────────
 
 CANONICAL_TABLES = {
-    "inquiries":    "Quotes / RFQs submitted by buyers",
-    "orders":       "Placed orders (converted quotes)",
-    "buyers":       "User / buyer profiles",
-    "accounts":     "Company / account profiles",
-    "experiments":  "A/B experiment exposure assignments",
-    "traffic":      "Daily traffic / session counts (optional)",
+    "inquiries": "Quotes / RFQs submitted by buyers",
+    "orders": "Placed orders (converted quotes)",
+    "buyers": "User / buyer profiles",
+    "accounts": "Company / account profiles",
+    "experiments": "A/B experiment exposure assignments",
+    "traffic": "Daily traffic / session counts (optional)",
 }
 
 CANONICAL_COLUMNS = {
-    "inquiry_id":           "Unique identifier for each inquiry/quote",
-    "buyer_id":             "User/buyer identifier",
-    "account_segment":      "Business segment (Core/Growth/Enterprise/Individuals)",
-    "platform":             "web or mobile",
-    "created_at":           "Timestamp of inquiry creation",
-    "converted_to_order":   "Boolean/int: 1 if inquiry became an order",
-    "order_value":          "USD value of the order (0 if no order)",
-    "variant":              "Experiment variant assignment",
-    "experiment_name":      "Name of the A/B experiment",
-    "category":             "Product category",
-    "country":              "User country",
+    "inquiry_id": "Unique identifier for each inquiry/quote",
+    "buyer_id": "User/buyer identifier",
+    "account_segment": "Business segment (Core/Growth/Enterprise/Individuals)",
+    "platform": "web or mobile",
+    "created_at": "Timestamp of inquiry creation",
+    "converted_to_order": "Boolean/int: 1 if inquiry became an order",
+    "order_value": "USD value of the order (0 if no order)",
+    "variant": "Experiment variant assignment",
+    "experiment_name": "Name of the A/B experiment",
+    "category": "Product category",
+    "country": "User country",
 }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODULE [1] — SCHEMA DISCOVERY
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_schema_discovery(
     llm,
@@ -94,7 +93,9 @@ def run_schema_discovery(
     if not tables:
         print("  ⚠️  No tables found. Load data first.")
         return None
-    print(f"     Found {len(tables)} tables: {', '.join(tables[:10])}{'...' if len(tables) > 10 else ''}")
+    print(
+        f"     Found {len(tables)} tables: {', '.join(tables[:10])}{'...' if len(tables) > 10 else ''}"
+    )
 
     # ── Profile each table ────────────────────────────────────────────────────
     print("\n  Profiling tables (sampling up to 5,000 rows each)...")
@@ -103,14 +104,14 @@ def run_schema_discovery(
         try:
             df_sample = db.execute(f'SELECT * FROM "{tbl}" LIMIT 5000').df()
             profiles[tbl] = {
-                "n_rows_sampled":  len(df_sample),
-                "n_cols":          len(df_sample.columns),
-                "columns":         df_sample.columns.tolist(),
-                "dtypes":          {c: str(df_sample[c].dtype) for c in df_sample.columns},
-                "null_rates":      {c: round(df_sample[c].isna().mean(), 3)
-                                    for c in df_sample.columns},
-                "sample_values":   {c: df_sample[c].dropna().head(3).tolist()
-                                    for c in df_sample.columns[:20]},
+                "n_rows_sampled": len(df_sample),
+                "n_cols": len(df_sample.columns),
+                "columns": df_sample.columns.tolist(),
+                "dtypes": {c: str(df_sample[c].dtype) for c in df_sample.columns},
+                "null_rates": {c: round(df_sample[c].isna().mean(), 3) for c in df_sample.columns},
+                "sample_values": {
+                    c: df_sample[c].dropna().head(3).tolist() for c in df_sample.columns[:20]
+                },
             }
             print(f"     ✅ {tbl:<32} {len(df_sample):>6,} rows · {len(df_sample.columns)} cols")
         except Exception as e:
@@ -122,9 +123,9 @@ def run_schema_discovery(
 
     # ── Deterministic mapping (no LLM needed for common patterns) ────────────
     print("\n  Building table/column mapping...")
-    table_mapping  = _deterministic_table_map(list(profiles.keys()))
+    table_mapping = _deterministic_table_map(list(profiles.keys()))
     column_mapping = _deterministic_column_map(profiles)
-    confidence     = _compute_confidence(table_mapping, column_mapping)
+    confidence = _compute_confidence(table_mapping, column_mapping)
 
     # ── LLM enhancement (if available) ───────────────────────────────────────
     if llm is not None:
@@ -148,7 +149,7 @@ def run_schema_discovery(
     # ── Verify ────────────────────────────────────────────────────────────────
     issues = _verify_mapping(table_mapping, column_mapping, profiles)
     n_errors = sum(1 for s, _ in issues if s == "error")
-    n_warns  = sum(1 for s, _ in issues if s == "warn")
+    n_warns = sum(1 for s, _ in issues if s == "warn")
 
     # ── Display ───────────────────────────────────────────────────────────────
     print("\n  Table mapping:")
@@ -164,63 +165,82 @@ def run_schema_discovery(
     # ── Write schema JSON ─────────────────────────────────────────────────────
     schema_path = Path(output_dir) / f"client_schema_{client_name.lower().replace(' ', '_')}.json"
     schema_out = {
-        "client_name":    client_name,
-        "generated_at":   datetime.utcnow().isoformat(),
-        "confidence":     round(confidence, 3),
-        "table_mapping":  table_mapping,
+        "client_name": client_name,
+        "generated_at": datetime.utcnow().isoformat(),
+        "confidence": round(confidence, 3),
+        "table_mapping": table_mapping,
         "column_mapping": column_mapping,
-        "issues":         [{"severity": s, "message": m} for s, m in issues],
+        "issues": [{"severity": s, "message": m} for s, m in issues],
     }
     with open(schema_path, "w", encoding="utf-8") as f:
         json.dump(schema_out, f, indent=2)
     print(f"\n  📁 Schema saved → {schema_path}")
 
     # ── PDF report ────────────────────────────────────────────────────────────
-    sections = OrderedDict([
-        ("OVERVIEW",
-         f"Schema discovery across {len(profiles)} tables. "
-         f"Mapping confidence: {confidence:.0%}. "
-         f"{n_errors} error(s), {n_warns} warning(s)."),
-        ("TABLE MAPPING",
-         "\n".join(f"- {c} → {m or '(no match)'}"
-                   for c, m in table_mapping.items())),
-        ("COLUMN MAPPING",
-         "\n".join(f"- {c} → {m or '(no match)'}"
-                   for c, m in list(column_mapping.items())[:20])),
-        ("VERIFICATION ISSUES",
-         "\n".join(f"- [{s.upper()}] {m}" for s, m in issues) or "None — all checks passed."),
-        ("NEXT STEPS",
-         "- Review every mapped column in the generated schema file.\n"
-         "- Replace any (no match) placeholders before deploying.\n"
-         "- Re-run pipeline with the approved mapping."),
-    ])
+    sections = OrderedDict(
+        [
+            (
+                "OVERVIEW",
+                f"Schema discovery across {len(profiles)} tables. "
+                f"Mapping confidence: {confidence:.0%}. "
+                f"{n_errors} error(s), {n_warns} warning(s).",
+            ),
+            (
+                "TABLE MAPPING",
+                "\n".join(f"- {c} → {m or '(no match)'}" for c, m in table_mapping.items()),
+            ),
+            (
+                "COLUMN MAPPING",
+                "\n".join(
+                    f"- {c} → {m or '(no match)'}" for c, m in list(column_mapping.items())[:20]
+                ),
+            ),
+            (
+                "VERIFICATION ISSUES",
+                "\n".join(f"- [{s.upper()}] {m}" for s, m in issues) or "None — all checks passed.",
+            ),
+            (
+                "NEXT STEPS",
+                "- Review every mapped column in the generated schema file.\n"
+                "- Replace any (no match) placeholders before deploying.\n"
+                "- Re-run pipeline with the approved mapping.",
+            ),
+        ]
+    )
     pdf_path = str(Path(output_dir) / "schema_discovery_report.pdf")
     out = render_document_pdf(
         title="Schema Discovery Report",
         subtitle=f"Client: {client_name}",
         sections=sections,
         output_path=pdf_path,
-        metadata={"Client": client_name, "Tables": str(len(profiles)),
-                  "Confidence": f"{confidence:.0%}", "Errors": str(n_errors)},
+        metadata={
+            "Client": client_name,
+            "Tables": str(len(profiles)),
+            "Confidence": f"{confidence:.0%}",
+            "Errors": str(n_errors),
+        },
         accent_color=PDF_PALETTE["accent"],
     )
     print(f"  📁 PDF report → {out}")
 
     return {
-        "client_name":    client_name,
-        "tables_found":   list(profiles.keys()),
-        "mapping":        {"table_mapping": table_mapping,
-                           "column_mapping": column_mapping,
-                           "confidence": confidence},
-        "issues":         issues,
-        "schema_file":    str(schema_path),
-        "pdf_report":     out,
+        "client_name": client_name,
+        "tables_found": list(profiles.keys()),
+        "mapping": {
+            "table_mapping": table_mapping,
+            "column_mapping": column_mapping,
+            "confidence": confidence,
+        },
+        "issues": issues,
+        "schema_file": str(schema_path),
+        "pdf_report": out,
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODULE [4] — DATA VALIDATION
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_data_validation(db=None, llm=None) -> Dict:
     print()
@@ -245,7 +265,7 @@ def run_data_validation(db=None, llm=None) -> Dict:
 
         check = _validate_dataframe(df, view)
         results["checks"][view] = check
-        results["errors"]   += check["errors"]
+        results["errors"] += check["errors"]
         results["warnings"] += check["warnings"]
 
     results["ok"] = len(results["errors"]) == 0
@@ -260,8 +280,10 @@ def run_data_validation(db=None, llm=None) -> Dict:
     for w in results["warnings"]:
         print(f"  ⚠️  {w}")
     for view, c in results["checks"].items():
-        print(f"\n  {view}: {c['n_rows']:,} rows · {c['n_cols']} cols · "
-              f"{c['n_errors']} errors · {c['n_warnings']} warnings")
+        print(
+            f"\n  {view}: {c['n_rows']:,} rows · {c['n_cols']} cols · "
+            f"{c['n_errors']} errors · {c['n_warnings']} warnings"
+        )
 
     return results
 
@@ -269,6 +291,7 @@ def run_data_validation(db=None, llm=None) -> Dict:
 # ─────────────────────────────────────────────────────────────────────────────
 # MODULE [5] — DIMENSION SETUP
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def run_dimension_setup(db=None, llm=None) -> Dict:
     print()
@@ -282,23 +305,24 @@ def run_dimension_setup(db=None, llm=None) -> Dict:
         return {}
 
     result: Dict[str, Any] = {}
-    EXPECTED_SEGMENTS  = {"Core", "Growth", "Enterprise", "Individuals"}
+    EXPECTED_SEGMENTS = {"Core", "Growth", "Enterprise", "Individuals"}
     EXPECTED_PLATFORMS = {"web", "mobile"}
 
-    for dim, expected in [("account_segment", EXPECTED_SEGMENTS),
-                           ("platform",        EXPECTED_PLATFORMS)]:
+    for dim, expected in [("account_segment", EXPECTED_SEGMENTS), ("platform", EXPECTED_PLATFORMS)]:
         for tbl in ["silver_inquiries", "gold_experiment_analysis"]:
             try:
-                vals = set(db.execute(
-                    f"SELECT DISTINCT {dim} FROM {tbl} WHERE {dim} IS NOT NULL"
-                ).df()[dim].tolist())
+                vals = set(
+                    db.execute(f"SELECT DISTINCT {dim} FROM {tbl} WHERE {dim} IS NOT NULL")
+                    .df()[dim]
+                    .tolist()
+                )
                 missing = expected - vals
-                extra   = vals - expected
+                extra = vals - expected
                 result[dim] = {
-                    "found":   sorted(vals),
+                    "found": sorted(vals),
                     "missing": sorted(missing),
-                    "extra":   sorted(extra),
-                    "ok":      len(missing) == 0,
+                    "extra": sorted(extra),
+                    "ok": len(missing) == 0,
                 }
                 icon = "✅" if result[dim]["ok"] else "⚠️ "
                 print(f"\n  {icon} {dim} from {tbl}:")
@@ -314,12 +338,15 @@ def run_dimension_setup(db=None, llm=None) -> Dict:
     # Category detection
     for tbl in ["silver_inquiries", "gold_experiment_analysis"]:
         try:
-            cats = db.execute(
-                f"SELECT DISTINCT category FROM {tbl} WHERE category IS NOT NULL"
-            ).df()["category"].tolist()
+            cats = (
+                db.execute(f"SELECT DISTINCT category FROM {tbl} WHERE category IS NOT NULL")
+                .df()["category"]
+                .tolist()
+            )
             result["categories"] = sorted(cats)
-            print(f"\n  Categories detected: {sorted(cats[:10])}"
-                  f"{'...' if len(cats) > 10 else ''}")
+            print(
+                f"\n  Categories detected: {sorted(cats[:10])}" f"{'...' if len(cats) > 10 else ''}"
+            )
             break
         except Exception:
             continue
@@ -331,15 +358,16 @@ def run_dimension_setup(db=None, llm=None) -> Dict:
 # INTERNAL HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _deterministic_table_map(table_names: List[str]) -> Dict[str, str]:
     mapping = {c: "" for c in CANONICAL_TABLES}
     kw = {
-        "inquiries":   ["inquiry", "quote", "rfq", "request"],
-        "orders":      ["order"],
-        "buyers":      ["buyer", "user", "customer", "contact"],
-        "accounts":    ["account", "company", "organization", "client"],
+        "inquiries": ["inquiry", "quote", "rfq", "request"],
+        "orders": ["order"],
+        "buyers": ["buyer", "user", "customer", "contact"],
+        "accounts": ["account", "company", "organization", "client"],
         "experiments": ["experiment", "statsig", "ab_test", "variant", "exposure", "assignment"],
-        "traffic":     ["traffic", "session", "visit", "pageview"],
+        "traffic": ["traffic", "session", "visit", "pageview"],
     }
     tl = [t.lower() for t in table_names]
     for canon, keywords in kw.items():
@@ -357,20 +385,34 @@ def _deterministic_column_map(profiles: Dict[str, Dict]) -> Dict[str, str]:
     all_cols_lower = {c.lower(): c for c in all_cols}
 
     kw = {
-        "inquiry_id":         ["inquiry_id", "quote_id", "_id", "id"],
-        "buyer_id":           ["buyer_id", "user_id", "user", "customer_id"],
-        "account_segment":    ["account_segment", "segment", "business_segment",
-                               "consolidated_business_segment"],
-        "platform":           ["platform", "device", "channel"],
-        "created_at":         ["created_at", "created", "timestamp", "date"],
-        "converted_to_order": ["converted_to_order", "converted", "is_order",
-                               "ordered", "conversion"],
-        "order_value":        ["order_value", "gmv", "total", "revenue", "aov"],
-        "variant":            ["variant", "group_name", "treatment", "arm", "group"],
-        "experiment_name":    ["experiment_name", "experiment_id", "test_name",
-                               "ab_test", "statsig_experiment"],
-        "category":           ["category", "product_category", "process_category"],
-        "country":            ["country", "shipping_country", "geo", "region"],
+        "inquiry_id": ["inquiry_id", "quote_id", "_id", "id"],
+        "buyer_id": ["buyer_id", "user_id", "user", "customer_id"],
+        "account_segment": [
+            "account_segment",
+            "segment",
+            "business_segment",
+            "consolidated_business_segment",
+        ],
+        "platform": ["platform", "device", "channel"],
+        "created_at": ["created_at", "created", "timestamp", "date"],
+        "converted_to_order": [
+            "converted_to_order",
+            "converted",
+            "is_order",
+            "ordered",
+            "conversion",
+        ],
+        "order_value": ["order_value", "gmv", "total", "revenue", "aov"],
+        "variant": ["variant", "group_name", "treatment", "arm", "group"],
+        "experiment_name": [
+            "experiment_name",
+            "experiment_id",
+            "test_name",
+            "ab_test",
+            "statsig_experiment",
+        ],
+        "category": ["category", "product_category", "process_category"],
+        "country": ["country", "shipping_country", "geo", "region"],
     }
     mapping = {}
     for canon, keywords in kw.items():
@@ -389,8 +431,7 @@ def _compute_confidence(table_map: Dict, column_map: Dict) -> float:
     return round((t_matched * 0.4 + c_matched * 0.6), 3)
 
 
-def _verify_mapping(table_map: Dict, column_map: Dict,
-                    profiles: Dict) -> List[Tuple[str, str]]:
+def _verify_mapping(table_map: Dict, column_map: Dict, profiles: Dict) -> List[Tuple[str, str]]:
     issues = []
     critical_cols = ["inquiry_id", "buyer_id", "converted_to_order", "created_at"]
     for col in critical_cols:
@@ -405,11 +446,16 @@ def _verify_mapping(table_map: Dict, column_map: Dict,
             for p in profiles.values():
                 if mapped in p.get("columns", []):
                     sv = p.get("sample_values", {}).get(mapped, [])
-                    if sv and not all(str(v) in ("0", "1", "True", "False", "true", "false")
-                                      for v in sv[:5]):
-                        issues.append(("warn",
-                                       f"'{mapped}' mapped to converted_to_order but "
-                                       f"sample values look non-binary: {sv[:3]}"))
+                    if sv and not all(
+                        str(v) in ("0", "1", "True", "False", "true", "false") for v in sv[:5]
+                    ):
+                        issues.append(
+                            (
+                                "warn",
+                                f"'{mapped}' mapped to converted_to_order but "
+                                f"sample values look non-binary: {sv[:3]}",
+                            )
+                        )
     return issues
 
 
@@ -420,10 +466,12 @@ def _build_mapping_prompt(profiles: Dict) -> str:
         summary.append(f"Table: {tbl}\n  Columns: {cols}")
     return (
         "You are a data engineer mapping a client warehouse to a canonical experimentation schema.\n\n"
-        "CANONICAL TABLES:\n" +
-        "\n".join(f"  {k}: {v}" for k, v in CANONICAL_TABLES.items()) + "\n\n"
-        "CANONICAL COLUMNS:\n" +
-        "\n".join(f"  {k}: {v}" for k, v in CANONICAL_COLUMNS.items()) + "\n\n"
+        "CANONICAL TABLES:\n"
+        + "\n".join(f"  {k}: {v}" for k, v in CANONICAL_TABLES.items())
+        + "\n\n"
+        "CANONICAL COLUMNS:\n"
+        + "\n".join(f"  {k}: {v}" for k, v in CANONICAL_COLUMNS.items())
+        + "\n\n"
         "CLIENT TABLES:\n" + "\n\n".join(summary) + "\n\n"
         "Return ONLY a JSON object with keys: "
         "table_mapping (dict canonical→client_table), "
@@ -453,13 +501,13 @@ def _validate_dataframe(df: pd.DataFrame, name: str) -> Dict:
             warnings.append(f"[{name}] Severe variant imbalance: {dict(vc.head())}")
 
     return {
-        "n_rows":     len(df),
-        "n_cols":     len(df.columns),
-        "errors":     errors,
-        "warnings":   warnings,
-        "n_errors":   len(errors),
+        "n_rows": len(df),
+        "n_cols": len(df.columns),
+        "errors": errors,
+        "warnings": warnings,
+        "n_errors": len(errors),
         "n_warnings": len(warnings),
-        "ok":         len(errors) == 0,
+        "ok": len(errors) == 0,
     }
 
 

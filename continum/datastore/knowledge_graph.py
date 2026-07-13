@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 logger = logging.getLogger("continum.knowledge_graph")
@@ -14,34 +13,34 @@ logger = logging.getLogger("continum.knowledge_graph")
 # ─────────────────────────────────────────────────────────────────────────────
 
 NODE_TYPES = {
-    "Experiment":   ["id", "name", "status", "owner", "team", "feature_area", "primary_metric"],
-    "Hypothesis":   ["id", "statement", "domain", "confidence", "owner"],
-    "Metric":       ["name", "direction", "metric_type", "owner"],
-    "Segment":      ["name", "entity_type", "estimated_size", "owner"],
-    "Learning":     ["id", "statement", "domain", "confidence", "evidence_type"],
-    "Anomaly":      ["id", "anomaly_type", "metric", "severity", "detected_at", "resolved"],
+    "Experiment": ["id", "name", "status", "owner", "team", "feature_area", "primary_metric"],
+    "Hypothesis": ["id", "statement", "domain", "confidence", "owner"],
+    "Metric": ["name", "direction", "metric_type", "owner"],
+    "Segment": ["name", "entity_type", "estimated_size", "owner"],
+    "Learning": ["id", "statement", "domain", "confidence", "evidence_type"],
+    "Anomaly": ["id", "anomaly_type", "metric", "severity", "detected_at", "resolved"],
     "CausalOutput": ["id", "method", "estimand", "estimate", "ci_lo", "ci_hi", "p_value"],
-    "Owner":        ["name", "team"],
-    "Document":     ["id", "type", "title", "created_at"],
+    "Owner": ["name", "team"],
+    "Document": ["id", "type", "title", "created_at"],
 }
 
 EDGE_TYPES = {
-    "TESTS":             ("Experiment",  "Hypothesis"),
-    "MEASURES":          ("Experiment",  "Metric"),
-    "TARGETS":           ("Experiment",  "Segment"),
-    "PRODUCED":          ("Experiment",  "CausalOutput"),
-    "GENERATED":         ("Experiment",  "Learning"),
-    "CONFIRMS":          ("Learning",    "Hypothesis"),
-    "CONTRADICTS":       ("Learning",    "Hypothesis"),
-    "APPLIES_TO":        ("Learning",    "Segment"),
-    "APPLIES_TO_METRIC": ("Learning",    "Metric"),
-    "REPLICATES":        ("Learning",    "Learning"),
-    "DETECTED_IN":       ("Anomaly",     "Experiment"),
-    "AFFECTS":           ("Anomaly",     "Metric"),
-    "OWNS":              ("Owner",       "Experiment"),
-    "SIMILAR_TO":        ("Experiment",  "Experiment"),
-    "CONCURRENT_WITH":   ("Experiment",  "Experiment"),
-    "PRECEDED_BY":       ("Experiment",  "Experiment"),
+    "TESTS": ("Experiment", "Hypothesis"),
+    "MEASURES": ("Experiment", "Metric"),
+    "TARGETS": ("Experiment", "Segment"),
+    "PRODUCED": ("Experiment", "CausalOutput"),
+    "GENERATED": ("Experiment", "Learning"),
+    "CONFIRMS": ("Learning", "Hypothesis"),
+    "CONTRADICTS": ("Learning", "Hypothesis"),
+    "APPLIES_TO": ("Learning", "Segment"),
+    "APPLIES_TO_METRIC": ("Learning", "Metric"),
+    "REPLICATES": ("Learning", "Learning"),
+    "DETECTED_IN": ("Anomaly", "Experiment"),
+    "AFFECTS": ("Anomaly", "Metric"),
+    "OWNS": ("Owner", "Experiment"),
+    "SIMILAR_TO": ("Experiment", "Experiment"),
+    "CONCURRENT_WITH": ("Experiment", "Experiment"),
+    "PRECEDED_BY": ("Experiment", "Experiment"),
 }
 
 DDL = """
@@ -75,12 +74,14 @@ CREATE INDEX IF NOT EXISTS idx_kg_nodes_type   ON kg_nodes (node_type);
 # KNOWLEDGE GRAPH
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class KnowledgeGraph:
 
     def __init__(self, db=None):
         if db is None:
             try:
                 import duckdb
+
                 db = duckdb.connect(":memory:")
             except ImportError:
                 raise RuntimeError("duckdb is required for KnowledgeGraph. pip install duckdb")
@@ -98,13 +99,16 @@ class KnowledgeGraph:
     def upsert_node(self, node_type: str, node_id: str, properties: Dict[str, Any]) -> None:
         props_json = json.dumps(properties, default=str)
         try:
-            self._db.execute("""
+            self._db.execute(
+                """
                 INSERT INTO kg_nodes (node_id, node_type, properties, updated_at)
                 VALUES (?, ?, ?, current_timestamp)
                 ON CONFLICT (node_id) DO UPDATE SET
                     properties = excluded.properties,
                     updated_at = now()
-            """, [node_id, node_type, props_json])
+            """,
+                [node_id, node_type, props_json],
+            )
         except Exception as e:
             logger.warning("upsert_node failed for %s %s: %s", node_type, node_id, e)
 
@@ -118,13 +122,16 @@ class KnowledgeGraph:
     ) -> None:
         props_json = json.dumps(properties or {}, default=str)
         try:
-            self._db.execute("""
+            self._db.execute(
+                """
                 INSERT INTO kg_edges (edge_id, edge_type, source_id, target_id, weight, properties)
                 VALUES (gen_random_uuid()::VARCHAR, ?, ?, ?, ?, ?)
                 ON CONFLICT (edge_type, source_id, target_id) DO UPDATE SET
                     weight = excluded.weight,
                     properties = excluded.properties
-            """, [edge_type, source_id, target_id, weight, props_json])
+            """,
+                [edge_type, source_id, target_id, weight, props_json],
+            )
         except Exception as e:
             logger.warning("upsert_edge failed %s %s→%s: %s", edge_type, source_id, target_id, e)
 
@@ -143,7 +150,7 @@ class KnowledgeGraph:
         self,
         node_id: str,
         edge_type: Optional[str] = None,
-        direction: str = "out",    # "out" | "in" | "both"
+        direction: str = "out",  # "out" | "in" | "both"
     ) -> List[Dict[str, Any]]:
         conditions = []
         params = []
@@ -177,8 +184,11 @@ class KnowledgeGraph:
             rows = self._db.execute(sql, params).fetchall()
             return [
                 {
-                    "edge_type": r[0], "source_id": r[1], "target_id": r[2],
-                    "weight": r[3], "node_type": r[4],
+                    "edge_type": r[0],
+                    "source_id": r[1],
+                    "target_id": r[2],
+                    "weight": r[3],
+                    "node_type": r[4],
                     **json.loads(r[5]),
                 }
                 for r in rows
@@ -194,20 +204,24 @@ class KnowledgeGraph:
 
     def record_experiment_result(
         self,
-        result,   # ExperimentResult artifact
+        result,  # ExperimentResult artifact
         causal_estimates: Optional[list] = None,
         violations: Optional[list] = None,
     ) -> None:
         # Experiment node
-        self.upsert_node("Experiment", result.experiment_id, {
-            "name":           result.experiment_name,
-            "status":         "completed",
-            "primary_metric": result.primary_metric,
-            "verdict":        result.verdict.value,
-            "ship":           result.ship_recommendation.value,
-            "n_total":        result.n_total,
-            "analysed_at":    str(result.analysed_at),
-        })
+        self.upsert_node(
+            "Experiment",
+            result.experiment_id,
+            {
+                "name": result.experiment_name,
+                "status": "completed",
+                "primary_metric": result.primary_metric,
+                "verdict": result.verdict.value,
+                "ship": result.ship_recommendation.value,
+                "n_total": result.n_total,
+                "analysed_at": str(result.analysed_at),
+            },
+        )
 
         # Metric node + edge
         self.upsert_node("Metric", result.primary_metric, {"name": result.primary_metric})
@@ -217,30 +231,38 @@ class KnowledgeGraph:
         if causal_estimates:
             for est in causal_estimates:
                 est_id = str(est.artifact_id)
-                self.upsert_node("CausalOutput", est_id, {
-                    "method":    est.method,
-                    "estimand":  est.estimand,
-                    "estimate":  est.estimate,
-                    "ci_lo":     est.ci_lo,
-                    "ci_hi":     est.ci_hi,
-                    "p_value":   est.p_value,
-                    "metric":    est.outcome_metric,
-                })
+                self.upsert_node(
+                    "CausalOutput",
+                    est_id,
+                    {
+                        "method": est.method,
+                        "estimand": est.estimand,
+                        "estimate": est.estimate,
+                        "ci_lo": est.ci_lo,
+                        "ci_hi": est.ci_hi,
+                        "p_value": est.p_value,
+                        "metric": est.outcome_metric,
+                    },
+                )
                 self.upsert_edge("PRODUCED", result.experiment_id, est_id)
 
         # Guardrail violations
         if violations:
             for v in violations:
                 v_id = str(v.artifact_id)
-                self.upsert_node("Anomaly", v_id, {
-                    "anomaly_type": "guardrail_violation",
-                    "metric":       v.metric_name,
-                    "severity":     v.severity,
-                    "detected_at":  str(v.detected_at),
-                    "resolved":     False,
-                })
+                self.upsert_node(
+                    "Anomaly",
+                    v_id,
+                    {
+                        "anomaly_type": "guardrail_violation",
+                        "metric": v.metric_name,
+                        "severity": v.severity,
+                        "detected_at": str(v.detected_at),
+                        "resolved": False,
+                    },
+                )
                 self.upsert_edge("DETECTED_IN", v_id, result.experiment_id)
-                self.upsert_edge("AFFECTS",     v_id, v.metric_name)
+                self.upsert_edge("AFFECTS", v_id, v.metric_name)
 
         # Learnings
         for learning in result.learnings:
@@ -250,13 +272,17 @@ class KnowledgeGraph:
 
     def record_anomaly(self, anomaly) -> None:
         a_id = str(anomaly.artifact_id)
-        self.upsert_node("Anomaly", a_id, {
-            "anomaly_type": anomaly.anomaly_type,
-            "metric":       anomaly.metric_affected,
-            "severity":     anomaly.severity.value,
-            "detected_at":  str(anomaly.detected_at),
-            "resolved":     anomaly.resolved,
-        })
+        self.upsert_node(
+            "Anomaly",
+            a_id,
+            {
+                "anomaly_type": anomaly.anomaly_type,
+                "metric": anomaly.metric_affected,
+                "severity": anomaly.severity.value,
+                "detected_at": str(anomaly.detected_at),
+                "resolved": anomaly.resolved,
+            },
+        )
         for exp_id in anomaly.experiment_ids_concurrent:
             self.upsert_edge("DETECTED_IN", a_id, exp_id)
 
@@ -275,7 +301,8 @@ class KnowledgeGraph:
         feature_area = node.get("feature_area", "")
 
         try:
-            rows = self._db.execute("""
+            rows = self._db.execute(
+                """
                 SELECT n.node_id, n.properties
                 FROM kg_nodes n
                 WHERE n.node_type = 'Experiment'
@@ -286,7 +313,9 @@ class KnowledgeGraph:
                   )
                 ORDER BY n.updated_at DESC
                 LIMIT ?
-            """, [experiment_id, metric, feature_area, top_k]).fetchall()
+            """,
+                [experiment_id, metric, feature_area, top_k],
+            ).fetchall()
             return [{"experiment_id": r[0], **json.loads(r[1])} for r in rows]
         except Exception as e:
             logger.warning("find_similar_experiments failed: %s", e)
@@ -311,12 +340,12 @@ class KnowledgeGraph:
             learnings = []
             for row in rows:
                 props = json.loads(row[1])
-                conf  = props.get("confidence", "tentative")
-                rank  = confidence_rank.get(conf, 1)
+                conf = props.get("confidence", "tentative")
+                rank = confidence_rank.get(conf, 1)
                 if rank < min_rank:
                     continue
                 metrics = props.get("applicable_metrics", [])
-                ldom    = props.get("domain", "")
+                ldom = props.get("domain", "")
                 if metric and metric not in metrics:
                     continue
                 if domain and domain != ldom:
@@ -334,13 +363,16 @@ class KnowledgeGraph:
         end_date: Optional[str] = None,
     ) -> List[str]:
         try:
-            rows = self._db.execute("""
+            rows = self._db.execute(
+                """
                 SELECT source_id FROM kg_edges
                 WHERE edge_type = 'CONCURRENT_WITH' AND target_id = ?
                 UNION
                 SELECT target_id FROM kg_edges
                 WHERE edge_type = 'CONCURRENT_WITH' AND source_id = ?
-            """, [experiment_id, experiment_id]).fetchall()
+            """,
+                [experiment_id, experiment_id],
+            ).fetchall()
             return [r[0] for r in rows]
         except Exception as e:
             logger.warning("detect_concurrent_experiments failed: %s", e)
@@ -350,28 +382,39 @@ class KnowledgeGraph:
         chain = []
         try:
             # Level 1: experiments where anomaly was detected
-            exp_rows = self._db.execute("""
+            exp_rows = self._db.execute(
+                """
                 SELECT target_id FROM kg_edges
                 WHERE edge_type = 'DETECTED_IN' AND source_id = ?
-            """, [anomaly_id]).fetchall()
+            """,
+                [anomaly_id],
+            ).fetchall()
             for (exp_id,) in exp_rows:
                 exp_node = self.get_node(exp_id)
                 chain.append({"level": 1, "type": "Experiment", "id": exp_id, "props": exp_node})
 
                 # Level 2: causal outputs from those experiments
-                co_rows = self._db.execute("""
+                co_rows = self._db.execute(
+                    """
                     SELECT target_id FROM kg_edges
                     WHERE edge_type = 'PRODUCED' AND source_id = ?
-                """, [exp_id]).fetchall()
+                """,
+                    [exp_id],
+                ).fetchall()
                 for (co_id,) in co_rows:
                     co_node = self.get_node(co_id)
-                    chain.append({"level": 2, "type": "CausalOutput", "id": co_id, "props": co_node})
+                    chain.append(
+                        {"level": 2, "type": "CausalOutput", "id": co_id, "props": co_node}
+                    )
 
                 # Level 3: learnings from those experiments
-                l_rows = self._db.execute("""
+                l_rows = self._db.execute(
+                    """
                     SELECT target_id FROM kg_edges
                     WHERE edge_type = 'GENERATED' AND source_id = ?
-                """, [exp_id]).fetchall()
+                """,
+                    [exp_id],
+                ).fetchall()
                 for (l_id,) in l_rows:
                     l_node = self.get_node(l_id)
                     chain.append({"level": 3, "type": "Learning", "id": l_id, "props": l_node})
@@ -399,12 +442,15 @@ class KnowledgeGraph:
 
     def search_by_domain(self, domain: str, node_type: str = "Learning") -> List[Dict]:
         try:
-            rows = self._db.execute("""
+            rows = self._db.execute(
+                """
                 SELECT node_id, properties FROM kg_nodes
                 WHERE node_type = ?
                   AND json_extract_string(properties, '$.domain') = ?
                 ORDER BY updated_at DESC
-            """, [node_type, domain]).fetchall()
+            """,
+                [node_type, domain],
+            ).fetchall()
             return [{"id": r[0], **json.loads(r[1])} for r in rows]
         except Exception as e:
             logger.warning("search_by_domain failed: %s", e)

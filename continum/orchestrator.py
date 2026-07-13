@@ -12,16 +12,19 @@ layer:
 
 Execution either defers to the AskData NL->SQL engine (data look-ups, which
 return a chartable table) or invokes a real analysis / deployment module from
-``continum.toolinterface`` — so the chatbot speaks the user's MatchView
-vocabulary (Campaigns, Sequences, Lead Lists, Email Analytics, Deploy) while
-driving the platform's actual modules. Module execution is best-effort: if a
-module needs more setup than the chat can supply, we fall back to a
-data-grounded answer rather than surfacing a stack trace.
+``continum.toolinterface``. Each tool is named with the EXACT module label the
+user sees on its dashboard card (e.g. "Causal Analysis", "Health Monitor") and
+carries its lifecycle ``phase``, so a chat suggestion points at the same module
+the user would click — they no longer have to map a marketing alias back to a
+card. Module execution is best-effort: if a module needs more setup than the
+chat can supply, we fall back to a data-grounded answer rather than surfacing a
+stack trace.
 
 Experimentation guardrails:
     * ``deploy_warning`` returns a prominent warning for any go-live action.
     * each tool carries 1-2 ``next_steps`` suggested after it runs.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,21 +35,23 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("continum.orchestrator")
 
 # Tool "kind" — drives how the result is fetched and whether a deploy warning fires.
-KIND_DATA = "data"          # NL -> SQL look-up via the AskData engine (chartable)
+KIND_DATA = "data"  # NL -> SQL look-up via the AskData engine (chartable)
 KIND_ANALYSIS = "analysis"  # a real dispatcher analysis module
-KIND_DEPLOY = "deploy"      # a go-live / activation action (always warned)
+KIND_DEPLOY = "deploy"  # a go-live / activation action (always warned)
 
 
 @dataclass
 class MatchViewTool:
     """A user-facing MatchView module mapped onto a real Continum capability."""
+
     key: str
-    module_name: str                       # what the user sees ("Lead Lists")
-    kind: str                              # KIND_DATA | KIND_ANALYSIS | KIND_DEPLOY
-    target: str                            # dispatcher module key, or "askdata"
-    triggers: List[str]                    # lowercase substring triggers
-    patterns: List[str] = field(default_factory=list)   # regex triggers
-    action_verb: str = "answer this"       # used in the confirmation sentence
+    module_name: str  # what the user sees ("Lead Lists")
+    kind: str  # KIND_DATA | KIND_ANALYSIS | KIND_DEPLOY
+    target: str  # dispatcher module key, or "askdata"
+    triggers: List[str]  # lowercase substring triggers
+    phase: str = ""  # MatchView lifecycle phase the module lives in
+    patterns: List[str] = field(default_factory=list)  # regex triggers
+    action_verb: str = "answer this"  # used in the confirmation sentence
     next_steps: List[str] = field(default_factory=list)
     description: str = ""
 
@@ -61,65 +66,125 @@ class MatchViewTool:
 MATCHVIEW_TOOLS: List[MatchViewTool] = [
     MatchViewTool(
         key="deploy",
-        module_name="Deployment",
+        module_name="Uplift Modeller",
+        phase="Deployment",
         kind=KIND_DEPLOY,
         target="uplift_modeller",
-        triggers=["launch", "deploy", "activate", "go live", "golive", "roll out",
-                  "rollout", "ship it", "send the campaign", "send this campaign",
-                  "send campaign", "turn on", "publish", "make it live"],
+        triggers=[
+            "launch",
+            "deploy",
+            "activate",
+            "go live",
+            "golive",
+            "roll out",
+            "rollout",
+            "ship it",
+            "send the campaign",
+            "send this campaign",
+            "send campaign",
+            "turn on",
+            "publish",
+            "make it live",
+        ],
         action_verb="take this action",
-        next_steps=["Show the uplift scores by segment",
-                    "Run the decision engine to optimise targeting"],
+        next_steps=[
+            "Show the uplift scores by segment",
+            "Run the decision engine to optimise targeting",
+        ],
         description="Activate / roll out (uplift modelling + budget-constrained targeting).",
     ),
     MatchViewTool(
         key="audience",
-        module_name="Lead Lists",
+        module_name="Audience Selection",
+        phase="Planning",
         kind=KIND_ANALYSIS,
         target="audience_selection",
-        triggers=["lead list", "lead-list", "leads", "audience", "who should i target",
-                  "who to target", "targeting", "propensity", "build a list"],
+        triggers=[
+            "lead list",
+            "lead-list",
+            "leads",
+            "audience",
+            "who should i target",
+            "who to target",
+            "targeting",
+            "propensity",
+            "build a list",
+        ],
         action_verb="take this action",
-        next_steps=["Estimate the opportunity size for this audience",
-                    "Would you like to launch a sequence to this audience?"],
+        next_steps=[
+            "Estimate the opportunity size for this audience",
+            "Would you like to launch a sequence to this audience?",
+        ],
         description="Propensity-scored audience / lead-list selection.",
     ),
     MatchViewTool(
         key="campaign_readout",
-        module_name="Campaigns",
+        module_name="A/B Readout",
+        phase="Analysis & Readout",
         kind=KIND_ANALYSIS,
         target="experiment_analysis",
-        triggers=["campaign", "sequence result", "experiment result", "experiment readout",
-                  "read out", "a/b readout", "ab readout", "run the readout",
-                  "how did the experiment", "how is the experiment",
-                  "did it win", "winner", "results of", "ab test", "a/b test"],
+        triggers=[
+            "campaign",
+            "sequence result",
+            "experiment result",
+            "experiment readout",
+            "read out",
+            "a/b readout",
+            "ab readout",
+            "run the readout",
+            "how did the experiment",
+            "how is the experiment",
+            "did it win",
+            "winner",
+            "results of",
+            "ab test",
+            "a/b test",
+        ],
         action_verb="answer this",
-        next_steps=["Why did it win or lose? (causal analysis)",
-                    "Track the ROI of this campaign"],
+        next_steps=["Why did it win or lose? (causal analysis)", "Track the ROI of this campaign"],
         description="Campaign / experiment A/B readout pipeline.",
     ),
     MatchViewTool(
         key="causal",
-        module_name="Campaign Insights",
+        module_name="Causal Analysis",
+        phase="Analysis & Readout",
         kind=KIND_ANALYSIS,
         target="causal_analysis",
-        triggers=["why did", "root cause", "what caused", "attribution", "causal",
-                  "explain why", "what drove"],
+        triggers=[
+            "why did",
+            "root cause",
+            "what caused",
+            "attribution",
+            "causal",
+            "explain why",
+            "what drove",
+        ],
         action_verb="answer this",
-        next_steps=["Check for Simpson's paradox across segments",
-                    "Summarise the key learnings"],
+        next_steps=["Check for Simpson's paradox across segments", "Summarise the key learnings"],
         description="Causal attribution analysis (DiD, PSM, ITS, ...).",
     ),
     MatchViewTool(
         key="health",
-        module_name="Sequence Monitoring",
+        module_name="Health Monitor",
+        phase="Live Monitoring",
         kind=KIND_ANALYSIS,
         target="health_monitor",
-        triggers=["health", "healthy", "is it healthy", "srm", "guardrail", "sample ratio",
-                  "monitor", "is the experiment ok", "anything wrong"],
+        triggers=[
+            "health",
+            "healthy",
+            "is it healthy",
+            "srm",
+            "guardrail",
+            "sample ratio",
+            "monitor",
+            "is the experiment ok",
+            "anything wrong",
+        ],
         action_verb="answer this",
-        next_steps=["Run sequential testing for an always-valid p-value",
-                    "Show the guardrail breakdown"],
+        next_steps=[
+            "Run sequential testing for an always-valid p-value",
+            "Show the guardrail breakdown",
+        ],
         description="SRM, guardrails, IOR trajectory and ETA-to-significance.",
     ),
     MatchViewTool(
@@ -127,21 +192,41 @@ MATCHVIEW_TOOLS: List[MatchViewTool] = [
         module_name="Email Analytics",
         kind=KIND_DATA,
         target="askdata",
-        triggers=["email analytics", "open rate", "click rate", "reply rate",
-                  "deliverability", "bounce rate", "performance by", "metrics by",
-                  "conversion by", "breakdown by", "rate by"],
+        triggers=[
+            "email analytics",
+            "open rate",
+            "click rate",
+            "reply rate",
+            "deliverability",
+            "bounce rate",
+            "performance by",
+            "metrics by",
+            "conversion by",
+            "breakdown by",
+            "rate by",
+        ],
         action_verb="answer this",
-        next_steps=["Break this down by another segment",
-                    "Compare against the previous period"],
+        next_steps=["Break this down by another segment", "Compare against the previous period"],
         description="Campaign / email performance analytics over the dataset.",
     ),
 ]
 
 # How-to / informational phrasing — these belong to the Guide engine, not an action.
 _HOWTO_MARKERS = (
-    "how do i", "how to", "how does", "how can i", "what is", "what are",
-    "what can you", "explain the", "guide", "tutorial", "where do i",
-    "which module", "what module", "getting started",
+    "how do i",
+    "how to",
+    "how does",
+    "how can i",
+    "what is",
+    "what are",
+    "what can you",
+    "explain the",
+    "guide",
+    "tutorial",
+    "where do i",
+    "which module",
+    "what module",
+    "getting started",
 )
 
 
@@ -170,11 +255,18 @@ def get_tool(key: str) -> Optional[MatchViewTool]:
 
 
 def confirmation_message(tool: MatchViewTool) -> str:
-    """The mandatory 'would you like to use the module?' prompt."""
+    """The mandatory 'would you like to use the module?' prompt.
+
+    Includes a one-line description of what the module will do (A9 — "if tool
+    calling is enabled, describe what it will do") so the user knows what they
+    are confirming before any module runs.
+    """
+    what = (tool.description or "").strip().rstrip(".")
+    what_line = f" It will **{what.lower()}**." if what else ""
+    phase_line = f" (in the **{tool.phase}** phase)" if tool.phase else ""
     return (
-        f"That looks like a job for the MatchView **{tool.module_name}** module. "
-        f"Would you like to use the relevant MatchView **{tool.module_name}** module "
-        f"to {tool.action_verb}?"
+        f"That looks like a job for the **{tool.module_name}** module{phase_line}."
+        f"{what_line} Would you like to run **{tool.module_name}** to {tool.action_verb}?"
     )
 
 
@@ -188,8 +280,9 @@ def deploy_warning(tool: MatchViewTool) -> str:
     )
 
 
-def execute_tool(app, tool: MatchViewTool, question: str,
-                 ui_context: Optional[dict] = None) -> Dict[str, Any]:
+def execute_tool(
+    app, tool: MatchViewTool, question: str, ui_context: Optional[dict] = None
+) -> Dict[str, Any]:
     """Run the capability behind a confirmed tool.
 
     Returns a dict shaped like the AskData engine's output so the endpoint and
@@ -205,8 +298,12 @@ def execute_tool(app, tool: MatchViewTool, question: str,
     # Analysis / deploy → invoke the real dispatcher module, best-effort.
     try:
         from continum.toolinterface import run_module
-        exp = (ui_context.get("active_experiment")
-               or getattr(getattr(app, "ses", None), "active_experiment", None) or "")
+
+        exp = (
+            ui_context.get("active_experiment")
+            or getattr(getattr(app, "ses", None), "active_experiment", None)
+            or ""
+        )
         kwargs: Dict[str, Any] = {}
         if tool.target == "experiment_analysis":
             # This module's lambda explicitly accepts these; others do not.
@@ -220,22 +317,29 @@ def execute_tool(app, tool: MatchViewTool, question: str,
         )
         return {
             "response": _summarise_result(result, tool),
-            "sql": None, "table": [], "columns": [],
-            "visualizations": [], "error": None,
+            "sql": None,
+            "table": [],
+            "columns": [],
+            "visualizations": [],
+            "error": None,
         }
     except Exception as e:  # noqa: BLE001 — never surface a stack trace to chat
-        logger.warning("Tool %r module %r failed (%s) — falling back to AskData",
-                       tool.key, tool.target, e)
+        logger.warning(
+            "Tool %r module %r failed (%s) — falling back to AskData", tool.key, tool.target, e
+        )
         out = _run_askdata(app, question, ui_context)
-        note = (f"I tried the **{tool.module_name}** module, but it needs an active "
-                "experiment / more setup in this session — so here's a data-grounded "
-                "answer instead:\n\n")
+        note = (
+            f"I tried the **{tool.module_name}** module, but it needs an active "
+            "experiment / more setup in this session — so here's a data-grounded "
+            "answer instead:\n\n"
+        )
         out["response"] = note + (out.get("response") or "")
         return out
 
 
 def _run_askdata(app, question: str, ui_context: dict) -> Dict[str, Any]:
     from continum.askdata import get_askdata_engine
+
     d = get_askdata_engine(app).ask(question, ui_context=ui_context)
     return {
         "response": d.get("response", ""),
@@ -258,8 +362,10 @@ def _summarise_result(result: Any, tool: MatchViewTool) -> str:
         if delta is not None and verdict is not None:
             sig = "significant ✅" if getattr(delta, "is_significant", False) else "not significant"
             v = getattr(verdict, "value", verdict)
-            return (f"**{tool.module_name}** — {v}: Δ={delta.delta_pp:+.3f}pp, "
-                    f"p={delta.p_value:.4f} ({sig}).")
+            return (
+                f"**{tool.module_name}** — {v}: Δ={delta.delta_pp:+.3f}pp, "
+                f"p={delta.p_value:.4f} ({sig})."
+            )
         # Narrative-bearing object or dict.
         for attr in ("narrative", "summary", "message"):
             v = getattr(result, attr, None)
@@ -272,8 +378,11 @@ def _summarise_result(result: Any, tool: MatchViewTool) -> str:
                 v = result.get(k)
                 if isinstance(v, str) and v.strip():
                     return v.strip()
-            bits = [f"- **{k}**: {v}" for k, v in result.items()
-                    if isinstance(v, (str, int, float, bool))][:6]
+            bits = [
+                f"- **{k}**: {v}"
+                for k, v in result.items()
+                if isinstance(v, (str, int, float, bool))
+            ][:6]
             if bits:
                 return f"**{tool.module_name}** results:\n" + "\n".join(bits)
         return f"**{tool.module_name}** completed.\n\n" + str(result)[:300]
@@ -282,10 +391,16 @@ def _summarise_result(result: Any, tool: MatchViewTool) -> str:
 
 
 __all__ = [
-    "MatchViewTool", "MATCHVIEW_TOOLS",
-    "detect_tool", "get_tool",
-    "confirmation_message", "deploy_warning", "execute_tool",
-    "KIND_DATA", "KIND_ANALYSIS", "KIND_DEPLOY",
+    "MatchViewTool",
+    "MATCHVIEW_TOOLS",
+    "detect_tool",
+    "get_tool",
+    "confirmation_message",
+    "deploy_warning",
+    "execute_tool",
+    "KIND_DATA",
+    "KIND_ANALYSIS",
+    "KIND_DEPLOY",
 ]
 
 
@@ -296,8 +411,10 @@ def _summarise(result: Any, module_key: str) -> str:
     try:
         if hasattr(result, "verdict") and hasattr(result, "primary_delta"):
             d = result.primary_delta
-            return (f"Δ={d.delta_pp:+.3f}pp  p={d.p_value:.4f}  "
-                    f"{'✅' if d.is_significant else '—'}  {result.verdict.value}")
+            return (
+                f"Δ={d.delta_pp:+.3f}pp  p={d.p_value:.4f}  "
+                f"{'✅' if d.is_significant else '—'}  {result.verdict.value}"
+            )
         if isinstance(result, dict):
             r = result.get("result")
             if r and hasattr(r, "verdict"):

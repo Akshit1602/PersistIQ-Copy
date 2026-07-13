@@ -33,3 +33,6 @@ runtime_data/
 
 # Archives
 *.zip
+
+# graphify knowledge graph (regenerate with: graphify update .)
+graphify-out/

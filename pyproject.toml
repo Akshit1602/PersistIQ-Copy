@@ -1,0 +1,50 @@
+# Tooling configuration for Continum MatchView (PersistIQ).
+#
+# Configures Ruff, Black, pytest, and coverage ONLY. It intentionally does NOT
+# declare [build-system] or [project] — packaging behaviour is unchanged and
+# runtime dependencies still live in requirements.txt.
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["continum"]
+extend-exclude = [".venv", "runtime_data", "sample_data", "test_data"]
+
+[tool.ruff.lint]
+# Pragmatic starting set for adopting linting on an existing codebase:
+# pycodestyle (E/W), pyflakes (F), and import sorting (I). Modernisation and
+# opinionated rules (UP / B / C4 / SIM) are deferred to follow-up PRs to keep
+# this adoption low-risk. Pre-existing unused imports in facade/registry modules
+# are grandfathered with inline `# noqa: F401`.
+select = ["E", "F", "W", "I"]
+ignore = [
+  "E501", # line length is enforced by Black
+  "E402", # module-level import not at top (intentional: sys.path / lazy setup)
+  "E701", # multiple statements on one line (colon) — pre-existing style
+  "E702", # multiple statements on one line (semicolon) — pre-existing style
+  "E741", # ambiguous variable name
+  "E721", # type comparison with ==
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401", "F403"] # re-export surfaces
+"**/tests/**" = ["F401", "E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["continum/tests"]
+addopts = "-ra"
+markers = [
+  "slow: long-running calibration/simulation tests (deselect with -m 'not slow')",
+]
+
+[tool.coverage.run]
+source = ["continum"]
+omit = ["continum/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

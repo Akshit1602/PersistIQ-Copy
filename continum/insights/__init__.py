@@ -1,1 +1,1 @@
-"""Post-run intelligence runtime: insight bus, cognition, patterns, recs, session."""
+"""Post-run intelligence runtime: insight bus, patterns, session."""

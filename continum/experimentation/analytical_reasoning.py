@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import logging
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger("continum.intelligence.analytical_reasoning")
@@ -14,13 +12,14 @@ logger = logging.getLogger("continum.intelligence.analytical_reasoning")
 # ADDITIONAL INSIGHT MINING
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def mine_additional_insights(
     df: pd.DataFrame,
-    control:    str = "control",
-    treatment:  str = "treatment",
-    date_col:   str = "created_at",
+    control: str = "control",
+    treatment: str = "treatment",
+    date_col: str = "created_at",
     outcome_col: str = "converted_to_order",
-    value_col:   str = "order_value",
+    value_col: str = "order_value",
 ) -> Dict:
     results: Dict = {}
 
@@ -30,7 +29,7 @@ def mine_additional_insights(
         data[date_col] = pd.to_datetime(data[date_col])
         mid = data[date_col].min() + (data[date_col].max() - data[date_col].min()) / 2
         early = data[data[date_col] <= mid]
-        late  = data[data[date_col] >  mid]
+        late = data[data[date_col] > mid]
 
         def _delta(frame):
             c = frame[frame["variant"] == control][outcome_col].mean()
@@ -42,16 +41,16 @@ def mine_additional_insights(
         e_d, *_ = _delta(early)
         l_d, *_ = _delta(late)
         if e_d is not None and l_d is not None:
-            decay  = l_d - e_d
-            direction = "weakening" if decay < -0.3 else "strengthening" if decay > 0.3 else "stable"
+            decay = l_d - e_d
+            direction = (
+                "weakening" if decay < -0.3 else "strengthening" if decay > 0.3 else "stable"
+            )
             results["time_decay"] = {
-                "early_delta_pp":   round(e_d, 3),
-                "late_delta_pp":    round(l_d, 3),
-                "decay_pp":         round(decay, 3),
-                "decay_direction":  direction,
-                "summary": (
-                    f"Early-half Δ={e_d:+.2f}pp → Late-half Δ={l_d:+.2f}pp ({direction})"
-                ),
+                "early_delta_pp": round(e_d, 3),
+                "late_delta_pp": round(l_d, 3),
+                "decay_pp": round(decay, 3),
+                "decay_direction": direction,
+                "summary": (f"Early-half Δ={e_d:+.2f}pp → Late-half Δ={l_d:+.2f}pp ({direction})"),
             }
     except Exception as e:
         logger.debug("Time decay mining failed: %s", e)
@@ -74,9 +73,9 @@ def mine_additional_insights(
             rd, rn = _seg_delta(ret_df)
             if nd is not None and rd is not None:
                 results["cohort_effect"] = {
-                    "new_user_delta_pp":      round(nd, 3),
+                    "new_user_delta_pp": round(nd, 3),
                     "returning_user_delta_pp": round(rd, 3),
-                    "divergence":             abs(nd - rd) > 0.5,
+                    "divergence": abs(nd - rd) > 0.5,
                     "summary": (
                         f"New users Δ={nd:+.2f}pp (n={nn:,}) vs "
                         f"returning Δ={rd:+.2f}pp (n={rn:,}) "
@@ -89,17 +88,18 @@ def mine_additional_insights(
     # ── 3. Cross-metric ──────────────────────────────────────────────────────
     try:
         if value_col in df.columns:
-            ctrl_conv = df[(df["variant"] == control)  & (df[outcome_col] == 1)]
-            trt_conv  = df[(df["variant"] == treatment) & (df[outcome_col] == 1)]
+            ctrl_conv = df[(df["variant"] == control) & (df[outcome_col] == 1)]
+            trt_conv = df[(df["variant"] == treatment) & (df[outcome_col] == 1)]
             if len(ctrl_conv) >= 30 and len(trt_conv) >= 30:
-                aov_c  = float(ctrl_conv[value_col].mean())
-                aov_t  = float(trt_conv[value_col].mean())
-                delta  = (aov_t - aov_c) / aov_c * 100 if aov_c > 0 else 0
+                aov_c = float(ctrl_conv[value_col].mean())
+                aov_t = float(trt_conv[value_col].mean())
+                delta = (aov_t - aov_c) / aov_c * 100 if aov_c > 0 else 0
                 results["cross_metric"] = {
-                    "aov_control":    round(aov_c, 2),
-                    "aov_treatment":  round(aov_t, 2),
-                    "aov_delta_pct":  round(delta, 2),
-                    "aligned":        (delta > 1) == (results.get("time_decay", {}).get("late_delta_pp", 0) > 0),
+                    "aov_control": round(aov_c, 2),
+                    "aov_treatment": round(aov_t, 2),
+                    "aov_delta_pct": round(delta, 2),
+                    "aligned": (delta > 1)
+                    == (results.get("time_decay", {}).get("late_delta_pp", 0) > 0),
                     "summary": (
                         f"AOV: ${aov_c:.0f} → ${aov_t:.0f} ({delta:+.1f}%) "
                         f"{'— aligned with IOR direction' if delta * (aov_t - aov_c) >= 0 else '— IOR and AOV DIVERGE (investigate)'}"
@@ -115,14 +115,15 @@ def mine_additional_insights(
 # UNIFIED SYNTHESIS PROMPT
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def synthesise_findings(
     context: Dict,
     llm: Any = None,
 ) -> str:
     if llm is None:
         # Template fallback
-        overall  = context.get("overall_summary", "")
-        seg      = context.get("segment_summary", "No segment breakdown.")
+        overall = context.get("overall_summary", "")
+        seg = context.get("segment_summary", "No segment breakdown.")
         decision = context.get("decision", "unknown")
         return (
             f"SYNTHESIS:\n{overall}. {seg}\n\n"
@@ -179,9 +180,10 @@ Plain business English. No emojis."""
 # ROOT-CAUSE SYNTHESIS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def generate_root_cause(
-    anomalies:   List[Dict],
-    experiment:  str = "",
+    anomalies: List[Dict],
+    experiment: str = "",
     data_context: Dict = None,
     llm: Any = None,
 ) -> str:
@@ -197,8 +199,8 @@ def generate_root_cause(
     )
 
     pipeline_state = ctx.get("pipeline_health", "unknown")
-    running_exps   = ctx.get("running_experiments", [])
-    exp_text       = ", ".join(e.get("name", str(e)) for e in running_exps[:3]) or "none identified"
+    running_exps = ctx.get("running_experiments", [])
+    exp_text = ", ".join(e.get("name", str(e)) for e in running_exps[:3]) or "none identified"
 
     if llm is None:
         parts = [f"{a.get('metric','?')} {a.get('type','?')}" for a in anomalies[:3]]
@@ -238,45 +240,90 @@ Be specific. Avoid generic advice. No emojis."""
 
 _RECOMMENDATION_RULES: Dict[str, List[Dict]] = {
     "experiment_not_significant": [
-        {"action": "Extend experiment", "reason": "p-value not reached — need more data",
-         "module": "power_calculator", "priority": 1},
-        {"action": "Check guardrails", "reason": "Ensure no degradation while waiting",
-         "module": "health_monitor", "priority": 2},
+        {
+            "action": "Extend experiment",
+            "reason": "p-value not reached — need more data",
+            "module": "power_calculator",
+            "priority": 1,
+        },
+        {
+            "action": "Check guardrails",
+            "reason": "Ensure no degradation while waiting",
+            "module": "health_monitor",
+            "priority": 2,
+        },
     ],
     "experiment_significant_ship": [
-        {"action": "Measure ROI post-ship", "reason": "Validate lift holds in production",
-         "module": "roi_tracker", "priority": 1},
-        {"action": "Run causal analysis", "reason": "Strengthen attribution before scaling",
-         "module": "causal_analysis", "priority": 2},
+        {
+            "action": "Measure ROI post-ship",
+            "reason": "Validate lift holds in production",
+            "module": "roi_tracker",
+            "priority": 1,
+        },
+        {
+            "action": "Run causal analysis",
+            "reason": "Strengthen attribution before scaling",
+            "module": "causal_analysis",
+            "priority": 2,
+        },
     ],
     "experiment_significant_no_ship": [
-        {"action": "Investigate segment divergence", "reason": "Understand why result is negative",
-         "module": "simpsons_paradox", "priority": 1},
-        {"action": "Run causal analysis", "reason": "Confirm the effect isn't confounded",
-         "module": "causal_analysis", "priority": 2},
+        {
+            "action": "Investigate segment divergence",
+            "reason": "Understand why result is negative",
+            "module": "simpsons_paradox",
+            "priority": 1,
+        },
+        {
+            "action": "Run causal analysis",
+            "reason": "Confirm the effect isn't confounded",
+            "module": "causal_analysis",
+            "priority": 2,
+        },
     ],
     "srm_detected": [
-        {"action": "Pause experiment", "reason": "SRM invalidates statistical inference",
-         "module": "health_monitor", "priority": 0},
-        {"action": "Investigate assignment logic", "reason": "Find the SRM root cause",
-         "module": "data_validation", "priority": 1},
+        {
+            "action": "Pause experiment",
+            "reason": "SRM invalidates statistical inference",
+            "module": "health_monitor",
+            "priority": 0,
+        },
+        {
+            "action": "Investigate assignment logic",
+            "reason": "Find the SRM root cause",
+            "module": "data_validation",
+            "priority": 1,
+        },
     ],
     "simpsons_paradox_detected": [
-        {"action": "Stratify analysis by confounding dimension",
-         "reason": "Aggregate direction misleading",
-         "module": "causal_analysis", "priority": 1},
-        {"action": "Consider segment-specific rollout",
-         "reason": "Ship only to segments with positive effect",
-         "module": "audience_selection", "priority": 2},
+        {
+            "action": "Stratify analysis by confounding dimension",
+            "reason": "Aggregate direction misleading",
+            "module": "causal_analysis",
+            "priority": 1,
+        },
+        {
+            "action": "Consider segment-specific rollout",
+            "reason": "Ship only to segments with positive effect",
+            "module": "audience_selection",
+            "priority": 2,
+        },
     ],
     "low_power": [
-        {"action": "Increase traffic allocation",
-         "reason": "Insufficient power to detect the MDE",
-         "module": "power_calculator", "priority": 1},
+        {
+            "action": "Increase traffic allocation",
+            "reason": "Insufficient power to detect the MDE",
+            "module": "power_calculator",
+            "priority": 1,
+        },
     ],
     "anomaly_critical": [
-        {"action": "Check pipeline health", "reason": "Critical anomaly may be data issue",
-         "module": "pipeline_health", "priority": 0},
+        {
+            "action": "Check pipeline health",
+            "reason": "Critical anomaly may be data issue",
+            "module": "pipeline_health",
+            "priority": 0,
+        },
     ],
 }
 
@@ -296,7 +343,9 @@ def adaptive_recommendations(
     elif sigs.get("simpsons_detected"):
         recs.extend(_RECOMMENDATION_RULES["simpsons_paradox_detected"])
     elif sigs.get("significant"):
-        key = "experiment_significant_ship" if sigs.get("ship") else "experiment_significant_no_ship"
+        key = (
+            "experiment_significant_ship" if sigs.get("ship") else "experiment_significant_no_ship"
+        )
         recs.extend(_RECOMMENDATION_RULES[key])
     elif sigs.get("anomaly_severity") == "critical":
         recs.extend(_RECOMMENDATION_RULES["anomaly_critical"])
@@ -306,7 +355,7 @@ def adaptive_recommendations(
         recs.extend(_RECOMMENDATION_RULES["experiment_not_significant"])
 
     # Deduplicate
-    seen  = set()
+    seen = set()
     dedup = []
     for r in sorted(recs, key=lambda x: x.get("priority", 99)):
         key = r["module"]
@@ -317,7 +366,9 @@ def adaptive_recommendations(
     # LLM enrichment
     if llm is not None and result is not None:
         try:
-            result_summary = str(result)[:400] if not isinstance(result, dict) else str(result)[:400]
+            result_summary = (
+                str(result)[:400] if not isinstance(result, dict) else str(result)[:400]
+            )
             prompt = (
                 f"Experiment result summary: {result_summary}\n"
                 f"Signals: {sigs}\n"
@@ -328,13 +379,19 @@ def adaptive_recommendations(
             resp = str(llm.ask(prompt)).strip()
             parts = resp.split("|")
             if len(parts) >= 2:
-                dedup.append({
-                    "action":   parts[0].strip(),
-                    "reason":   parts[1].strip(),
-                    "module":   parts[2].strip().lower().replace(" ","_") if len(parts) > 2 else "experiment_analysis",
-                    "priority": 3,
-                    "llm_suggested": True,
-                })
+                dedup.append(
+                    {
+                        "action": parts[0].strip(),
+                        "reason": parts[1].strip(),
+                        "module": (
+                            parts[2].strip().lower().replace(" ", "_")
+                            if len(parts) > 2
+                            else "experiment_analysis"
+                        ),
+                        "priority": 3,
+                        "llm_suggested": True,
+                    }
+                )
         except Exception as e:
             logger.debug("Adaptive recommendations LLM failed: %s", e)
 
@@ -345,16 +402,19 @@ def adaptive_recommendations(
 # ROI GAP EXPLANATION
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def explain_roi_gap(
-    experiment_lift_pp:  float,
-    production_lift_pp:  float,
-    experiment_name:     str = "",
-    concurrent_ships:    List[Dict] = None,
+    experiment_lift_pp: float,
+    production_lift_pp: float,
+    experiment_name: str = "",
+    concurrent_ships: List[Dict] = None,
     llm: Any = None,
 ) -> str:
-    gap  = production_lift_pp - experiment_lift_pp
+    gap = production_lift_pp - experiment_lift_pp
     sign = "lower" if gap < 0 else "higher"
-    conc = ", ".join(s.get("name", str(s)) for s in (concurrent_ships or [])[:3]) or "none identified"
+    conc = (
+        ", ".join(s.get("name", str(s)) for s in (concurrent_ships or [])[:3]) or "none identified"
+    )
 
     if llm is None:
         return (
@@ -387,25 +447,36 @@ No emojis."""
 # OPEN QUESTION GENERATION
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def generate_open_questions(
     experiment_name: str,
-    result:          Dict,
+    result: Dict,
     llm: Any = None,
 ) -> List[str]:
     # Static rules
     questions: List[str] = []
     if result.get("srm_detected"):
-        questions.append("What caused the sample ratio mismatch? Is the assignment logic deterministic?")
+        questions.append(
+            "What caused the sample ratio mismatch? Is the assignment logic deterministic?"
+        )
     if result.get("simpsons_paradox_detected"):
-        questions.append("Which dimension is confounding the aggregate result, and should we stratify the rollout?")
+        questions.append(
+            "Which dimension is confounding the aggregate result, and should we stratify the rollout?"
+        )
     if result.get("time_decay"):
         td = result["time_decay"]
         if td.get("decay_direction") == "weakening":
-            questions.append("Why is the treatment effect weakening over time? Novelty effect or feature degradation?")
+            questions.append(
+                "Why is the treatment effect weakening over time? Novelty effect or feature degradation?"
+            )
     if result.get("cohort_effect", {}).get("divergence"):
-        questions.append("New and returning users respond differently — should we personalise the rollout?")
+        questions.append(
+            "New and returning users respond differently — should we personalise the rollout?"
+        )
     if result.get("significant") and not result.get("ship"):
-        questions.append("The experiment is significant but not being shipped — what specific blocker needs resolving?")
+        questions.append(
+            "The experiment is significant but not being shipped — what specific blocker needs resolving?"
+        )
 
     if llm is not None:
         try:
@@ -424,23 +495,24 @@ def generate_open_questions(
         except Exception as e:
             logger.debug("open question LLM failed: %s", e)
 
-    return list(dict.fromkeys(questions))[:5]   # deduplicate, keep up to 5
+    return list(dict.fromkeys(questions))[:5]  # deduplicate, keep up to 5
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # EXPERIMENT CONTEXT BUILDER
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def build_experiment_context(
-    exp_name:        str,
-    exp_info:        Dict,
+    exp_name: str,
+    exp_info: Dict,
     overall_results: Dict,
     segment_results: Dict,
-    interesting:     List,
-    decision:        str,
-    reasoning:       str,
-    extra_insights:  Dict = None,
-    past_learnings:  List[Dict] = None,
+    interesting: List,
+    decision: str,
+    reasoning: str,
+    extra_insights: Dict = None,
+    past_learnings: List[Dict] = None,
 ) -> Dict:
     overall_summary = "; ".join(
         f"{t}: Δ={r.get('delta_pp',0):+.2f}pp "
@@ -453,13 +525,18 @@ def build_experiment_context(
     seg_parts = []
     for dim, rows in segment_results.items():
         for r in [x for x in rows if x.get("sig") or x.get("is_significant")][:4]:
-            seg_parts.append(f"{r.get('dim',dim)}={r.get('level','?')}: Δ={r.get('delta_pp',0):+.2f}pp (sig)")
+            seg_parts.append(
+                f"{r.get('dim',dim)}={r.get('level','?')}: Δ={r.get('delta_pp',0):+.2f}pp (sig)"
+            )
     segment_summary = "; ".join(seg_parts) or "No significant segment-level effects."
 
-    interesting_summary = ", ".join(
-        f"{kind}: {r.get('dim','?')}={r.get('level','?')} Δ={r.get('delta_pp',0):+.2f}pp"
-        for kind, r in (interesting or [])[:5]
-    ) or "None detected."
+    interesting_summary = (
+        ", ".join(
+            f"{kind}: {r.get('dim','?')}={r.get('level','?')} Δ={r.get('delta_pp',0):+.2f}pp"
+            for kind, r in (interesting or [])[:5]
+        )
+        or "None detected."
+    )
 
     time_trend = "Not computed."
     if extra_insights and extra_insights.get("time_decay"):
@@ -486,20 +563,20 @@ def build_experiment_context(
         pl_text = "(No relevant prior experiments in learnings repository)"
 
     return {
-        "experiment":          exp_name,
-        "description":         exp_info.get("description", ""),
-        "hypothesis":          exp_info.get("hypothesis", "(not recorded)"),
-        "method":              exp_info.get("method", "A/B test"),
-        "team":                exp_info.get("team", ""),
-        "decision":            decision,
-        "reasoning":           reasoning,
-        "overall_summary":     overall_summary,
-        "segment_summary":     segment_summary,
+        "experiment": exp_name,
+        "description": exp_info.get("description", ""),
+        "hypothesis": exp_info.get("hypothesis", "(not recorded)"),
+        "method": exp_info.get("method", "A/B test"),
+        "team": exp_info.get("team", ""),
+        "decision": decision,
+        "reasoning": reasoning,
+        "overall_summary": overall_summary,
+        "segment_summary": segment_summary,
         "interesting_summary": interesting_summary,
-        "time_trend_summary":  time_trend,
-        "extra_insights":      ei_summary,
-        "past_learnings":      pl_text,
-        "n_past_learnings":    len(past_learnings) if past_learnings else 0,
+        "time_trend_summary": time_trend,
+        "extra_insights": ei_summary,
+        "past_learnings": pl_text,
+        "n_past_learnings": len(past_learnings) if past_learnings else 0,
     }
 
 

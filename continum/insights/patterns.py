@@ -10,46 +10,53 @@ logger = logging.getLogger("continum.insights.patterns")
 # DATA CLASSES
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Pattern:
-    def __init__(self, pattern_type: str, description: str,
-                 evidence: List[Dict], confidence: float, implication: str):
+    def __init__(
+        self,
+        pattern_type: str,
+        description: str,
+        evidence: List[Dict],
+        confidence: float,
+        implication: str,
+    ):
         self.pattern_type = pattern_type
-        self.description  = description
-        self.evidence     = evidence
-        self.confidence   = confidence
-        self.implication  = implication
+        self.description = description
+        self.evidence = evidence
+        self.confidence = confidence
+        self.implication = implication
 
     def to_dict(self) -> Dict:
         return {
-            "type":        self.pattern_type,
+            "type": self.pattern_type,
             "description": self.description,
-            "confidence":  round(self.confidence, 2),
+            "confidence": round(self.confidence, 2),
             "implication": self.implication,
-            "n_evidence":  len(self.evidence),
+            "n_evidence": len(self.evidence),
         }
 
 
 class ExperimentPrior:
 
     def __init__(self, exp_name: str):
-        self.exp_name            = exp_name
-        self.expected_sig_rate   = 0.0
-        self.expected_delta_pp   = 0.0
-        self.expected_srm_rate   = 0.0
-        self.similar_experiments : List[Dict] = []
-        self.relevant_learnings  : List[str]  = []
-        self.caution_flags       : List[str]  = []
+        self.exp_name = exp_name
+        self.expected_sig_rate = 0.0
+        self.expected_delta_pp = 0.0
+        self.expected_srm_rate = 0.0
+        self.similar_experiments: List[Dict] = []
+        self.relevant_learnings: List[str] = []
+        self.caution_flags: List[str] = []
 
     def to_dict(self) -> Dict:
         return {
-            "experiment":           self.exp_name,
-            "expected_sig_rate":    round(self.expected_sig_rate, 2),
-            "expected_delta_pp":    round(self.expected_delta_pp, 4),
-            "expected_srm_rate":    round(self.expected_srm_rate, 2),
-            "n_similar":            len(self.similar_experiments),
-            "similar_experiments":  self.similar_experiments[:3],
-            "relevant_learnings":   self.relevant_learnings[:4],
-            "caution_flags":        self.caution_flags,
+            "experiment": self.exp_name,
+            "expected_sig_rate": round(self.expected_sig_rate, 2),
+            "expected_delta_pp": round(self.expected_delta_pp, 4),
+            "expected_srm_rate": round(self.expected_srm_rate, 2),
+            "n_similar": len(self.similar_experiments),
+            "similar_experiments": self.similar_experiments[:3],
+            "relevant_learnings": self.relevant_learnings[:4],
+            "caution_flags": self.caution_flags,
         }
 
     def narrative(self) -> str:
@@ -58,7 +65,7 @@ class ExperimentPrior:
 
         n = len(self.similar_experiments)
         sig_pct = self.expected_sig_rate * 100
-        dp      = self.expected_delta_pp
+        dp = self.expected_delta_pp
 
         lines = [
             f"Based on {n} similar past experiment(s):",
@@ -77,6 +84,7 @@ class ExperimentPrior:
 # PATTERN MINER
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class PatternMiner:
 
     def __init__(self, memory=None):
@@ -87,11 +95,11 @@ class PatternMiner:
             return {"status": "no memory", "patterns": [], "summary": ""}
 
         return {
-            "metric_patterns":  self._mine_metric_patterns(),
-            "significance_rate":self._mine_significance_rate(),
-            "effect_sizes":     self._mine_effect_sizes(),
-            "srm_rate":         self._mine_srm_rate(),
-            "summary":          self._synthesize_summary(),
+            "metric_patterns": self._mine_metric_patterns(),
+            "significance_rate": self._mine_significance_rate(),
+            "effect_sizes": self._mine_effect_sizes(),
+            "srm_rate": self._mine_srm_rate(),
+            "summary": self._synthesize_summary(),
             "experiment_count": self.memory.experiment_count(),
         }
 
@@ -114,9 +122,9 @@ class PatternMiner:
                 db.close()
             return [
                 {
-                    "metric":    r[0],
-                    "n_exps":    int(r[1]),
-                    "sig_rate":  round(float(r[2] or 0), 2),
+                    "metric": r[0],
+                    "n_exps": int(r[1]),
+                    "sig_rate": round(float(r[2] or 0), 2),
                     "avg_delta": round(float(r[3] or 0), 4),
                     "std_delta": round(float(r[4] or 0), 4) if r[4] else None,
                 }
@@ -139,8 +147,8 @@ class PatternMiner:
                 db.close()
             if row:
                 return {
-                    "n_total":  int(row[0] or 0),
-                    "n_sig":    int(row[1] or 0),
+                    "n_total": int(row[0] or 0),
+                    "n_sig": int(row[1] or 0),
                     "sig_rate": round(float(row[2] or 0), 3),
                 }
         except Exception as e:
@@ -163,10 +171,10 @@ class PatternMiner:
                 db.close()
             if row:
                 return {
-                    "mean":   round(float(row[0] or 0), 4),
-                    "std":    round(float(row[1] or 0), 4) if row[1] else None,
-                    "min":    round(float(row[2] or 0), 4),
-                    "max":    round(float(row[3] or 0), 4),
+                    "mean": round(float(row[0] or 0), 4),
+                    "std": round(float(row[1] or 0), 4) if row[1] else None,
+                    "min": round(float(row[2] or 0), 4),
+                    "max": round(float(row[3] or 0), 4),
                     "median": round(float(row[4] or 0), 4) if row[4] else None,
                 }
         except Exception as e:
@@ -192,11 +200,11 @@ class PatternMiner:
         metrics = self._mine_metric_patterns()
         srm_rate = self._mine_srm_rate()
 
-        n   = sig.get("n_total", 0)
+        n = sig.get("n_total", 0)
         if n == 0:
             return "No patterns yet — run more experiments to build organizational intelligence."
 
-        sig_rate  = sig.get("sig_rate", 0)
+        sig_rate = sig.get("sig_rate", 0)
         avg_delta = effects.get("mean", 0)
 
         lines = [
@@ -205,9 +213,7 @@ class PatternMiner:
         ]
         if avg_delta:
             direction = "positive" if avg_delta > 0 else "negative"
-            lines.append(
-                f"  Average effect size is {avg_delta:+.3f}pp ({direction})."
-            )
+            lines.append(f"  Average effect size is {avg_delta:+.3f}pp ({direction}).")
         if srm_rate > 0.1:
             lines.append(
                 f"  {srm_rate:.0%} had sample ratio mismatches — worth auditing randomisation."
@@ -229,8 +235,8 @@ class PatternMiner:
         prior.similar_experiments = similar
 
         if similar:
-            sig_rates   = [1 if r.get("is_significant") else 0 for r in similar]
-            delta_pps   = [float(r.get("delta_pp") or 0) for r in similar]
+            sig_rates = [1 if r.get("is_significant") else 0 for r in similar]
+            delta_pps = [float(r.get("delta_pp") or 0) for r in similar]
             prior.expected_sig_rate = sum(sig_rates) / len(sig_rates) if sig_rates else 0.0
             prior.expected_delta_pp = sum(delta_pps) / len(delta_pps) if delta_pps else 0.0
 
@@ -260,6 +266,7 @@ def get_miner(memory=None) -> PatternMiner:
     global _MINER
     if _MINER is None:
         from continum.datastore.memory import get_memory
+
         _MINER = PatternMiner(memory=memory or get_memory())
     return _MINER
 

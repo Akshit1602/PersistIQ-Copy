@@ -74,8 +74,27 @@ a{color:inherit}
 .gw-btn.active:hover{background:var(--blue-d);transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,99,235,.35)}
 
 /* ══ APP SHELL ══════════════════════════════════════════════════════════ */
-#app{display:none;position:relative;grid-template-columns:226px 1fr var(--rp-w,312px);height:100vh;overflow:hidden}
-#app.copilot-mode{grid-template-columns:226px 1fr 0}
+/* NOTE: do NOT add `transition:grid-template-columns` here — Chromium fails to
+   interpolate a var()-driven track change alongside the 1fr track, which leaves
+   the collapsed pane stuck at its old width (the C5 collapse silently no-ops).
+   Instant collapse is correct and reliable. */
+#app{display:none;position:relative;grid-template-columns:var(--sb-w,226px) 1fr var(--rp-w,312px);height:100vh;overflow:hidden}
+#app.copilot-mode{grid-template-columns:var(--sb-w,226px) 1fr 0}
+/* Collapsible panes (Snowflake-style): collapsing a pane drives its grid column
+   to 0 and the pane (overflow:hidden) clips away. A thin floating button at the
+   screen edge brings it back. */
+#app.sb-collapsed{--sb-w:0px}
+#app.rp-collapsed{--rp-w:0px}
+.pane-toggle{background:transparent;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:4px 6px;border-radius:6px;line-height:1}
+.pane-toggle:hover{background:var(--surf2);color:var(--txt)}
+.pane-expander{position:fixed;top:64px;z-index:400;background:var(--surf);border:1px solid var(--bdr);color:var(--muted);
+  width:22px;height:40px;border-radius:0 8px 8px 0;cursor:pointer;display:none;align-items:center;justify-content:center;
+  box-shadow:var(--shadow-sm);font-size:11px}
+.pane-expander:hover{color:var(--blue);border-color:var(--blue)}
+#sb-expander{left:0}
+#rp-expander{right:0;border-radius:8px 0 0 8px}
+#app.sb-collapsed #sb-expander{display:flex}
+#app.rp-collapsed:not(.copilot-mode) #rp-expander{display:flex}
 
 /* ── Sidebar ── */
 .sb{background:var(--surf);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
@@ -185,6 +204,15 @@ a{color:inherit}
 .log-FILE{color:#7DD3FC;text-decoration:underline;cursor:pointer}.log-FILE::before{content:"[ FILE ] ";color:#38BDF8}
 .log-INPUT{color:#FBBF24;font-weight:600}
 .log-PING{display:none}
+/* ── Run status toasts (#1): outcome surfaced outside the console ── */
+#toast-wrap{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px}
+.toast{padding:11px 14px;border-radius:10px;font-size:12px;line-height:1.5;box-shadow:var(--shadow-sm);
+  border:1px solid var(--bdr);background:var(--surf);color:var(--txt);white-space:pre-wrap;word-break:break-word;
+  opacity:0;transform:translateY(8px);transition:opacity .18s,transform .18s}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast-ok{border-left:3px solid var(--green,#16a34a)}
+.toast-err{border-left:3px solid var(--red,#dc2626);background:var(--amber-lt,#fff7ed)}
+.toast b{font-weight:700}
 .console-files{padding:10px 16px;background:#0B1220;border-top:1px solid #1E293B;display:none}
 .file-chip{display:inline-block;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);border-radius:6px;
   padding:4px 10px;margin:3px 4px 0 0;font-size:10.5px;color:#7DD3FC;text-decoration:none;cursor:pointer}
@@ -208,12 +236,22 @@ table.dt tr:hover td{background:var(--surf2)}
 #rp-resize:hover,#rp-resize.dragging{background:rgba(37,99,235,.10)}
 #rp-resize:hover::after,#rp-resize.dragging::after{background:var(--blue);height:100%;border-radius:0}
 #app.copilot-mode #rp-resize{display:none}
-.rp-tabs{display:flex;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.rp-tabs{display:flex;border-bottom:1px solid var(--bdr);flex-shrink:0;align-items:stretch}
+/* tabs scroll horizontally if they don't fit; the collapse toggle stays pinned+visible (#3) */
+.rp-tabs-scroll{display:flex;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.rp-tabs-scroll::-webkit-scrollbar{display:none}
+.rp-tabs .pane-toggle{flex-shrink:0;border-left:1px solid var(--bdr)}
 .rp-tab{padding:10px 13px;font-size:10.5px;font-weight:600;cursor:pointer;color:var(--muted2);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
 .rp-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
 .rp-body{flex:1;overflow-y:auto}
 .rp-panel{display:none}
 .rp-panel.show{display:block}
+/* The Ask-AI pane is a flex column (chat history grows, composer pinned to the
+   bottom). It must ONLY appear when its tab is active — an inline display:flex
+   here used to override .rp-panel{display:none}, leaking the chat onto the
+   Insights / Narrative / Evidence tabs. id+class wins over .rp-panel.show. */
+#tab-ask{flex-direction:column;height:100%}
+#tab-ask.show{display:flex}
 .ins-item{background:var(--surf2);border:1px solid var(--bdr);border-radius:9px;padding:10px 12px;margin:9px;font-size:10.5px}
 .ins-src{font-size:8.5px;color:var(--muted2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;font-weight:700}
 .ins-msg{color:var(--txt);line-height:1.45;font-weight:500}
@@ -250,6 +288,12 @@ table.dt tr:hover td{background:var(--surf2)}
 .copilot-header{padding:22px 30px;border-bottom:1px solid var(--bdr);background:var(--surf)}
 .copilot-header h2{font-size:19px;font-weight:800;color:var(--txt);margin-bottom:4px}
 .copilot-header p{font-size:12px;color:var(--muted)}
+.cp-select-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.cp-select-lbl{font-size:10.5px;font-weight:700;color:var(--muted2);display:inline-flex;align-items:center;gap:5px}
+.cp-scope{margin-top:10px;font-size:11.5px;padding:8px 12px;border-radius:8px;line-height:1.5}
+.cp-scope.none{background:rgba(239,68,68,.10);color:#fca5a5;border:1px solid rgba(239,68,68,.30)}
+.cp-scope.partial{background:rgba(245,158,11,.10);color:#fcd34d;border:1px solid rgba(245,158,11,.28)}
+.cp-scope.set{background:rgba(34,197,94,.10);color:#86efac;border:1px solid rgba(34,197,94,.28)}
 .kpi-row{display:flex;gap:14px;padding:16px 30px;border-bottom:1px solid var(--bdr);background:var(--surf)}
 .kpi-card{background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--radius);padding:13px 17px;flex:1}
 .kpi-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted2);margin-bottom:5px;font-weight:700}
@@ -265,7 +309,32 @@ table.dt tr:hover td{background:var(--surf2)}
 .chat-msg.ai .chat-bubble{background:var(--surf);border:1px solid var(--bdr);color:var(--txt);border-radius:14px 14px 14px 4px;box-shadow:var(--shadow-sm)}
 .chat-ai-label{font-size:9.5px;color:var(--violet);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:flex;align-items:center;gap:5px;font-weight:700}
 .conf-badge{font-size:8.5px;background:var(--violet-lt);color:var(--violet);padding:2px 7px;border-radius:5px;margin-left:auto;font-weight:700}
-#ask-history .chat-msg + .chat-msg{margin-top:24px}   /* same breathing room as .copilot-chat, for the Ask-AI side pane */
+/* Ask-AI side pane: give the shared chat bubbles the same breathing room as
+   the full-screen copilot, plus a quick-action chip row that mirrors the
+   copilot's .copilot-quick (A4/A5 parity + spacing fix). */
+#ask-history{display:flex;flex-direction:column;gap:18px}
+#ask-history .chat-msg + .chat-msg{margin-top:0}
+#ask-history .chat-msg{max-width:100%}
+#ask-history .chat-bubble{max-width:90%;padding:11px 14px}
+.ask-quick{display:flex;gap:6px;flex-wrap:wrap;padding:9px 11px 0;flex-shrink:0}
+/* Right-pane loading placeholder (#1) */
+.rp-loading{padding:20px 18px;color:var(--muted2);font-size:11px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px}
+/* Ask-pane portfolio KPI tiles (compact, fit the narrow right pane) (#2) */
+.ask-kpis{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:9px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.ask-kpi{background:var(--surf2);border:1px solid var(--bdr);border-radius:8px;padding:8px 9px}
+.ask-kpi .akl{font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted2);font-weight:700;margin-bottom:3px}
+.ask-kpi .akl small{text-transform:none;letter-spacing:0;opacity:.8}
+.ask-kpi .akv{font-size:15px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--txt)}
+/* Ask-pane experiment scope chip: makes the active experiment obvious, warns when none (#2/#4) */
+.ask-scope{display:flex;align-items:center;gap:7px;font-size:10.5px;padding:8px 11px;border-bottom:1px solid var(--bdr);flex-shrink:0;line-height:1.4}
+.ask-scope.none{background:var(--amber-lt,#fff7ed);color:var(--amber,#b45309)}
+.ask-scope.set{background:var(--surf2);color:var(--muted)}
+.ask-scope b{color:var(--txt)}
+.ask-scope .scope-act{margin-left:auto;color:var(--blue);cursor:pointer;font-weight:700;white-space:nowrap}
+.ask-scope .scope-act:hover{text-decoration:underline}
+.cp-clarify{margin-top:9px;font-size:10.5px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+@keyframes expflash{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}30%{box-shadow:0 0 0 3px rgba(59,130,246,.45)}}
+.exp-flash{animation:expflash 1s ease 2}
 .copilot-input-wrap{padding:16px 30px;border-top:1px solid var(--bdr);background:var(--surf);display:flex;gap:10px;align-items:flex-end}
 .copilot-quick{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap;padding:0 30px}
 .quick-btn{background:var(--surf2);border:1px solid var(--bdr);color:var(--muted);border-radius:18px;padding:5px 13px;
@@ -277,6 +346,25 @@ table.dt tr:hover td{background:var(--surf2)}
 .copilot-send{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:11px 20px;font-size:13px;
   font-weight:700;cursor:pointer;height:46px;font-family:inherit}
 .copilot-send:hover{background:var(--blue-d)}
+
+/* ── Copilot collapsibles (SQL / table / charts) + callouts ── */
+.cp-acc{margin-top:9px;border:1px solid var(--bdr);border-radius:9px;background:var(--surf2);overflow:hidden}
+.cp-acc>summary{cursor:pointer;list-style:none;padding:8px 11px;font-size:10.5px;font-weight:700;color:var(--muted);
+  display:flex;align-items:center;gap:7px;user-select:none}
+.cp-acc>summary::-webkit-details-marker{display:none}
+.cp-acc>summary::after{content:"\f078";font-family:"Font Awesome 6 Free";font-weight:900;margin-left:auto;font-size:8px;color:var(--muted2);transition:transform .15s}
+.cp-acc[open]>summary::after{transform:rotate(180deg)}
+.cp-acc>summary:hover{color:var(--txt)}
+.cp-acc-body{padding:0 11px 11px}
+.cp-sql{font-family:'JetBrains Mono',monospace;font-size:10.5px;background:#0B1220;color:#CBD5E1;border-radius:7px;
+  padding:10px 12px;white-space:pre-wrap;word-break:break-word;line-height:1.6;margin:0}
+.cp-chart{width:100%}
+.cp-tool-desc{margin-top:8px;padding:8px 11px;border-radius:8px;background:var(--blue-lt);border:1px solid var(--bdr);
+  color:var(--txt);font-size:11px;line-height:1.5}
+.cp-tool-desc i{color:var(--blue);margin-right:5px}
+.cp-callout{padding:11px 13px;border-radius:10px;font-size:12px;line-height:1.55}
+.cp-callout-warn{background:var(--amber-lt);border:1px solid var(--amber);color:var(--amber)}
+.cp-callout-warn i{margin-right:6px}
 
 /* ── sections ── */
 .main-section{display:none}
@@ -393,6 +481,8 @@ textarea.field-input{resize:vertical;min-height:64px}
 
 <!-- ══ APP SHELL ═══════════════════════════════════════════════════════ -->
 <div id="app">
+  <button class="pane-expander" id="sb-expander" title="Show sidebar" onclick="togglePane('sb')"><i class="fa-solid fa-angles-right"></i></button>
+  <button class="pane-expander" id="rp-expander" title="Show panel" onclick="togglePane('rp')"><i class="fa-solid fa-angles-left"></i></button>
   <div class="rp-resize" id="rp-resize" title="Drag to resize the chat pane"></div>
   <input type="file" id="readout-file-input" multiple style="display:none" accept=".pdf,.txt,.md,.csv,.json,.docx" onchange="uploadReadout(this.files)">
   <aside class="sb" id="sidebar">
@@ -402,6 +492,7 @@ textarea.field-input{resize:vertical;min-height:64px}
         <div class="sb-name">CONTINUM</div>
         <div class="sb-tag">Intelligent Experimentation Platform</div>
       </div>
+      <button class="pane-toggle" style="margin-left:auto" title="Collapse sidebar" onclick="togglePane('sb')"><i class="fa-solid fa-angles-left"></i></button>
     </div>
     <div class="sb-role">
       <span class="rp-icon" id="sb-role-icon"><i class="fa-solid fa-chart-line"></i></span>
@@ -419,9 +510,14 @@ textarea.field-input{resize:vertical;min-height:64px}
   <main class="main" id="main-area">
     <div class="topbar">
       <div class="tb-title" id="topbar-title">Dashboard<span class="tb-sub" id="topbar-sub"></span></div>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted2);font-weight:600">
+        <i class="fa-solid fa-database" style="font-size:11px"></i>Dataset
+        <select class="exp-sel" id="ds-select-top" title="Active dataset — switching changes it app-wide" style="width:auto" onchange="switchDataset(this.value)"></select>
+      </span>
       <select class="exp-sel" id="exp-select" onchange="selectExperiment(this.value)">
-        <option value="">— Select experiment —</option>
+        <option value="">— All experiments —</option>
       </select>
+      <button class="btn btn-ghost" id="new-exp-btn" title="Create a new experiment" onclick="openNewExperiment()"><i class="fa-solid fa-plus" style="margin-right:5px"></i>New experiment</button>
       <button class="btn btn-primary" id="run-btn" onclick="runSelected()"><i class="fa-solid fa-play" style="margin-right:6px"></i>Run readout</button>
       <button class="btn btn-ghost" onclick="showSection('history')">History</button>
     </div>
@@ -478,19 +574,6 @@ textarea.field-input{resize:vertical;min-height:64px}
           </div>
         </div>
 
-        <div class="sec-title">Execution console</div>
-        <div class="console-wrap">
-          <div class="console-header">
-            <div class="dot" id="console-dot"></div>
-            <span id="console-label">Idle</span>
-            <span class="console-status" id="console-status">Ready</span>
-          </div>
-          <div class="console-body" id="console-body">
-            <div style="color:#64748B;font-size:11px;margin-top:90px;text-align:center">Select a module from any phase and press Run to execute it live against the backend.</div>
-          </div>
-          <div class="console-files" id="console-files"></div>
-        </div>
-
         <div class="sec-title">Recent runs</div>
         <div class="tbl-wrap">
           <table class="dt">
@@ -532,12 +615,28 @@ textarea.field-input{resize:vertical;min-height:64px}
         <div id="data-preview"><div style="padding:18px;color:var(--muted2);font-size:11px">Loading dataset…</div></div>
       </div>
 
+      <!-- OUTPUT (generated module artifacts — the outputs folder) -->
+      <div class="main-section" id="section-output">
+        <div class="sec-title" style="display:flex;align-items:center;gap:10px">Generated output
+          <button class="btn btn-ghost" style="margin-left:auto;padding:5px 11px" onclick="loadOutputView()"><i class="fa-solid fa-rotate" style="margin-right:5px"></i>Refresh</button>
+        </div>
+        <div id="output-list"><div style="padding:18px;color:var(--muted2);font-size:11px">Run a module to generate output…</div></div>
+      </div>
+
       <!-- COPILOT FULL PAGE -->
       <div class="main-section" id="section-copilot">
         <div class="copilot-full">
           <div class="copilot-header">
             <h2>CONTINUM AI Copilot</h2>
             <p>Ask anything about your experiments, metrics, and decisions — grounded in live data.</p>
+            <div class="cp-select-row">
+              <span class="cp-select-lbl"><i class="fa-solid fa-database"></i> Company / dataset</span>
+              <select class="exp-sel" id="cp-ds-select" onchange="switchDataset(this.value)"></select>
+              <span class="cp-select-lbl"><i class="fa-solid fa-flask"></i> Experiment</span>
+              <select class="exp-sel" id="cp-exp-select" onchange="selectExperiment(this.value)"></select>
+              <button class="btn btn-ghost" onclick="openNewExperiment()" style="padding:5px 10px;font-size:11px"><i class="fa-solid fa-plus" style="margin-right:5px"></i>New</button>
+            </div>
+            <div class="cp-scope none" id="cp-scope"></div>
           </div>
           <div class="kpi-row" id="copilot-kpis">
             <div class="kpi-card"><div class="kpi-label">Overall IOR</div><div class="kpi-value" id="ck-ior">—</div><div class="kpi-trend" id="ck-ior-trend"></div></div>
@@ -567,29 +666,61 @@ textarea.field-input{resize:vertical;min-height:64px}
 
   <aside class="rp" id="right-panel">
     <div class="rp-tabs">
-      <div class="rp-tab active" onclick="switchTab('insights',this)">Insights</div>
-      <div class="rp-tab" onclick="switchTab('narrative',this)">Narrative</div>
-      <div class="rp-tab" onclick="switchTab('ask',this)">Ask AI</div>
-      <div class="rp-tab" onclick="switchTab('evidence',this)">Evidence</div>
+      <div class="rp-tabs-scroll">
+        <div class="rp-tab active" onclick="switchTab('insights',this)">Insights</div>
+        <div class="rp-tab" onclick="switchTab('narrative',this)">Narrative</div>
+        <div class="rp-tab" onclick="switchTab('ask',this)">Ask AI</div>
+        <div class="rp-tab" onclick="switchTab('evidence',this)">Evidence</div>
+        <div class="rp-tab" onclick="switchTab('console',this)">Console</div>
+      </div>
+      <button class="pane-toggle" title="Collapse panel" onclick="togglePane('rp')"><i class="fa-solid fa-angles-right"></i></button>
     </div>
     <div class="rp-body" id="rp-body">
-      <div class="rp-panel show" id="tab-insights"><div id="insights-list" style="padding-top:2px"></div></div>
-      <div class="rp-panel" id="tab-narrative"><div id="narrative-list"></div></div>
-      <div class="rp-panel" id="tab-ask" style="display:flex;flex-direction:column;height:100%">
-        <div style="flex:1;overflow-y:auto" id="ask-history"></div>
+      <div class="rp-panel show" id="tab-insights"><div id="insights-list" style="padding-top:2px"><div class="rp-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading insights…</div></div></div>
+      <div class="rp-panel" id="tab-narrative"><div id="narrative-list"><div class="rp-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading narrative…</div></div></div>
+      <div class="rp-panel" id="tab-ask">
+        <div class="ask-kpis" id="ask-kpis" title="Experimentation portfolio — GMV is measured; margin is a modeled 30% assumption (no spend is recorded in the data)">
+          <div class="ask-kpi"><div class="akl">Experiments</div><div class="akv" id="ak-exp">—</div></div>
+          <div class="ask-kpi"><div class="akl">Overall IOR</div><div class="akv" id="ak-ior">—</div></div>
+          <div class="ask-kpi"><div class="akl">Converted orders</div><div class="akv" id="ak-orders">—</div></div>
+          <div class="ask-kpi"><div class="akl">Avg order value</div><div class="akv" id="ak-aov">—</div></div>
+          <div class="ask-kpi"><div class="akl">GMV <small>return</small></div><div class="akv" id="ak-gmv">—</div></div>
+          <div class="ask-kpi"><div class="akl">Margin <small>modeled 30%</small></div><div class="akv" id="ak-margin">—</div></div>
+        </div>
+        <div class="ask-scope none" id="ask-scope"></div>
+        <div style="flex:1;overflow-y:auto;padding:6px 4px" id="ask-history"></div>
         <div class="ask-resp" id="ask-response"></div>
+        <div class="ask-quick" id="ask-quick">
+          <button class="quick-btn" onclick="sendQuick('What is the current IOR, AOV and inquiry count?')">Current metrics</button>
+          <button class="quick-btn" onclick="sendQuick('Read out the latest experiment results')">Readout</button>
+          <button class="quick-btn" onclick="sendQuick('Why did the treatment underperform?')">Diagnose</button>
+          <button class="quick-btn" onclick="sendQuick('What should I run next?')">Next step</button>
+        </div>
         <div class="ask-wrap">
           <div class="ask-label">Ask CONTINUM IEP</div>
           <div class="ask-row">
             <input type="text" class="ask-in" id="ask-input" placeholder="Why did IOR drop yesterday?" onkeydown="if(event.key==='Enter') sendAsk()">
             <button class="ask-btn" onclick="triggerReadoutUpload()" title="Upload a readout to ask about" style="background:var(--surf2);color:var(--muted);border:1px solid var(--bdr)"><i class="fa-solid fa-paperclip"></i></button>
-            <button class="ask-btn" onclick="sendAsk()"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+            <button class="ask-btn" onclick="sendAsk()" title="Ask"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
           </div>
         </div>
       </div>
       <div class="rp-panel" id="tab-evidence">
         <div style="padding:11px 13px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--bdr);font-weight:600">Evidence chain for last query</div>
         <div id="evidence-chain"><div style="padding:18px;color:var(--muted2);font-size:11px;text-align:center">Ask a question to see grounded evidence</div></div>
+      </div>
+      <div class="rp-panel" id="tab-console">
+        <div class="console-wrap" style="margin:11px;border-radius:8px">
+          <div class="console-header">
+            <div class="dot" id="console-dot"></div>
+            <span id="console-label">Idle</span>
+            <span class="console-status" id="console-status">Ready</span>
+          </div>
+          <div class="console-body" id="console-body">
+            <div style="color:#64748B;font-size:11px;margin-top:90px;text-align:center">Run a module (from a card or the Ask-AI chat) to see it execute live here.</div>
+          </div>
+          <div class="console-files" id="console-files"></div>
+        </div>
       </div>
     </div>
   </aside>
@@ -608,6 +739,37 @@ textarea.field-input{resize:vertical;min-height:64px}
   </div>
 </div>
 
+<!-- New experiment modal — create an experiment under a dataset (persisted). -->
+<div class="modal-overlay" id="newexp-modal">
+  <div class="modal-box">
+    <div class="modal-title">New experiment</div>
+    <div class="modal-desc">Register a new experiment under a dataset. It appears in the experiment dropdown right away.</div>
+    <div id="newexp-fields">
+      <div class="field-label">Dataset / company</div>
+      <select class="field-input" id="ne-dataset"></select>
+      <div class="field-label" style="margin-top:10px">Experiment name</div>
+      <input type="text" class="field-input" id="ne-name" placeholder="e.g. checkout_button_color">
+      <div class="field-label" style="margin-top:10px">Hypothesis</div>
+      <input type="text" class="field-input" id="ne-hypothesis" placeholder="e.g. A green CTA lifts quote→order conversion">
+      <div class="field-label" style="margin-top:10px">Variants (comma-separated)</div>
+      <input type="text" class="field-input" id="ne-variants" placeholder="control, treatment">
+      <div class="field-label" style="margin-top:10px">Primary metric</div>
+      <input type="text" class="field-input" id="ne-metric" placeholder="e.g. converted_to_order">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><div class="field-label" style="margin-top:10px">Start date</div>
+          <input type="date" class="field-input" id="ne-start"></div>
+        <div style="flex:1"><div class="field-label" style="margin-top:10px">End date</div>
+          <input type="date" class="field-input" id="ne-end"></div>
+      </div>
+      <div id="ne-error" style="color:#ef4444;font-size:11px;margin-top:10px;display:none"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeNewExperiment()">Cancel</button>
+      <button class="btn-run-mod" id="ne-create-btn" onclick="submitNewExperiment()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Create experiment</button>
+    </div>
+  </div>
+</div>
+
 <!-- Interactive input() modal (server requests input mid-run) -->
 <div class="modal-overlay" id="input-overlay">
   <div class="input-modal">
@@ -619,6 +781,25 @@ textarea.field-input{resize:vertical;min-height:64px}
     </div>
   </div>
 </div>
+
+<!-- Module result dialog (#6) — the run's text output, shown in the dialog box
+     itself when a module is run from its card, so the user reads the result
+     without hunting for the console. -->
+<div class="modal-overlay" id="result-modal">
+  <div class="modal-box" style="max-width:680px">
+    <div class="modal-title" id="result-title">Module result</div>
+    <div class="modal-desc" id="result-status" style="display:flex;align-items:center;gap:8px"></div>
+    <pre id="result-output" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;background:#0B1220;color:#CBD5E1;border:1px solid #1E293B;border-radius:8px;padding:13px 15px;max-height:48vh;overflow:auto;margin:6px 0 0"></pre>
+    <div id="result-files" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeResultModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Run status toasts (#1) — a module's one-line result / failure surfaces here,
+     outside the Console tab, so the user sees the outcome without opening it. -->
+<div id="toast-wrap"></div>
 
 
 <script>
@@ -648,6 +829,7 @@ const NAV_DEFS = {
   intelligence: { label:'Intelligence & tools',     icon:'fa-brain',                  phase:null },
   data:         { label:'Data',                     icon:'fa-table-cells-large',      phase:null },
   copilot:      { label:'AI Copilot',               icon:'fa-wand-magic-sparkles',    phase:null },
+  output:       { label:'Output',                   icon:'fa-folder-open',            phase:null },
   history:      { label:'Run history',              icon:'fa-clock-rotate-left',      phase:null },
 };
 
@@ -699,10 +881,7 @@ const MOD_META = {
   historical_learning:               { icon:'fa-clock-rotate-left',       group:'intelligence' },
   next_step_generation:               { icon:'fa-forward',                 group:'intelligence' },
   anomaly_synthesis:                   { icon:'fa-triangle-exclamation',    group:'intelligence' },
-  analytical_chain:                     { icon:'fa-link',                    group:'intelligence' },
   cross_experiment_learning:             { icon:'fa-diagram-project',         group:'intelligence' },
-  adaptive_recommendations:               { icon:'fa-lightbulb',               group:'intelligence' },
-  ask_v2:                                  { icon:'fa-comment-dots',            group:'intelligence' },
   open_questions:                           { icon:'fa-circle-question',         group:'intelligence' },
   root_cause:                                { icon:'fa-magnifying-glass',        group:'intelligence' },
 
@@ -731,6 +910,11 @@ let currentRunId = null;
 let currentEventSource = null;
 let selectedModuleKey = null;
 let liveConfigCache = {};       // module_key -> config payload
+// Per-run output capture (#6) — buffer the streamed lines + generated files so the
+// result can be shown as text in a dialog when a module is run from its card.
+let runOutputLines = [];
+let runOutputFiles = [];
+let runShowDialog = false;      // true when the run was launched from a module card
 
 // ════════════════════════════════════════════════════════════════════════
 // API CLIENT — thin wrappers, one per real backend route
@@ -738,9 +922,16 @@ let liveConfigCache = {};       // module_key -> config payload
 const Api = {
   async modules() { const r = await fetch('/api/modules'); return r.json(); },
   async moduleConfig(key) { const r = await fetch('/api/module-config/' + encodeURIComponent(key)); return r.json(); },
-  async experiments() { const r = await fetch('/api/experiments'); return r.json(); },
+  async experiments(dataset) {
+    const qs = dataset ? ('?dataset=' + encodeURIComponent(dataset)) : '';
+    const r = await fetch('/api/experiments' + qs); return r.json();
+  },
   async selectExperiment(name) {
     const r = await fetch('/api/experiments/select', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+    return r.json();
+  },
+  async createExperiment(rec) {
+    const r = await fetch('/api/experiments/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
     return r.json();
   },
   async execute(key, fields, experiment_name) {
@@ -770,8 +961,15 @@ const Api = {
   async copilotAsk(question, mode, extra) {
     const body = Object.assign({ question, mode: mode || 'auto',
       ui_context: { active_experiment: (typeof activeExperiment !== 'undefined' ? activeExperiment : '') } }, extra || {});
-    const r = await fetch('/api/copilot/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    return r.json();
+    // A8 — abort the request if the backend takes too long, so the chat shows a
+    // friendly timeout message instead of spinning on "Thinking…" forever.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60000);
+    try {
+      const r = await fetch('/api/copilot/ask', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body), signal: ctrl.signal });
+      return await r.json();
+    } finally { clearTimeout(timer); }
   },
   async compare(a,b) {
     const r = await fetch('/api/compare', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({experiment_a:a, experiment_b:b}) });
@@ -840,6 +1038,12 @@ function buildNav(sections) {
     menu.appendChild(homeItem);
   }
 
+  // Every role that has a run history can also review module Output (B4).
+  if (sections.indexOf('output') === -1) {
+    const hi = sections.indexOf('history');
+    if (hi !== -1) sections = sections.slice(0, hi).concat(['output'], sections.slice(hi));
+  }
+
   sections.forEach(sec => {
     const def = NAV_DEFS[sec];
     const item = document.createElement('div');
@@ -865,25 +1069,62 @@ async function bootstrapData() {
   } catch(e) { console.warn('session fetch failed', e); }
 
   try {
-    const exps = await Api.experiments();
-    const sel = document.getElementById('exp-select');
-    sel.innerHTML = '<option value="">— Select experiment —</option>';
-    (Array.isArray(exps) ? exps : []).forEach(e => {
-      const opt = document.createElement('option');
-      opt.value = e.experiment_name; opt.textContent = `${e.experiment_name} (${e.n_rows||0} rows, ${e.n_variants||'?'} variants)`;
-      if (e.experiment_name === activeExperiment) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  } catch(e) { console.warn('experiments fetch failed', e); }
-
-  try {
     liveModules = await Api.modules();
     renderAllGrids();
   } catch(e) { console.warn('modules fetch failed', e); }
 
+  // Datasets first (sets activeDataset), then experiments filtered by it.
+  try { await loadDatasets(); } catch(e) { console.warn('datasets fetch failed', e); }
+  try { await loadExperiments(activeDataset); } catch(e) { console.warn('experiments fetch failed', e); }
+  try { renderCopilotScope(); } catch(e) {}
+  try { renderAskScope(); } catch(e) {}
   try { await refreshKpis(); } catch(e) { console.warn('kpi refresh failed', e); }
+  try { await refreshAskKpis(); } catch(e) { console.warn('ask kpi refresh failed', e); }
   try { await refreshInsights(); } catch(e) { console.warn('insights fetch failed', e); }
   try { await refreshNarrative(); } catch(e) { console.warn('narrative fetch failed', e); }
+}
+
+// Populate the top-bar (global) + Data-view + Copilot dataset selectors and show
+// the active one. Switching is app-wide via switchDataset(). (#1)
+// activeDataset is '' when no dataset/company is selected yet (gates the chat).
+let activeDataset = '';
+let DATASETS = [];
+async function loadDatasets() {
+  let ds;
+  try { ds = await (await fetch('/api/copilot/datasets')).json(); }
+  catch(e) { return; }
+  activeDataset = ds.active || '';
+  DATASETS = ds.datasets || [];
+  const blank = '<option value="">— Select dataset —</option>';
+  const opts = blank + DATASETS.map(function(d){
+    const label = d.display_name || d.name;
+    return '<option value="'+escapeAttr(d.name)+'"'+(d.name===activeDataset?' selected':'')+'>'+escapeHtml(label)+'</option>';
+  }).join('');
+  ['ds-select-top','ds-select','cp-ds-select'].forEach(function(id){
+    const sel = document.getElementById(id); if(sel) sel.innerHTML = opts;
+  });
+}
+
+// Fetch experiments (optionally scoped to a dataset) and paint every experiment
+// selector. If the current activeExperiment is no longer in the list, clear it.
+async function loadExperiments(dataset) {
+  let exps = [];
+  try { exps = await Api.experiments(dataset || ''); } catch(e) { console.warn('experiments fetch failed', e); }
+  exps = Array.isArray(exps) ? exps : [];
+  const names = exps.map(function(e){ return e.experiment_name; });
+  if (activeExperiment && names.indexOf(activeExperiment) === -1) {
+    activeExperiment = '';
+    const sb = document.getElementById('sb-exp'); if(sb) sb.textContent = '—';
+  }
+  const blank = '<option value="">— ' + (dataset ? 'Select experiment' : 'All experiments') + ' —</option>';
+  const opts = blank + exps.map(function(e){
+    const meta = (e.n_rows||0) + ' rows, ' + (e.n_variants||'?') + ' variants';
+    return '<option value="'+escapeAttr(e.experiment_name)+'"'+(e.experiment_name===activeExperiment?' selected':'')+'>'
+      + escapeHtml(e.experiment_name + ' (' + meta + ')') + '</option>';
+  }).join('');
+  ['exp-select','cp-exp-select'].forEach(function(id){
+    const sel = document.getElementById(id); if(sel) sel.innerHTML = opts;
+  });
 }
 
 async function refreshKpis() {
@@ -892,7 +1133,7 @@ async function refreshKpis() {
   // "Current state: IOR=17.830%  AOV=$0  n=24,000" regardless of LLM availability,
   // so KPIs are correct with or without the LLM loaded.
   try {
-    const res = await Api.copilotAsk('What is the current overall IOR, AOV, and inquiry count?', 'data');
+    const res = await Api.copilotAsk('What is the current overall IOR, AOV, and inquiry count?', 'data', {system:true});
     const txt = (res.response || '');
     const n = extractFirstNumber(txt, /n[=:]\s*([\d,]+)/i) || extractFirstNumber(txt, /across\s+([\d,]+)\s+inquir/i);
     const ior = extractFirstPct(txt);
@@ -917,6 +1158,33 @@ async function refreshKpis() {
     const sess = await Api.session();
     document.getElementById('ck-runs').textContent = sess.n_runs || 0;
   } catch(e) {}
+}
+
+// Compact money formatter for the narrow Ask-pane tiles ($1.2M / $980K / $450).
+function fmtMoney(n){
+  if(n==null || isNaN(n)) return '—';
+  const a=Math.abs(n);
+  if(a>=1e9) return '$'+(n/1e9).toFixed(1)+'B';
+  if(a>=1e6) return '$'+(n/1e6).toFixed(1)+'M';
+  if(a>=1e3) return '$'+(n/1e3).toFixed(1)+'K';
+  return '$'+Math.round(n);
+}
+
+// Portfolio KPI cards for the Ask-AI pane — experiment count + headline metrics +
+// modeled GMV/margin (#2). Backed by GET /api/copilot/portfolio (one aggregate query).
+async function refreshAskKpis(){
+  let d;
+  try{ d = await (await fetch('/api/copilot/portfolio')).json(); }catch(e){ return; }
+  if(!d || d.error || d.booting) return;
+  const set=function(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; };
+  const fmtInt=function(n){ return n!=null ? Number(n).toLocaleString() : '—'; };
+  set('ak-exp',    d.n_experiments!=null ? d.n_experiments : '—');
+  set('ak-ior',    d.ior!=null ? (d.ior*100).toFixed(2)+'%' : '—');
+  set('ak-orders', fmtInt(d.converted_orders));
+  // Money fields are modeled when the dataset has no order value — mark with '~'.
+  set('ak-aov',    (d.aov_modeled ? '~' : '') + fmtMoney(d.aov));
+  set('ak-gmv',    (d.gmv_modeled ? '~' : '') + fmtMoney(d.total_gmv));
+  set('ak-margin', (d.gmv_modeled ? '~' : '') + fmtMoney(d.modeled_margin));
 }
 
 function extractFirstPct(txt) { const m = txt.match(/(\d+\.\d+)%/); return m ? m[1]+'%' : null; }
@@ -1010,7 +1278,14 @@ function buildGrid(containerId, modules) {
   });
 }
 
+// Display-label overrides where the prettified key isn't the name we want to show.
+// The registry key (e.g. anomaly_synthesis) stays stable across the backend; only
+// the user-facing label changes here.
+const LABEL_OVERRIDES = {
+  anomaly_synthesis: 'Anomaly Detection',
+};
 function humanize(key) {
+  if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key];
   return key.split('_').map(w => w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
 }
 
@@ -1031,6 +1306,34 @@ function showSection(sec) {
   document.getElementById('topbar-title').innerHTML = (def ? def.label : 'Dashboard');
   if (sec === 'history') refreshFullHistory();
   if (sec === 'data') loadDataView();
+  if (sec === 'output') loadOutputView();
+  if (sec === 'copilot') { try { renderCopilotScope(); } catch(e) {} }
+}
+
+// ── OUTPUT VIEW (B4) — the outputs FOLDER: every file a module run generated,
+//    downloadable. Backed by GET /api/outputs (the real folder listing). ──────
+function _fmtBytes(n){ if(n==null) return ''; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
+async function loadOutputView(){
+  const box = document.getElementById('output-list');
+  if(!box) return;
+  let data;
+  try{ data = await (await fetch('/api/outputs')).json(); }
+  catch(e){ box.innerHTML = '<div class="grid-error">Could not load the outputs folder.</div>'; return; }
+  const files = (data && data.files) || [];
+  const dirNote = data && data.dir ? ('<div style="font-size:10px;color:var(--muted2);margin:0 0 8px">📁 '+escapeHtml(data.dir)+'</div>') : '';
+  if(!files.length){
+    box.innerHTML = dirNote + '<div style="padding:18px;color:var(--muted2);font-size:11px">No output files yet. Run a module (from a card or from the Ask-AI chat) — every run saves its generated files here.</div>';
+    return;
+  }
+  box.innerHTML = dirNote + files.map(function(f){
+    const ext = (f.ext||'').toUpperCase() || 'FILE';
+    return '<div class="ins-item" style="margin:9px 0;display:flex;align-items:center;gap:10px">'
+      + '<span class="tier-badge t1">'+escapeHtml(ext)+'</span>'
+      + '<div style="flex:1;min-width:0"><div class="ins-msg" style="font-weight:600">'+escapeHtml(f.name)+'</div>'
+      + '<div class="ins-det">'+_fmtBytes(f.size)+'</div></div>'
+      + '<a class="file-chip" style="color:var(--blue)" href="'+escapeAttr(f.url)+'" target="_blank"><i class="fa-solid fa-download" style="margin-right:5px"></i>Open</a>'
+      + '</div>';
+  }).join('');
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1039,9 +1342,72 @@ function showSection(sec) {
 async function selectExperiment(name) {
   activeExperiment = name;
   document.getElementById('sb-exp').textContent = name || '—';
+  ['exp-select','cp-exp-select'].forEach(function(id){
+    const sel = document.getElementById(id); if (sel && sel.value !== (name||'')) sel.value = name || '';
+  });
+  renderAskScope();
+  renderCopilotScope();
   if (name) {
     try { await Api.selectExperiment(name); } catch(e) { console.warn(e); }
   }
+}
+
+// Copilot start-window scope banner + selection prompt. Mirrors renderAskScope
+// but drives the dataset+experiment gate line in the Copilot header.
+function renderCopilotScope() {
+  const el = document.getElementById('cp-scope'); if (!el) return;
+  if (!activeDataset) {
+    el.className = 'cp-scope none';
+    el.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Select a <b>dataset / company</b> to begin — then pick an experiment for experiment-level questions.';
+  } else if (!activeExperiment) {
+    el.className = 'cp-scope partial';
+    el.innerHTML = '<i class="fa-solid fa-database"></i> Company: <b>' + escapeHtml(datasetLabel(activeDataset)) + '</b> · no experiment selected (answers span all experiments).';
+  } else {
+    el.className = 'cp-scope set';
+    el.innerHTML = '<i class="fa-solid fa-flask"></i> <b>' + escapeHtml(datasetLabel(activeDataset)) + '</b> → <b>' + escapeHtml(activeExperiment) + '</b>';
+  }
+}
+
+function datasetLabel(name) {
+  const d = (DATASETS || []).find(function(x){ return x.name === name; });
+  return (d && (d.display_name || d.name)) || name;
+}
+
+// Experiment names from the live selector (values are the experiment names).
+function experimentNames() {
+  return Array.from(document.querySelectorAll('#exp-select option'))
+    .map(function(o){ return o.value; }).filter(Boolean);
+}
+
+// Ask-pane scope chip — shows the active experiment (obvious) or a warning callout
+// when none is selected (#2/#4).
+function renderAskScope() {
+  const el = document.getElementById('ask-scope'); if (!el) return;
+  if (activeExperiment) {
+    el.className = 'ask-scope set';
+    el.innerHTML = '<i class="fa-solid fa-flask"></i> Answering for <b>' + escapeHtml(activeExperiment) +
+      '</b><span class="scope-act" onclick="focusExperimentPicker()">Change</span>';
+  } else {
+    el.className = 'ask-scope none';
+    el.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> No experiment selected — answers span <b>all experiments</b>' +
+      '<span class="scope-act" onclick="focusExperimentPicker()">Select one</span>';
+  }
+}
+
+// Draw attention to the top-bar experiment dropdown and open it.
+function focusExperimentPicker() {
+  const sel = document.getElementById('exp-select'); if (!sel) return;
+  if (document.getElementById('app').classList.contains('copilot-mode')) togglePane('rp'); // ensure top bar reachable
+  sel.scrollIntoView({block:'nearest', behavior:'smooth'});
+  sel.classList.add('exp-flash');
+  setTimeout(function(){ sel.classList.remove('exp-flash'); }, 2100);
+  try { sel.focus(); } catch(e) {}
+}
+
+// Clarifier chip handler: scope to an experiment, then re-ask the last question (#2).
+async function clarifyExperiment(name, q) {
+  await selectExperiment(name);
+  if (q) copilotSubmit(q);
 }
 
 function runSelected() {
@@ -1156,8 +1522,19 @@ async function executeModule() {
   if (uz && uz.dataset.templatePath) fields['_template_path'] = uz.dataset.templatePath;
 
   closeModal();
-  showSection('dashboard');
+  await startModuleRun(key, fields, expName || activeExperiment, {showDialog: true});
+}
 
+// Shared module runner: opens the execution console, runs the module over the
+// real /api/execute + SSE machinery (so interactive input() prompts surface in
+// the modal — instead of crashing with EOF — and generated files are captured).
+// Used by the config modal AND by chat tool-calls (B4).
+async function startModuleRun(key, fields, expName, opts) {
+  opts = opts || {};
+  runShowDialog = !!opts.showDialog;   // show the result dialog for card-initiated runs (#6)
+  runOutputLines = [];
+  runOutputFiles = [];
+  openConsolePane();                   // execution console lives in the right pane now (#3)
   const dot = document.getElementById('console-dot');
   const label = document.getElementById('console-label');
   const status = document.getElementById('console-status');
@@ -1172,7 +1549,7 @@ async function executeModule() {
 
   let res;
   try {
-    res = await Api.execute(key, fields, expName || activeExperiment);
+    res = await Api.execute(key, fields || {}, expName || activeExperiment);
   } catch (e) {
     appendConsoleLine('ERR', 'Failed to start module: ' + e.message);
     dot.classList.remove('run'); status.textContent = 'Failed'; return;
@@ -1193,6 +1570,46 @@ function appendConsoleLine(level, msg) {
   line.textContent = msg;
   body.appendChild(line);
   body.scrollTop = body.scrollHeight;
+  // Capture for the result dialog (#6). Skip pure-noise levels.
+  if (level !== 'PING') runOutputLines.push(msg);
+}
+
+// #1 — surface a module's one-line outcome (result or failure) outside the
+// console. Plain text only (#2 — one-liners get no markdown). Auto-dismisses.
+function showToast(msg, kind) {
+  const wrap = document.getElementById('toast-wrap');
+  if (!wrap) return;
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + (kind === 'err' ? 'err' : 'ok');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  const ttl = kind === 'err' ? 9000 : 5000;
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 220);
+  }, ttl);
+}
+
+// Show the captured run output as text in a dialog (#6).
+function showResultDialog(moduleKey, ok) {
+  document.getElementById('result-title').textContent = humanize(moduleKey) + ' — result';
+  const statusEl = document.getElementById('result-status');
+  statusEl.innerHTML = ok
+    ? '<span style="color:var(--green,#16a34a)"><i class="fa-solid fa-circle-check"></i> Completed</span>'
+    : '<span style="color:var(--red,#dc2626)"><i class="fa-solid fa-circle-exclamation"></i> Finished with errors</span>';
+  const out = runOutputLines.join('\n').trim();
+  document.getElementById('result-output').textContent = out || 'The module produced no text output.';
+  const filesBox = document.getElementById('result-files');
+  filesBox.innerHTML = '';
+  runOutputFiles.forEach(function(f) {
+    const chip = document.createElement('a');
+    chip.className = 'file-chip'; chip.textContent = f.name;
+    chip.href = '/api/file?path=' + encodeURIComponent(f.path);
+    chip.target = '_blank';
+    filesBox.appendChild(chip);
+  });
+  document.getElementById('result-modal').classList.add('show');
 }
 
 function streamRun(runId, moduleKey) {
@@ -1202,6 +1619,8 @@ function streamRun(runId, moduleKey) {
   const dot = document.getElementById('console-dot');
   const label = document.getElementById('console-label');
   const status = document.getElementById('console-status');
+  // #1 — track outcome so we can surface a clear one-liner outside the console.
+  let sawError = false, runSummary = '', firstErr = '';
 
   es.onmessage = async (ev) => {
     let data;
@@ -1209,6 +1628,14 @@ function streamRun(runId, moduleKey) {
     const level = data.level, msg = data.msg;
 
     if (level === 'PING') return;
+
+    if (level === 'ERR') {
+      sawError = true;
+      // Keep the first real error line (the "❌ Type: message" headline).
+      if (!firstErr && /\S/.test(msg)) firstErr = String(msg).replace(/^❌\s*/, '').trim();
+    } else if (level === 'SUMMARY') {
+      runSummary = String(msg).trim();
+    }
 
     if (level === 'INPUT') {
       // msg is itself a JSON string: {"prompt":..., "default":...}
@@ -1229,18 +1656,32 @@ function streamRun(runId, moduleKey) {
       chip.href = '/api/file?path=' + encodeURIComponent(fpath);
       chip.target = '_blank';
       filesBox.appendChild(chip);
+      runOutputFiles.push({name: fname.trim(), path: fpath});  // capture for the result dialog (#6)
       return;
     }
 
     if (level === 'DONE') {
+      const ok = !sawError;
       dot.classList.remove('run');
       label.textContent = 'Idle';
-      status.textContent = 'Completed';
+      status.textContent = ok ? 'Completed' : 'Failed';
       es.close();
       currentEventSource = null;
       const card = document.getElementById('mod-' + moduleKey);
-      if (card) card.classList.add('done');
+      if (card) card.classList.add(ok ? 'done' : 'failed');
+      // #1 — always surface the outcome outside the console: a clear one-line
+      // failure, or the module's one-line summary on success.
+      const name = humanize(moduleKey);
+      if (!ok) {
+        showToast('❌ ' + name + ' failed' + (firstErr ? ': ' + firstErr : '. See the Console for details.'), 'err');
+      } else {
+        showToast('✅ ' + name + (runSummary ? ': ' + runSummary : ' completed'), 'ok');
+      }
+      // Show the full-text dialog for card runs, and always on failure so the
+      // error is never buried in the console.
+      if (runShowDialog || !ok) showResultDialog(moduleKey, ok);
       await bootstrapData(); // refresh history + KPIs from real backend
+      try { loadOutputView(); } catch(e) {}  // B4 — surface freshly generated output
       return;
     }
 
@@ -1319,12 +1760,37 @@ function switchTab(tab, el) {
   el.classList.add('active');
   const panel = document.getElementById('tab-' + tab);
   if (panel) panel.classList.add('show');
+  // A2 — refresh the panel's data the moment it's opened, instead of waiting for
+  // the 20s poll / a fresh bootstrap (the old behaviour felt "very slow").
+  if (tab === 'insights')      refreshInsights();
+  else if (tab === 'narrative') refreshNarrative();
+  else if (tab === 'evidence')  renderEvidence();
+  else if (tab === 'ask')       { renderChat(); refreshAskKpis(); renderAskScope(); }
+}
+
+// Reveal the right-pane Console tab (the execution console now lives there, #3).
+function openConsolePane() {
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('rp-collapsed');
+  document.querySelectorAll('.rp-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.rp-panel').forEach(p => p.classList.remove('show'));
+  const panel = document.getElementById('tab-console');
+  if (panel) panel.classList.add('show');
+  document.querySelectorAll('.rp-tab').forEach(t => {
+    if (/switchTab\('console'/.test(t.getAttribute('onclick') || '')) t.classList.add('active');
+  });
+}
+
+function closeResultModal() {
+  document.getElementById('result-modal').classList.remove('show');
 }
 
 async function refreshInsights() {
+  const list = document.getElementById('insights-list');
+  // Show a loading state only on the first load (avoid flicker on the 20s poll).
+  if (list && !list.querySelector('.ins-item')) list.innerHTML = '<div class="rp-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading insights…</div>';
   try {
     const data = await Api.intelligence();
-    const list = document.getElementById('insights-list');
     const items = (data.insights || []).slice(-10).reverse();
     if (!items.length) {
       list.innerHTML = '<div style="padding:18px;color:var(--muted2);font-size:11px;text-align:center">No insights yet — run a module to generate some</div>';
@@ -1340,9 +1806,10 @@ async function refreshInsights() {
 }
 
 async function refreshNarrative() {
+  const list = document.getElementById('narrative-list');
+  if (list && !list.querySelector('.narr-item')) list.innerHTML = '<div class="rp-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading narrative…</div>';
   try {
     const stream = await Api.narrative();
-    const list = document.getElementById('narrative-list');
     if (!stream || !stream.length) {
       list.innerHTML = '<div style="padding:18px;color:var(--muted2);font-size:11px;text-align:center">No narrative yet</div>';
       return;
@@ -1364,6 +1831,9 @@ async function refreshNarrative() {
 let CHAT = { history: [], pending: null, busy: false, lastQ: '' };
 
 function fmtMd(s){ return escapeHtml(String(s==null?'':s)).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+// #2 — a single-line answer needs no markdown; render it plain so short outputs
+// aren't dressed up with bold/formatting.
+function fmtBody(s){ const t=String(s==null?'':s); return /\n/.test(t.trim()) ? fmtMd(t) : escapeHtml(t); }
 
 function _cpTable(rows, cols){
   if(!rows || !rows.length) return '';
@@ -1373,24 +1843,142 @@ function _cpTable(rows, cols){
   return '<div class="tbl-wrap" style="margin-top:9px;max-height:240px;overflow:auto"><table class="dt"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
 }
 
+// A collapsible <details> block (Snowflake-style) — used for SQL, table, charts.
+function _cpDetails(label, icon, bodyHtml, open){
+  if(!bodyHtml) return '';
+  return '<details class="cp-acc"'+(open?' open':'')+'>'
+    + '<summary><i class="fa-solid '+icon+'"></i> '+escapeHtml(label)+'</summary>'
+    + '<div class="cp-acc-body">'+bodyHtml+'</div></details>';
+}
+
 function _cpMsgHtml(m){
   if(m.role === 'user')
     return '<div class="chat-msg user"><div class="chat-bubble">'+escapeHtml(m.text)+'</div></div>';
+
+  // Experiment-not-selected callout (A7): a confirmed analysis/deploy module
+  // ran without an active experiment.
+  if(m.needs_experiment){
+    let warn = '<div class="chat-ai-label"><i class="fa-solid fa-wand-magic-sparkles"></i> CONTINUM Copilot</div>'
+      + '<div class="cp-callout cp-callout-warn"><i class="fa-solid fa-circle-exclamation"></i> '
+      + fmtMd(m.text || 'Select an experiment first.')
+      + '<div style="margin-top:8px;font-size:10.5px;opacity:.9">Pick one from the <b>experiment dropdown</b> in the top bar, then ask again.</div></div>';
+    return '<div class="chat-msg ai">'+warn+'</div>';
+  }
+
+  // Dataset-not-selected callout: a data question was asked before a company /
+  // dataset was picked. Meta/help questions are never gated.
+  if(m.needs_dataset){
+    let warn = '<div class="chat-ai-label"><i class="fa-solid fa-wand-magic-sparkles"></i> CONTINUM Copilot</div>'
+      + '<div class="cp-callout cp-callout-warn"><i class="fa-solid fa-circle-exclamation"></i> '
+      + fmtMd(m.text || 'Select a dataset / company first.')
+      + '<div style="margin-top:8px;font-size:10.5px;opacity:.9">Pick a <b>dataset / company</b> from the dropdown above, then ask again.</div></div>';
+    return '<div class="chat-msg ai">'+warn+'</div>';
+  }
+
+  // #5 — error messages get a distinct warning callout.
+  if(m.error){
+    return '<div class="chat-msg ai"><div class="chat-ai-label"><i class="fa-solid fa-wand-magic-sparkles"></i> CONTINUM Copilot</div>'
+      + '<div class="cp-callout cp-callout-warn">'+fmtMd(m.text)+'</div></div>';
+  }
+
+  // #5 — rotating loading message with a spinner while the model works.
+  const bubble = m.thinking
+    ? '<span class="cp-thinking"><i class="fa-solid fa-spinner fa-spin" style="opacity:.7;margin-right:7px"></i><span class="cp-think-txt">'+escapeHtml(m.thinkMsg||'Thinking…')+'</span></span>'
+    : fmtBody(m.text);
   let inner = '<div class="chat-ai-label"><i class="fa-solid fa-wand-magic-sparkles"></i> CONTINUM Copilot'
     + (m.meta && m.meta.mode ? ' <span class="conf-badge">'+escapeHtml(m.meta.mode)+'</span>' : '')
-    + '</div><div class="chat-bubble">'+(m.thinking ? '<i style="opacity:.7">Thinking…</i>' : fmtMd(m.text))+'</div>';
+    + '</div><div class="chat-bubble">'+bubble+'</div>';
   if(m.confirm){
+    // A9 — describe what the tool will do before the user commits.
+    if(m.confirm.description)
+      inner += '<div class="cp-tool-desc"><i class="fa-solid fa-circle-info"></i> '+fmtMd(m.confirm.description)+'</div>';
     if(m.confirm.deploy_warning)
       inner += '<div style="margin-top:8px;padding:9px 11px;border-radius:8px;background:var(--amber-lt);border:1px solid var(--amber);color:var(--amber);font-size:11px;line-height:1.5">'+fmtMd(m.confirm.deploy_warning)+'</div>';
     inner += '<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">'
       + '<button onclick="copilotConfirm()" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer">Yes, use '+escapeHtml(m.confirm.module_name)+'</button>'
       + '<button onclick="copilotDecline()" style="background:var(--surf2);color:var(--muted);border:1px solid var(--bdr);border-radius:8px;padding:7px 14px;font-size:11.5px;cursor:pointer">No, just answer</button></div>';
   }
-  if(m.meta && m.meta.table && m.meta.table.length) inner += _cpTable(m.meta.table, m.meta.columns);
+  // A6 — table, SQL and visualizations, each in a collapsible.
+  if(m.meta && m.meta.table && m.meta.table.length)
+    inner += _cpDetails('Result table ('+m.meta.table.length+' rows)', 'fa-table', _cpTable(m.meta.table, m.meta.columns), true);
+  if(m.meta && m.meta.viz && m.meta.viz.length){
+    const cid = (m._cid || (m._cid = 'c'+Math.random().toString(36).slice(2)));
+    inner += _cpDetails('Visualization', 'fa-chart-column',
+      '<div class="cp-chart" data-cid="'+cid+'" style="min-height:260px"></div>', true);
+  }
+  if(m.meta && m.meta.sql)
+    inner += _cpDetails('SQL', 'fa-code', '<pre class="cp-sql">'+escapeHtml(m.meta.sql)+'</pre>', false);
   if(m.meta && m.meta.next_steps && m.meta.next_steps.length)
     inner += '<div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">'
       + m.meta.next_steps.map(s=>'<button class="quick-btn" data-q="'+escapeAttr(escapeHtml(s))+'" onclick="sendQuick(this.dataset.q)">'+escapeHtml(s)+'</button>').join('') + '</div>';
+  // Clarifier chips (#2): answered across all data — offer to re-scope to one experiment.
+  if(m.clarify && m.clarify.length)
+    inner += '<div class="cp-clarify"><i class="fa-solid fa-flask"></i> Answered across all experiments — focus on one?'
+      + m.clarify.map(function(e){ return ' <button class="quick-btn" data-exp="'+escapeAttr(e)+'" data-q="'+escapeAttr(m.clarifyQ||'')+'" onclick="clarifyExperiment(this.dataset.exp,this.dataset.q)">'+escapeHtml(e)+'</button>'; }).join('') + '</div>';
   return '<div class="chat-msg ai">'+inner+'</div>';
+}
+
+// ── Lazy Plotly loader + chart renderer (charts render after renderChat). ──
+let _plotlyPromise = null;
+function ensurePlotly(){
+  if(window.Plotly) return Promise.resolve(window.Plotly);
+  if(_plotlyPromise) return _plotlyPromise;
+  _plotlyPromise = new Promise(function(resolve,reject){
+    const s = document.createElement('script');
+    s.src = 'https://cdn.plot.ly/plotly-2.27.0.min.js';
+    s.onload = function(){ resolve(window.Plotly); };
+    s.onerror = function(){ reject(new Error('plotly load failed')); };
+    document.head.appendChild(s);
+  });
+  return _plotlyPromise;
+}
+function _renderOneChart(el, cfg, rows){
+  if(!el || !cfg || !rows || !rows.length) return;
+  const type=(cfg.type||'bar').toLowerCase();
+  const col=function(name){ return rows.map(function(r){ return r[name]; }); };
+  let data=[];
+  try{
+    if(type==='pie'){
+      data=[{type:'pie', labels:col(cfg.names||cfg.x), values:col(cfg.values||cfg.y)}];
+    } else if(cfg.color && rows.some(function(r){return r[cfg.color]!=null;})){
+      const groups={};
+      rows.forEach(function(r){ (groups[r[cfg.color]] = groups[r[cfg.color]]||[]).push(r); });
+      data=Object.keys(groups).map(function(g){
+        return {type:(type==='line'?'scatter':'bar'), mode:type==='line'?'lines+markers':undefined,
+          name:String(g), x:groups[g].map(function(r){return r[cfg.x];}), y:groups[g].map(function(r){return r[cfg.y];})};
+      });
+    } else {
+      data=[{type:(type==='line'?'scatter':'bar'), mode:type==='line'?'lines+markers':undefined, x:col(cfg.x), y:col(cfg.y)}];
+    }
+    Plotly.newPlot(el, data,
+      {title:cfg.title||'', margin:{t:34,r:12,b:40,l:46}, height:270, font:{size:11},
+       paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)'},
+      {displayModeBar:false, responsive:true});
+  }catch(e){ el.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:11px">Chart could not be rendered.</div>'; }
+}
+function renderPendingCharts(){
+  const pending = CHAT.history.filter(function(m){ return m._cid && m.meta && m.meta.viz && m.meta.viz.length; });
+  if(!pending.length) return;
+  ensurePlotly().then(function(){
+    pending.forEach(function(m){
+      ['copilot-chat','ask-history'].forEach(function(boxId){
+        const box=document.getElementById(boxId); if(!box) return;
+        const el=box.querySelector('.cp-chart[data-cid="'+m._cid+'"]');
+        if(el && !el.dataset.rendered){ el.dataset.rendered='1'; _renderOneChart(el, m.meta.viz[0], m.meta.table||[]); }
+      });
+    });
+  }).catch(function(){
+    // Plotly failed to load (offline / CDN blocked). Don't fail silently — say so
+    // in the chart box so a missing chart is diagnosable, not invisible.
+    pending.forEach(function(m){
+      ['copilot-chat','ask-history'].forEach(function(boxId){
+        const box=document.getElementById(boxId); if(!box) return;
+        const el=box.querySelector('.cp-chart[data-cid="'+m._cid+'"]');
+        if(el && !el.dataset.rendered){ el.dataset.rendered='1';
+          el.innerHTML='<div style="padding:10px;color:var(--muted);font-size:11px">Chart library couldn\'t load (offline or the CDN is blocked). The underlying data is in the table above.</div>'; }
+      });
+    });
+  });
 }
 
 // Render the single shared conversation into BOTH chat surfaces (sync).
@@ -1408,6 +1996,7 @@ function renderChat(){
     box.scrollTop = box.scrollHeight;
   });
   const resp = document.getElementById('ask-response'); if(resp){ resp.classList.remove('show'); resp.innerHTML = ''; }
+  renderPendingCharts();
 }
 
 // Single entry point for every chat surface + quick chips + confirm/decline.
@@ -1419,38 +2008,145 @@ async function copilotSubmit(question, opts){
   if(opts.confirm_tool)      CHAT.history.push({role:'user', text:'Yes — use ' + ((CHAT.pending && CHAT.pending.module_name) || 'the module')});
   else if(opts.decline)      CHAT.history.push({role:'user', text:'No — just answer'});
   else { CHAT.history.push({role:'user', text:question}); CHAT.lastQ = question; }
-  const ph = {role:'ai', thinking:true}; CHAT.history.push(ph);
+  const ph = {role:'ai', thinking:true, thinkMsg:_THINK_MSGS[0]}; CHAT.history.push(ph);
   CHAT.busy = true; renderChat();
+  startThinking(ph);
   try{
     const extra = {};
     if(opts.confirm_tool) extra.confirm_tool = opts.confirm_tool;
     if(opts.decline)      extra.decline = true;
     const d = await Api.copilotAsk(CHAT.lastQ, 'auto', extra);
+    stopThinking();
     CHAT.history = CHAT.history.filter(function(m){ return m !== ph; });
     if(d.mode === 'confirm' && d.pending_tool){
-      CHAT.pending = { key:d.pending_tool.key, module_name:d.pending_tool.module_name, kind:d.pending_tool.kind, deploy_warning:d.deploy_warning };
+      CHAT.pending = { key:d.pending_tool.key, module_name:d.pending_tool.module_name,
+        kind:d.pending_tool.kind, target:d.pending_tool.target || '',
+        description:d.pending_tool.description || '', deploy_warning:d.deploy_warning };
       CHAT.history.push({role:'ai', text:d.response, confirm:CHAT.pending});
+    } else if(d.mode === 'needs_experiment'){
+      CHAT.pending = null;
+      CHAT.history.push({role:'ai', needs_experiment:true, text:(d.response || 'Select an experiment first.')});
+    } else if(d.mode === 'needs_dataset'){
+      CHAT.pending = null;
+      CHAT.history.push({role:'ai', needs_dataset:true, text:(d.response || 'Select a dataset / company first.')});
     } else {
       CHAT.pending = null;
-      CHAT.history.push({role:'ai', text:(d.response || d.error || '(no response)'),
-        meta:{ table:d.table||[], columns:d.columns||[],
-          next_steps:((d.suggestions && d.suggestions.length) ? d.suggestions : (d.next_steps||[])), mode:d.mode }});
+      const meta = { table:d.table||[], columns:d.columns||[], sql:d.sql||'', viz:d.visualizations||[],
+        next_steps:((d.suggestions && d.suggestions.length) ? d.suggestions : (d.next_steps||[])), mode:d.mode };
+      const msg = {role:'ai', text:(d.response || d.error || '(no response)'), meta:meta};
+      // #2 — a data answer with no experiment selected: offer clarifier chips to re-scope.
+      if(!activeExperiment && !opts.confirm_tool && (d.mode === 'askdata' || d.mode === 'data')){
+        const exps = experimentNames();
+        if(exps.length){ msg.clarify = exps.slice(0,4); msg.clarifyQ = CHAT.lastQ; }
+      }
+      CHAT.history.push(msg);
+      captureEvidence(CHAT.lastQ, d, meta);
     }
   }catch(e){
+    stopThinking();
     CHAT.history = CHAT.history.filter(function(m){ return m !== ph; });
-    CHAT.history.push({role:'ai', text:'Request failed: ' + e.message});
+    CHAT.history.push({role:'ai', error:true, text: friendlyError(e)});
   }
   CHAT.busy = false; renderChat();
 }
 
-function copilotConfirm(){ if(CHAT.pending) copilotSubmit('', {confirm_tool: CHAT.pending.key}); }
+// #5 — rotating "thinking" messages so a slow LLM call feels responsive.
+const _THINK_MSGS = ['Understanding your question…','Retrieving the data…',
+  'Analysing the results…','Composing the answer…','Almost there…'];
+let _thinkTimer = null;
+function startThinking(ph){
+  let i = 0;
+  stopThinking();
+  _thinkTimer = setInterval(function(){
+    i = (i + 1) % _THINK_MSGS.length;
+    ph.thinkMsg = _THINK_MSGS[i];
+    // Update the live thinking bubble in place (no full re-render → keeps scroll).
+    document.querySelectorAll('.cp-think-txt').forEach(function(el){ el.textContent = _THINK_MSGS[i]; });
+  }, 2200);
+}
+function stopThinking(){ if(_thinkTimer){ clearInterval(_thinkTimer); _thinkTimer = null; } }
+
+// #5 — friendly, actionable error text instead of a raw exception string.
+function friendlyError(e){
+  const msg = (e && (e.message || e.name)) ? String(e.message || e.name) : String(e || '');
+  if(/AbortError|tim[eo]*out|aborted/i.test(msg))
+    return '⏱️ That took too long and was cancelled. Try a narrower question, pick an experiment, or ask again — the model may have been busy.';
+  if(/Failed to fetch|NetworkError|load failed/i.test(msg))
+    return '🔌 I couldn’t reach the server. Check that the app is still running, then try again.';
+  return '⚠️ Something went wrong answering that. Please try again — if it keeps happening, rephrase the question or check the server logs.';
+}
+
+function copilotConfirm(){
+  const p = CHAT.pending;
+  if(!p) return;
+  // Data look-ups answer inline in chat (table + chart + SQL). Analysis / deploy
+  // modules run in the live console (B4): it streams logs, handles interactive
+  // input() via the modal, and captures outputs into the Output tab — instead of
+  // executing silently in the request (which broke on modules that call input()).
+  const runnable = p.target && p.target !== 'askdata' && (p.kind === 'analysis' || p.kind === 'deploy');
+  if(!runnable){ copilotSubmit('', {confirm_tool: p.key}); return; }
+  if(EXP_MODULES.has(p.target) && !activeExperiment){
+    CHAT.history.push({role:'user', text:'Yes — run ' + p.module_name});
+    CHAT.history.push({role:'ai', needs_experiment:true,
+      text:'**'+p.module_name+'** runs against a single experiment, but none is selected yet.'});
+    CHAT.pending = null; renderChat(); return;
+  }
+  CHAT.history.push({role:'user', text:'Yes — run ' + p.module_name});
+  CHAT.history.push({role:'ai',
+    text:'▶️ Running **'+p.module_name+'**. Watch the **Console** tab (right panel) for live progress; generated files land in the **Output** view.'});
+  const target = p.target; CHAT.pending = null; renderChat();
+  startModuleRun(target, {}, activeExperiment);
+}
 function copilotDecline(){ copilotSubmit('', {decline:true}); }
 
 // Both surfaces + quick chips funnel into the one shared conversation.
 function sendAsk(){ const i=document.getElementById('ask-input'); const q=(i.value||'').trim(); if(!q) return; i.value=''; copilotSubmit(q); }
 function sendCopilot(){ const i=document.getElementById('copilot-input'); const q=(i.value||'').trim(); if(!q) return; i.value=''; copilotSubmit(q); }
 function sendQuick(q){ copilotSubmit(q); }
-function renderEvidence(){ /* /api/copilot/ask does not return an evidence chain */ }
+
+// ── EVIDENCE (A3) — grounding chain for the most recent Copilot answer ─────────
+// /api/copilot/ask returns the mode it resolved to, the SQL it ran, the rows it
+// grounded on and the live LLM flag. We snapshot that on every answer and render
+// it as the auditable "why did it say that" trail the Evidence tab used to show.
+let LAST_EVIDENCE = null;
+function captureEvidence(question, d, meta){
+  LAST_EVIDENCE = {
+    question: question,
+    mode: (d && d.mode) || meta.mode || '',
+    llm_loaded: !!(d && d.llm_loaded),
+    sql: meta.sql || '',
+    columns: meta.columns || [],
+    rows: meta.table || [],
+    answer: (d && d.response) || '',
+    error: (d && d.error) || '',
+    at: new Date().toLocaleTimeString(),
+  };
+  renderEvidence();
+}
+function renderEvidence(){
+  const box = document.getElementById('evidence-chain');
+  if(!box) return;
+  const e = LAST_EVIDENCE;
+  if(!e){
+    box.innerHTML = '<div style="padding:18px;color:var(--muted2);font-size:11px;text-align:center">Ask a question to see grounded evidence</div>';
+    return;
+  }
+  const step = function(src, html){
+    return '<div class="ev-item"><div class="ev-src">'+escapeHtml(src)+'</div><div class="ev-claim">'+html+'</div></div>'; };
+  let h = '';
+  h += step('Question', escapeHtml(e.question) + ' <span style="color:var(--muted2)">· '+escapeHtml(e.at)+'</span>');
+  h += step('Resolution path', '<span class="conf-badge" style="margin:0">'+escapeHtml(e.mode||'—')+'</span> '
+        + (e.llm_loaded ? 'grounded + LLM' : 'grounded · deterministic'));
+  if(e.sql)
+    h += step('SQL executed', '<pre class="cp-sql" style="margin-top:4px">'+escapeHtml(e.sql)+'</pre>');
+  if(e.rows && e.rows.length)
+    h += step('Data grounded on', e.rows.length + ' row(s)' + (e.columns.length ? ' · ' + escapeHtml(e.columns.join(', ')) : '')
+        + _cpTable(e.rows, e.columns));
+  if(e.error)
+    h += step('Error', '<span style="color:var(--red)">'+escapeHtml(e.error)+'</span>');
+  h += step('Answer', fmtMd((e.answer||'').slice(0,600)));
+  box.innerHTML = h;
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // Periodic refresh for insights/narrative (light polling, real endpoints)
@@ -1485,14 +2181,76 @@ async function loadDataView(){
   }catch(e){ box.innerHTML = '<div class="grid-error">Could not load the data preview.</div>'; }
 }
 async function switchDataset(name){
-  if(!name) return;
-  document.getElementById('data-preview').innerHTML = '<div style="padding:18px;color:var(--muted2);font-size:11px">Switching dataset…</div>';
-  try{ await fetch('/api/copilot/dataset', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataset:name})}); }catch(e){}
-  loadDataView();
+  if(!name || name === activeDataset) return;   // blank re-select is a no-op (no clear route)
+  // Keep every dataset selector in sync immediately (top bar / Data view / Copilot).
+  ['ds-select-top','ds-select','cp-ds-select'].forEach(function(id){
+    const sel = document.getElementById(id); if(sel) sel.value = name;
+  });
+  const dv = document.getElementById('data-preview');
+  if(dv) dv.innerHTML = '<div style="padding:18px;color:var(--muted2);font-size:11px">Switching dataset…</div>';
+  try{
+    const r = await fetch('/api/copilot/dataset', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataset:name})});
+    const d = await r.json();
+    if(d && d.error){ if(dv) dv.innerHTML = '<div class="grid-error">'+escapeHtml(d.error)+'</div>'; await loadDatasets(); return; }
+  }catch(e){}
+  activeDataset = name;
+  // Experiments are scoped to the dataset — refresh the dropdowns (this also
+  // clears activeExperiment if it doesn't belong to the new dataset).
+  try { await loadExperiments(activeDataset); } catch(e){}
+  renderCopilotScope();
+  renderAskScope();
+  // Refresh everything that reflects the active dataset.
+  try { await refreshKpis(); } catch(e){}
+  try { await refreshAskKpis(); } catch(e){}
+  if(document.getElementById('section-data').classList.contains('show')) loadDataView();
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// READOUT UPLOAD — attach a readout doc to the Copilot library; the chatbot
+// NEW EXPERIMENT MODAL — create a metadata record under a dataset (persisted).
+// ════════════════════════════════════════════════════════════════════════
+function openNewExperiment(){
+  const sel = document.getElementById('ne-dataset');
+  if(sel){
+    sel.innerHTML = (DATASETS||[]).map(function(d){
+      return '<option value="'+escapeAttr(d.name)+'"'+(d.name===activeDataset?' selected':'')+'>'+escapeHtml(d.display_name||d.name)+'</option>';
+    }).join('');
+  }
+  ['ne-name','ne-hypothesis','ne-variants','ne-metric','ne-start','ne-end'].forEach(function(id){
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  const err=document.getElementById('ne-error'); if(err){ err.style.display='none'; err.textContent=''; }
+  document.getElementById('newexp-modal').classList.add('show');
+}
+function closeNewExperiment(){ document.getElementById('newexp-modal').classList.remove('show'); }
+async function submitNewExperiment(){
+  const err = document.getElementById('ne-error');
+  const show = function(m){ if(err){ err.textContent=m; err.style.display='block'; } };
+  const rec = {
+    dataset: (document.getElementById('ne-dataset')||{}).value || '',
+    experiment_name: ((document.getElementById('ne-name')||{}).value||'').trim(),
+    hypothesis: ((document.getElementById('ne-hypothesis')||{}).value||'').trim(),
+    variants: ((document.getElementById('ne-variants')||{}).value||'').trim(),
+    primary_metric: ((document.getElementById('ne-metric')||{}).value||'').trim(),
+    start_date: (document.getElementById('ne-start')||{}).value||'',
+    end_date: (document.getElementById('ne-end')||{}).value||''
+  };
+  if(!rec.experiment_name){ show('Experiment name is required.'); return; }
+  if(!rec.dataset){ show('Pick a dataset.'); return; }
+  const btn=document.getElementById('ne-create-btn'); if(btn) btn.disabled=true;
+  try{
+    const d = await Api.createExperiment(rec);
+    if(d && d.error){ show(d.error); if(btn) btn.disabled=false; return; }
+    closeNewExperiment();
+    // Switch to the experiment's dataset if needed, then select the new experiment.
+    if(rec.dataset !== activeDataset){ await switchDataset(rec.dataset); }
+    else { await loadExperiments(activeDataset); }
+    await selectExperiment(rec.experiment_name);
+  }catch(e){ show('Could not create the experiment — try again.'); }
+  finally { if(btn) btn.disabled=false; }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// READOUT UPLOAD — attach a readout doc for the Copilot to reference; the chatbot
 // then answers grounded in it (/api/copilot/readout/upload).
 // ════════════════════════════════════════════════════════════════════════
 function triggerReadoutUpload(){ const i = document.getElementById('readout-file-input'); if(i) i.click(); }
@@ -1508,7 +2266,7 @@ async function uploadReadout(files){
     const ok = (d.added||[]).filter(function(a){ return !a.error; });
     if(ok.length){
       CHAT.history.push({role:'ai',
-        text:'📄 Added **'+ok.length+'** readout'+(ok.length>1?'s':'')+' to the library ('+ok.map(function(a){return a.name;}).join(', ')+'). Ask me anything about '+(ok.length>1?'them':'it')+'.',
+        text:'📄 Added **'+ok.length+'** readout'+(ok.length>1?'s':'')+' ('+ok.map(function(a){return a.name;}).join(', ')+'). Ask me anything about '+(ok.length>1?'them':'it')+'.',
         meta:{ next_steps:['Summarize the readout','What did the readout recommend?','What are the key risks in the readout?'] }});
     } else {
       CHAT.history.push({role:'ai', text:'Upload failed: ' + ((((d.added||[])[0]||{}).error) || d.error || 'unknown error')});
@@ -1547,6 +2305,22 @@ async function uploadReadout(files){
     try { localStorage.setItem('rpWidth', lastW); } catch(e){}
   });
 })();
+// ── Collapsible panes (C5) — toggle sidebar / right panel, persisted ──────────
+function togglePane(which){
+  const app = document.getElementById('app');
+  const cls = which === 'sb' ? 'sb-collapsed' : 'rp-collapsed';
+  const collapsed = app.classList.toggle(cls);
+  // flip the in-pane toggle chevron to point the right way
+  try{ localStorage.setItem('pane_'+which, collapsed ? '1' : '0'); }catch(e){}
+}
+(function(){
+  const app = document.getElementById('app');
+  try{
+    if(localStorage.getItem('pane_sb') === '1') app.classList.add('sb-collapsed');
+    if(localStorage.getItem('pane_rp') === '1') app.classList.add('rp-collapsed');
+  }catch(e){}
+})();
+
 setInterval(() => { if (document.getElementById('app').style.display !== 'none') { refreshInsights(); } }, 20000);
 </script>
 

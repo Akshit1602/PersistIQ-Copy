@@ -10,6 +10,7 @@ The bundled README(s) are small, so this module just reads them directly and
 does simple keyword retrieval.  It always works, with or without the ML stack,
 and with or without an LLM (it can return README text verbatim).
 """
+
 from __future__ import annotations
 
 import re
@@ -66,9 +67,9 @@ def get_readme_context(query: str, max_chars: int = 3500) -> str:
     terms = {w for w in re.findall(r"[a-z0-9]+", (query or "").lower()) if len(w) > 2}
     if not terms:
         return text[:max_chars]
-    scored = sorted(_paragraphs(text),
-                    key=lambda p: sum(p.lower().count(t) for t in terms),
-                    reverse=True)
+    scored = sorted(
+        _paragraphs(text), key=lambda p: sum(p.lower().count(t) for t in terms), reverse=True
+    )
     out, total = [], 0
     for p in scored:
         if total + len(p) + 2 > max_chars:

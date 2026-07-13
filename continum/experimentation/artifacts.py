@@ -9,46 +9,46 @@ from pydantic import BaseModel, Field
 
 
 class SignificanceVerdict(str, Enum):
-    SIGNIFICANT     = "significant"
+    SIGNIFICANT = "significant"
     NOT_SIGNIFICANT = "not_significant"
-    INCONCLUSIVE    = "inconclusive"
-    SRM_DETECTED    = "srm_detected"
-    UNDERPOWERED    = "underpowered"
+    INCONCLUSIVE = "inconclusive"
+    SRM_DETECTED = "srm_detected"
+    UNDERPOWERED = "underpowered"
 
 
 class ShipRecommendation(str, Enum):
-    SHIP        = "ship"
+    SHIP = "ship"
     DO_NOT_SHIP = "do_not_ship"
-    EXTEND      = "extend"
+    EXTEND = "extend"
     INVESTIGATE = "investigate"
-    PARTIAL     = "partial_rollout"
+    PARTIAL = "partial_rollout"
 
 
 class AnomalySeverity(str, Enum):
     CRITICAL = "critical"
-    WARNING  = "warning"
-    INFO     = "info"
+    WARNING = "warning"
+    INFO = "info"
 
 
 class PowerAnalysis(BaseModel):
-    artifact_version:         str      = "1.0"
-    artifact_id:              UUID     = Field(default_factory=uuid4)
-    experiment_id:            str
-    primary_metric:           str
-    baseline_rate:            float
-    mde_abs:                  float
-    mde_rel:                  float
-    alpha:                    float    = 0.05
-    power:                    float    = 0.80
-    n_variants:               int      = 2
-    n_per_variant:            int
-    n_total:                  int
-    daily_eligible_traffic:   float
-    days_required:            int
-    planned_end_date:         str
-    effect_size_h:            float
-    computed_at:              datetime = Field(default_factory=datetime.utcnow)
-    analyst:                  str      = ""
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    primary_metric: str
+    baseline_rate: float
+    mde_abs: float
+    mde_rel: float
+    alpha: float = 0.05
+    power: float = 0.80
+    n_variants: int = 2
+    n_per_variant: int
+    n_total: int
+    daily_eligible_traffic: float
+    days_required: int
+    planned_end_date: str
+    effect_size_h: float
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyst: str = ""
 
     def to_llm_context(self) -> str:
         return (
@@ -62,25 +62,25 @@ class PowerAnalysis(BaseModel):
 
 
 class OpportunitySizing(BaseModel):
-    artifact_version:              str      = "1.0"
-    artifact_id:                   UUID     = Field(default_factory=uuid4)
-    experiment_id:                 str      = ""
-    monthly_inquiries:             float
-    current_ior:                   float
-    target_ior:                    float
-    avg_order_value:               float
-    gross_margin:                  float
-    time_horizon_months:           float    = 12
-    ior_gap_pp:                    float
-    current_orders_monthly:        float
-    target_orders_monthly:         float
-    incremental_orders_monthly:    float
-    incremental_revenue_monthly:   float
-    incremental_gm_monthly:        float
-    incremental_orders_12mo:       float    = 0.0
-    incremental_revenue_12mo:      float    = 0.0
-    incremental_gm_12mo:           float    = 0.0
-    computed_at:                   datetime = Field(default_factory=datetime.utcnow)
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str = ""
+    monthly_inquiries: float
+    current_ior: float
+    target_ior: float
+    avg_order_value: float
+    gross_margin: float
+    time_horizon_months: float = 12
+    ior_gap_pp: float
+    current_orders_monthly: float
+    target_orders_monthly: float
+    incremental_orders_monthly: float
+    incremental_revenue_monthly: float
+    incremental_gm_monthly: float
+    incremental_orders_12mo: float = 0.0
+    incremental_revenue_12mo: float = 0.0
+    incremental_gm_12mo: float = 0.0
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
 
     def to_llm_context(self) -> str:
         return (
@@ -94,59 +94,59 @@ class OpportunitySizing(BaseModel):
 
 
 class MetricDelta(BaseModel):
-    artifact_version:    str            = "1.0"
-    metric_name:         str
+    artifact_version: str = "1.0"
+    metric_name: str
     metric_display_name: str
-    control_variant:     str
-    treatment_variant:   str
-    n_control:           int
-    n_treatment:         int
-    rate_control:        Optional[float] = None
-    rate_treatment:      Optional[float] = None
-    delta_pp:            Optional[float] = None
-    mean_control:        Optional[float] = None
-    mean_treatment:      Optional[float] = None
-    delta_abs:           float
-    delta_rel:           float
-    ci_lo:               float
-    ci_hi:               float
-    p_value:             float
-    effect_size:         float
-    is_significant:      bool
-    direction:           str
-    alpha:               float           = 0.05
-    method:              str             = "z_test"
-    bonferroni_applied:  bool            = False
-    n_comparisons:       int             = 1
+    control_variant: str
+    treatment_variant: str
+    n_control: int
+    n_treatment: int
+    rate_control: Optional[float] = None
+    rate_treatment: Optional[float] = None
+    delta_pp: Optional[float] = None
+    mean_control: Optional[float] = None
+    mean_treatment: Optional[float] = None
+    delta_abs: float
+    delta_rel: float
+    ci_lo: float
+    ci_hi: float
+    p_value: float
+    effect_size: float
+    is_significant: bool
+    direction: str
+    alpha: float = 0.05
+    method: str = "z_test"
+    bonferroni_applied: bool = False
+    n_comparisons: int = 1
 
 
 class SliceFinding(BaseModel):
-    artifact_version:      str         = "1.0"
-    experiment_id:         str
-    metric_name:           str
-    dimension_name:        str
-    dimension_value:       str
-    n_slice:               int
-    delta:                 MetricDelta
-    is_heterogeneous:      bool
-    simpsons_paradox_flag: bool        = False
-    interaction_p_value:   Optional[float] = None
+    artifact_version: str = "1.0"
+    experiment_id: str
+    metric_name: str
+    dimension_name: str
+    dimension_value: str
+    n_slice: int
+    delta: MetricDelta
+    is_heterogeneous: bool
+    simpsons_paradox_flag: bool = False
+    interaction_p_value: Optional[float] = None
 
 
 class GuardrailViolation(BaseModel):
-    artifact_version:    str      = "1.0"
-    artifact_id:         UUID     = Field(default_factory=uuid4)
-    experiment_id:       str
-    guardrail_name:      str
-    metric_name:         str
-    severity:            str
-    condition:           str
-    threshold:           float
-    observed_value:      float
-    baseline_value:      Optional[float] = None
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    guardrail_name: str
+    metric_name: str
+    severity: str
+    condition: str
+    threshold: float
+    observed_value: float
+    baseline_value: Optional[float] = None
     violation_magnitude: float
-    detected_at:         datetime = Field(default_factory=datetime.utcnow)
-    recommendation:      str      = "Do not ship without investigation"
+    detected_at: datetime = Field(default_factory=datetime.utcnow)
+    recommendation: str = "Do not ship without investigation"
 
     def to_llm_context(self) -> str:
         return (
@@ -159,35 +159,35 @@ class GuardrailViolation(BaseModel):
 
 
 class ExperimentResult(BaseModel):
-    artifact_version:         str                      = "1.0"
-    artifact_id:              UUID                     = Field(default_factory=uuid4)
-    experiment_id:            str
-    experiment_name:          str
-    primary_metric:           str
-    analysis_method:          str
-    analyst:                  str
-    analysed_at:              datetime                 = Field(default_factory=datetime.utcnow)
-    primary_delta:            MetricDelta
-    secondary_deltas:         List[MetricDelta]        = Field(default_factory=list)
-    slice_findings:           List[SliceFinding]       = Field(default_factory=list)
-    guardrail_violations:     List[GuardrailViolation] = Field(default_factory=list)
-    srm_detected:             bool                     = False
-    srm_p_value:              Optional[float]          = None
-    srm_chi2:                 Optional[float]          = None
-    power_analysis:           Optional[PowerAnalysis]  = None
-    actual_n:                 Optional[int]            = None
-    verdict:                  SignificanceVerdict
-    ship_recommendation:      ShipRecommendation
-    ship_blockers:            List[str]                = Field(default_factory=list)
-    ship_enablers:            List[str]                = Field(default_factory=list)
-    learnings:                List[Dict[str, Any]]     = Field(default_factory=list)
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    experiment_name: str
+    primary_metric: str
+    analysis_method: str
+    analyst: str
+    analysed_at: datetime = Field(default_factory=datetime.utcnow)
+    primary_delta: MetricDelta
+    secondary_deltas: List[MetricDelta] = Field(default_factory=list)
+    slice_findings: List[SliceFinding] = Field(default_factory=list)
+    guardrail_violations: List[GuardrailViolation] = Field(default_factory=list)
+    srm_detected: bool = False
+    srm_p_value: Optional[float] = None
+    srm_chi2: Optional[float] = None
+    power_analysis: Optional[PowerAnalysis] = None
+    actual_n: Optional[int] = None
+    verdict: SignificanceVerdict
+    ship_recommendation: ShipRecommendation
+    ship_blockers: List[str] = Field(default_factory=list)
+    ship_enablers: List[str] = Field(default_factory=list)
+    learnings: List[Dict[str, Any]] = Field(default_factory=list)
 
     @property
     def is_shippable(self) -> bool:
-        return (
-            self.ship_recommendation in (ShipRecommendation.SHIP, ShipRecommendation.PARTIAL)
-            and not any(v.severity == "blocker" for v in self.guardrail_violations)
-        )
+        return self.ship_recommendation in (
+            ShipRecommendation.SHIP,
+            ShipRecommendation.PARTIAL,
+        ) and not any(v.severity == "blocker" for v in self.guardrail_violations)
 
     @property
     def n_total(self) -> int:
@@ -230,32 +230,35 @@ class ExperimentResult(BaseModel):
             + (f" (p={self.srm_p_value:.4f})" if self.srm_p_value else "")
             + f"\nViolations: {len(self.guardrail_violations)}\n"
             f"Blockers: {'; '.join(self.ship_blockers) or 'None'}\n"
-            + violations_text + secondary_text + slice_text
+            + violations_text
+            + secondary_text
+            + slice_text
         )
 
 
 class CausalEstimate(BaseModel):
-    artifact_version:  str            = "1.0"
-    artifact_id:       UUID           = Field(default_factory=uuid4)
-    experiment_id:     str
-    method:            str
-    estimand:          str            = "ATT"
-    outcome_metric:    str
-    estimate:          float
-    std_error:         float
-    ci_lo:             float
-    ci_hi:             float
-    p_value:           float
-    is_significant:    bool
-    method_specific:   Dict[str, Any] = Field(default_factory=dict)
-    validity_checks:   Dict[str, Any] = Field(default_factory=dict)
-    computed_at:       datetime       = Field(default_factory=datetime.utcnow)
-    analyst:           str            = ""
-    notes:             str            = ""
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    method: str
+    estimand: str = "ATT"
+    outcome_metric: str
+    estimate: float
+    std_error: float
+    ci_lo: float
+    ci_hi: float
+    p_value: float
+    is_significant: bool
+    method_specific: Dict[str, Any] = Field(default_factory=dict)
+    validity_checks: Dict[str, Any] = Field(default_factory=dict)
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyst: str = ""
+    notes: str = ""
 
     def to_llm_context(self) -> str:
         validity = "; ".join(
-            f"{k}={'PASS' if v else 'FAIL'}" for k, v in self.validity_checks.items()
+            f"{k}={'PASS' if v else 'FAIL'}"
+            for k, v in self.validity_checks.items()
             if isinstance(v, bool)
         )
         return (
@@ -270,22 +273,22 @@ class CausalEstimate(BaseModel):
 
 
 class CounterfactualForecast(BaseModel):
-    artifact_version:      str            = "1.0"
-    artifact_id:           UUID           = Field(default_factory=uuid4)
-    experiment_id:         str
-    method:                str
-    outcome_metric:        str
-    intervention_date:     str
-    post_period_estimate:  float
-    post_period_ci_lo:     float
-    post_period_ci_hi:     float
-    cumulative_effect:     float
-    cumulative_ci_lo:      float
-    cumulative_ci_hi:      float
-    p_value:               Optional[float] = None
-    is_significant:        bool
-    model_fit_metrics:     Dict[str, float] = Field(default_factory=dict)
-    computed_at:           datetime        = Field(default_factory=datetime.utcnow)
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    method: str
+    outcome_metric: str
+    intervention_date: str
+    post_period_estimate: float
+    post_period_ci_lo: float
+    post_period_ci_hi: float
+    cumulative_effect: float
+    cumulative_ci_lo: float
+    cumulative_ci_hi: float
+    p_value: Optional[float] = None
+    is_significant: bool
+    model_fit_metrics: Dict[str, float] = Field(default_factory=dict)
+    computed_at: datetime = Field(default_factory=datetime.utcnow)
 
     def to_llm_context(self) -> str:
         return (
@@ -301,28 +304,32 @@ class CounterfactualForecast(BaseModel):
 
 
 class AnomalyReport(BaseModel):
-    artifact_version:           str              = "1.0"
-    artifact_id:                UUID             = Field(default_factory=uuid4)
-    anomaly_type:               str
-    severity:                   AnomalySeverity
-    metric_affected:            str
-    dimension_name:             Optional[str]    = None
-    dimension_value:            Optional[str]    = None
-    detected_at:                datetime
-    baseline_value:             float
-    observed_value:             float
-    deviation_z_score:          float
-    pct_change:                 float
-    experiment_ids_concurrent:  List[str]        = Field(default_factory=list)
-    pipeline_hint:              str              = ""
-    recommended_action:         str
-    resolved:                   bool             = False
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    anomaly_type: str
+    severity: AnomalySeverity
+    metric_affected: str
+    dimension_name: Optional[str] = None
+    dimension_value: Optional[str] = None
+    detected_at: datetime
+    baseline_value: float
+    observed_value: float
+    deviation_z_score: float
+    pct_change: float
+    experiment_ids_concurrent: List[str] = Field(default_factory=list)
+    pipeline_hint: str = ""
+    recommended_action: str
+    resolved: bool = False
 
     def to_llm_context(self) -> str:
         return (
             f"ANOMALY [{self.severity.value.upper()}]: {self.anomaly_type}\n"
             f"Metric: {self.metric_affected}"
-            + (f"  Slice: {self.dimension_name}={self.dimension_value}" if self.dimension_name else "")
+            + (
+                f"  Slice: {self.dimension_name}={self.dimension_value}"
+                if self.dimension_name
+                else ""
+            )
             + f"\nBaseline: {self.baseline_value:.4f} → Observed: {self.observed_value:.4f}\n"
             f"Δ={self.pct_change:+.1f}%  z={self.deviation_z_score:+.2f}\n"
             f"Action: {self.recommended_action}\n"
@@ -330,21 +337,21 @@ class AnomalyReport(BaseModel):
 
 
 class SequentialTestState(BaseModel):
-    artifact_version:    str      = "1.0"
-    artifact_id:         UUID     = Field(default_factory=uuid4)
-    experiment_id:       str
-    metric_name:         str
-    variant:             str
-    n_control:           int
-    n_treatment:         int
-    current_statistic:   float
-    threshold:           float
-    current_ior_ctrl:    float
-    current_ior_treat:   float
-    current_delta_pp:    float
-    stop_recommended:    bool
-    stop_reason:         str      = ""
-    last_updated:        datetime = Field(default_factory=datetime.utcnow)
+    artifact_version: str = "1.0"
+    artifact_id: UUID = Field(default_factory=uuid4)
+    experiment_id: str
+    metric_name: str
+    variant: str
+    n_control: int
+    n_treatment: int
+    current_statistic: float
+    threshold: float
+    current_ior_ctrl: float
+    current_ior_treat: float
+    current_delta_pp: float
+    stop_recommended: bool
+    stop_reason: str = ""
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
 
     def to_llm_context(self) -> str:
         status = "STOP" if self.stop_recommended else "CONTINUE"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger("continum.intelligence.metric_planner")
 
@@ -32,9 +32,13 @@ METRICS_KB: Dict[str, Dict] = {
             "Backend error rate",
         ],
         "tracking_event_types": [
-            "sign_up_started", "sign_up_step_completed", "sign_up_completed",
-            "verification_email_sent", "verification_email_clicked",
-            "sign_up_abandoned", "page_load_timing",
+            "sign_up_started",
+            "sign_up_step_completed",
+            "sign_up_completed",
+            "verification_email_sent",
+            "verification_email_clicked",
+            "sign_up_abandoned",
+            "page_load_timing",
         ],
     },
     "conversion": {
@@ -58,9 +62,15 @@ METRICS_KB: Dict[str, Dict] = {
             "Support ticket rate per order",
         ],
         "tracking_event_types": [
-            "checkout_initiated", "checkout_step_completed", "checkout_completed",
-            "checkout_abandoned", "payment_submitted", "payment_failed",
-            "order_confirmed", "quote_viewed", "quote_accepted",
+            "checkout_initiated",
+            "checkout_step_completed",
+            "checkout_completed",
+            "checkout_abandoned",
+            "payment_submitted",
+            "payment_failed",
+            "order_confirmed",
+            "quote_viewed",
+            "quote_accepted",
         ],
     },
     "retention": {
@@ -82,8 +92,12 @@ METRICS_KB: Dict[str, Dict] = {
             "Customer support ticket volume",
         ],
         "tracking_event_types": [
-            "repeat_order_placed", "loyalty_nudge_sent", "loyalty_nudge_clicked",
-            "user_churned", "user_reactivated", "order_completed",
+            "repeat_order_placed",
+            "loyalty_nudge_sent",
+            "loyalty_nudge_clicked",
+            "user_churned",
+            "user_reactivated",
+            "order_completed",
         ],
     },
     "engagement": {
@@ -105,8 +119,12 @@ METRICS_KB: Dict[str, Dict] = {
             "Task success rate on critical flows",
         ],
         "tracking_event_types": [
-            "feature_viewed", "feature_interaction", "cta_clicked",
-            "session_started", "session_ended", "page_viewed",
+            "feature_viewed",
+            "feature_interaction",
+            "cta_clicked",
+            "session_started",
+            "session_ended",
+            "page_viewed",
             "error_encountered",
         ],
     },
@@ -129,8 +147,12 @@ METRICS_KB: Dict[str, Dict] = {
             "Net revenue per cohort",
         ],
         "tracking_event_types": [
-            "price_tier_viewed", "price_tier_selected", "price_comparison_expanded",
-            "checkout_initiated", "order_confirmed", "discount_applied",
+            "price_tier_viewed",
+            "price_tier_selected",
+            "price_comparison_expanded",
+            "checkout_initiated",
+            "order_confirmed",
+            "discount_applied",
         ],
     },
 }
@@ -156,8 +178,8 @@ _SECTION_SYSTEM = (
 # LLM CALL WRAPPER (with structured fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _call_section(llm, section_name: str, prompt: str,
-                  fallback: str, max_tokens: int = 480) -> str:
+
+def _call_section(llm, section_name: str, prompt: str, fallback: str, max_tokens: int = 480) -> str:
     if llm is None:
         return fallback
     try:
@@ -171,6 +193,7 @@ def _call_section(llm, section_name: str, prompt: str,
 # KPI CONFIG INFERENCE
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def infer_kpi_config(desc: str, llm=None) -> Tuple[str, str, str, List[str]]:
     defaults = ("iteration", "partial", "balanced", ["maturity", "instrumentation", "preference"])
     if llm is None:
@@ -179,12 +202,12 @@ def infer_kpi_config(desc: str, llm=None) -> Tuple[str, str, str, List[str]]:
     prompt = (
         f'Feature: "{desc}"\n\n'
         "Infer the KPI planning configuration. Return ONLY valid JSON — no other text:\n"
-        '{\n'
+        "{\n"
         '  "maturity": "mvp" | "iteration" | "critical",\n'
         '  "instrumentation": "none" | "partial" | "full",\n'
         '  "preference": "leading" | "balanced" | "lagging",\n'
         '  "uncertain": ["maturity"]\n'
-        '}\n'
+        "}\n"
         "maturity=mvp if first launch. instrumentation=full if v2/existing. "
         "preference=lagging if revenue/conversion explicitly mentioned. "
         "uncertain lists only keys that are genuinely ambiguous (1-2 max)."
@@ -194,13 +217,16 @@ def infer_kpi_config(desc: str, llm=None) -> Tuple[str, str, str, List[str]]:
         m = re.search(r"\{[\s\S]*\}", raw)
         if m:
             d = json.loads(m.group())
-            maturity        = d.get("maturity",        "iteration")
+            maturity = d.get("maturity", "iteration")
             instrumentation = d.get("instrumentation", "partial")
-            preference      = d.get("preference",      "balanced")
-            uncertain       = d.get("uncertain",       [])
-            if maturity        not in {"mvp", "iteration", "critical"}:   maturity = "iteration"
-            if instrumentation not in {"none", "partial", "full"}:        instrumentation = "partial"
-            if preference      not in {"leading", "balanced", "lagging"}: preference = "balanced"
+            preference = d.get("preference", "balanced")
+            uncertain = d.get("uncertain", [])
+            if maturity not in {"mvp", "iteration", "critical"}:
+                maturity = "iteration"
+            if instrumentation not in {"none", "partial", "full"}:
+                instrumentation = "partial"
+            if preference not in {"leading", "balanced", "lagging"}:
+                preference = "balanced"
             return maturity, instrumentation, preference, uncertain
     except Exception as e:
         logger.warning("infer_kpi_config failed: %s", e)
@@ -231,15 +257,16 @@ def confirm_uncertain(
 # CONSTRAINT INFERENCE (causal method selection)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def infer_constraints_from_description(desc: str, llm=None) -> Tuple[Dict, List[str]]:
     defaults: Dict = {
-        "can_randomise":    True,
-        "rollout_pct":      50,
+        "can_randomise": True,
+        "rollout_pct": 50,
         "has_control_group": False,
-        "has_time_series":  True,
-        "pre_period_days":  180,
-        "observational":    False,
-        "has_threshold":    False,
+        "has_time_series": True,
+        "pre_period_days": 180,
+        "observational": False,
+        "has_threshold": False,
     }
     if llm is None:
         return defaults, list(defaults.keys())
@@ -275,13 +302,16 @@ def infer_constraints_from_description(desc: str, llm=None) -> Tuple[Dict, List[
 
 def confirm_uncertain_constraints(constraints: Dict, uncertain: List[str]) -> Dict:
     QUESTION_MAP = {
-        "can_randomise":     ("Can users be randomly assigned to control vs treatment?", bool),
-        "rollout_pct":       ("% of traffic receiving this feature (100 = full rollout)?", float),
+        "can_randomise": ("Can users be randomly assigned to control vs treatment?", bool),
+        "rollout_pct": ("% of traffic receiving this feature (100 = full rollout)?", float),
         "has_control_group": ("Will there be a permanent untreated group?", bool),
-        "has_time_series":   ("Do you have 3+ months of historical daily data?", bool),
-        "pre_period_days":   ("How many days of pre-feature history are available?", int),
-        "observational":     ("Observational study — users self-select rather than being assigned?", bool),
-        "has_threshold":     ("Is treatment assigned based on a score or threshold?", bool),
+        "has_time_series": ("Do you have 3+ months of historical daily data?", bool),
+        "pre_period_days": ("How many days of pre-feature history are available?", int),
+        "observational": (
+            "Observational study — users self-select rather than being assigned?",
+            bool,
+        ),
+        "has_threshold": ("Is treatment assigned based on a score or threshold?", bool),
     }
     if not uncertain:
         return constraints
@@ -311,20 +341,24 @@ def confirm_uncertain_constraints(constraints: Dict, uncertain: List[str]) -> Di
 # METRIC SECTION GENERATORS
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _get_kb(category: str) -> Dict:
     return METRICS_KB.get(category, METRICS_KB["conversion"])
 
 
 def gen_primary_metrics(
-    desc: str, category: str, maturity: str = "iteration",
-    preference: str = "balanced", llm=None,
+    desc: str,
+    category: str,
+    maturity: str = "iteration",
+    preference: str = "balanced",
+    llm=None,
 ) -> str:
-    kb         = _get_kb(category)
+    kb = _get_kb(category)
     candidates = "\n".join(f"- {m}" for m in kb["primary_pool"])
-    pref_note  = {
-        "leading":  "Prefer early-signal leading indicators.",
+    pref_note = {
+        "leading": "Prefer early-signal leading indicators.",
         "balanced": "Include one leading indicator and one lagging revenue outcome.",
-        "lagging":  "Focus on revenue-tied lagging outcomes (conversion rate, AOV, GMV).",
+        "lagging": "Focus on revenue-tied lagging outcomes (conversion rate, AOV, GMV).",
     }.get(preference, "")
     prompt = (
         f"Feature: {desc}\nFunnel stage: {category}\nMaturity: {maturity}\n\n"
@@ -343,9 +377,11 @@ def gen_primary_metrics(
 
 
 def gen_secondary_metrics(
-    desc: str, category: str, llm=None,
+    desc: str,
+    category: str,
+    llm=None,
 ) -> str:
-    kb         = _get_kb(category)
+    kb = _get_kb(category)
     candidates = "\n".join(f"- {m}" for m in kb["secondary_pool"])
     prompt = (
         f"Feature: {desc}\nFunnel stage: {category}\n\n"
@@ -364,9 +400,12 @@ def gen_secondary_metrics(
 
 
 def gen_guardrail_metrics(
-    desc: str, category: str, maturity: str = "iteration", llm=None,
+    desc: str,
+    category: str,
+    maturity: str = "iteration",
+    llm=None,
 ) -> str:
-    kb         = _get_kb(category)
+    kb = _get_kb(category)
     candidates = "\n".join(f"- {m}" for m in kb["guardrail_pool"])
     threshold_map = {"mvp": "5-10%", "iteration": "2-3%", "critical": "0.5-1%"}
     threshold = threshold_map.get(maturity, "3-5%")
@@ -389,15 +428,18 @@ def gen_guardrail_metrics(
 
 
 def gen_tracking_requirements(
-    desc: str, category: str, instrumentation: str = "partial", llm=None,
+    desc: str,
+    category: str,
+    instrumentation: str = "partial",
+    llm=None,
 ) -> str:
     kb = _get_kb(category)
     depth_map = {
-        "none":    "6-10 concrete tracking events covering the full user path.",
+        "none": "6-10 concrete tracking events covering the full user path.",
         "partial": "4-6 NEW events specific to this feature.",
-        "full":    "2-3 events maximum. Focus on extending existing events.",
+        "full": "2-3 events maximum. Focus on extending existing events.",
     }
-    depth_note  = depth_map.get(instrumentation, "4-6 events")
+    depth_note = depth_map.get(instrumentation, "4-6 events")
     event_types = "\n".join(f"- {e}" for e in kb["tracking_event_types"])
     prompt = (
         f"Feature: {desc}\nFunnel stage: {category}\nInstrumentation: {instrumentation} ({depth_note})\n\n"
@@ -445,12 +487,12 @@ def gen_metrics_bundle(
     instrumentation: str = "partial",
     llm=None,
 ) -> Dict[str, str]:
-    kb         = _get_kb(category)
-    threshold  = {"mvp": "5-10%", "iteration": "2-3%", "critical": "0.5-1%"}.get(maturity, "3-5%")
-    pref_note  = {
-        "leading":  "Prefer early-signal leading indicators for primary.",
+    kb = _get_kb(category)
+    threshold = {"mvp": "5-10%", "iteration": "2-3%", "critical": "0.5-1%"}.get(maturity, "3-5%")
+    pref_note = {
+        "leading": "Prefer early-signal leading indicators for primary.",
         "balanced": "Include one leading and one lagging metric for primary.",
-        "lagging":  "Focus on revenue-tied lagging outcomes for primary.",
+        "lagging": "Focus on revenue-tied lagging outcomes for primary.",
     }.get(preference, "")
 
     p_cands = "\n".join(f"- {m}" for m in kb["primary_pool"])
@@ -482,21 +524,27 @@ def gen_metrics_bundle(
     for header in ("PRIMARY METRICS", "SECONDARY METRICS", "GUARDRAIL METRICS"):
         m = re.search(
             rf"{re.escape(header)}\s*\n(.*?)(?=(?:PRIMARY METRICS|SECONDARY METRICS|GUARDRAIL METRICS)|\Z)",
-            raw, re.DOTALL | re.IGNORECASE,
+            raw,
+            re.DOTALL | re.IGNORECASE,
         )
         sections[header] = m.group(1).strip() if m else ""
 
     # Validate and fallback
     fallback_fns = {
-        "PRIMARY METRICS":   lambda: gen_primary_metrics(desc, category, maturity, preference, None),
+        "PRIMARY METRICS": lambda: gen_primary_metrics(desc, category, maturity, preference, None),
         "SECONDARY METRICS": lambda: gen_secondary_metrics(desc, category, None),
         "GUARDRAIL METRICS": lambda: gen_guardrail_metrics(desc, category, maturity, None),
     }
     result: Dict[str, str] = {}
     for name, fn in fallback_fns.items():
-        content    = sections.get(name, "").strip()
-        field_hits = len(re.findall(r"^(?:Metric|Definition|Why|Expected|Risk|Threshold):",
-                                    content, re.MULTILINE | re.IGNORECASE))
+        content = sections.get(name, "").strip()
+        field_hits = len(
+            re.findall(
+                r"^(?:Metric|Definition|Why|Expected|Risk|Threshold):",
+                content,
+                re.MULTILINE | re.IGNORECASE,
+            )
+        )
         if not content or field_hits < 2:
             logger.info("Structured fallback applied for %s", name)
             result[name] = fn()
@@ -504,7 +552,8 @@ def gen_metrics_bundle(
             result[name] = content
 
     result["DATA TRACKING REQUIREMENTS"] = gen_tracking_requirements(
-        desc, category, instrumentation, llm)
+        desc, category, instrumentation, llm
+    )
     result["OPEN QUESTIONS & ASSUMPTIONS"] = gen_open_questions(desc, category, llm)
     return result
 
@@ -512,6 +561,7 @@ def gen_metrics_bundle(
 # ─────────────────────────────────────────────────────────────────────────────
 # PAST LEARNINGS FORMATTER
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def format_past_learnings(learnings: List[Dict]) -> str:
     if not learnings:

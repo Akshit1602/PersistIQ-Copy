@@ -2,13 +2,14 @@
 
 Query-understanding layer (extracted from the former runtime.ask.copilot).
 """
+
 from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 logger = logging.getLogger("continum.askdata")
 
@@ -17,56 +18,61 @@ logger = logging.getLogger("continum.askdata")
 # TURN — a single conversation exchange
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Turn:
-    question:   str
-    response:   str
-    intent:     str
-    entities:   Dict[str, Any] = field(default_factory=dict)
-    timestamp:  str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    question: str
+    response: str
+    intent: str
+    entities: Dict[str, Any] = field(default_factory=dict)
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INTENT TAXONOMY
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class Intent:
-    WHY_DROPPED      = "why_dropped"
-    WHY_IMPROVED     = "why_improved"
-    NEXT_STEP        = "next_step"
-    SIGNIFICANCE     = "significance"
-    SEGMENT_EXPLAIN  = "segment_explain"
-    CAUSAL_EXPLAIN   = "causal_explain"
-    SUMMARISE        = "summarise"
-    HEALTH_CHECK     = "health_check"
-    COMPARE          = "compare"
-    ANOMALY          = "anomaly"
-    LEARNINGS        = "learnings"
-    METRICS          = "metrics"
-    INVESTIGATE      = "investigate"    # recursive drill-down
-    COHORT           = "cohort"
-    ASSUMPTION       = "assumption"
-    LONGITUDINAL     = "longitudinal"
-    GENERAL          = "general"
+    WHY_DROPPED = "why_dropped"
+    WHY_IMPROVED = "why_improved"
+    NEXT_STEP = "next_step"
+    SIGNIFICANCE = "significance"
+    SEGMENT_EXPLAIN = "segment_explain"
+    CAUSAL_EXPLAIN = "causal_explain"
+    SUMMARISE = "summarise"
+    HEALTH_CHECK = "health_check"
+    COMPARE = "compare"
+    ANOMALY = "anomaly"
+    LEARNINGS = "learnings"
+    METRICS = "metrics"
+    INVESTIGATE = "investigate"  # recursive drill-down
+    COHORT = "cohort"
+    ASSUMPTION = "assumption"
+    LONGITUDINAL = "longitudinal"
+    GENERAL = "general"
 
 
 _PATTERNS: List[Tuple[str, str]] = [
-    (r"why.*(drop|declin|fall|decrease|worse|lower|regress)",   Intent.WHY_DROPPED),
-    (r"why.*(improv|increas|lift|better|higher|win)",           Intent.WHY_IMPROVED),
-    (r"(investig|drill|dig|explor|root cause|explain why)",     Intent.INVESTIGATE),
-    (r"(what.*(next|should|do)|recommend|suggest)",             Intent.NEXT_STEP),
-    (r"(significant|p.val|stat|result|verdict|ship)",           Intent.SIGNIFICANCE),
-    (r"(segment|cohort|slice|mobile|enterprise|country).*(under|over|worse|better|differ|explain)", Intent.SEGMENT_EXPLAIN),
-    (r"(causal|cause|drove|driven|impact|effect|attribut)",     Intent.CAUSAL_EXPLAIN),
-    (r"(summar|explain|tell me|describe|overview|readout|brief)",Intent.SUMMARISE),
-    (r"(health|srm|guardrail|anomal|monitor|ratio)",            Intent.HEALTH_CHECK),
+    (r"why.*(drop|declin|fall|decrease|worse|lower|regress)", Intent.WHY_DROPPED),
+    (r"why.*(improv|increas|lift|better|higher|win)", Intent.WHY_IMPROVED),
+    (r"(investig|drill|dig|explor|root cause|explain why)", Intent.INVESTIGATE),
+    (r"(what.*(next|should|do)|recommend|suggest)", Intent.NEXT_STEP),
+    (r"(significant|p.val|stat|result|verdict|ship)", Intent.SIGNIFICANCE),
+    (
+        r"(segment|cohort|slice|mobile|enterprise|country).*(under|over|worse|better|differ|explain)",
+        Intent.SEGMENT_EXPLAIN,
+    ),
+    (r"(causal|cause|drove|driven|impact|effect|attribut)", Intent.CAUSAL_EXPLAIN),
+    (r"(summar|explain|tell me|describe|overview|readout|brief)", Intent.SUMMARISE),
+    (r"(health|srm|guardrail|anomal|monitor|ratio)", Intent.HEALTH_CHECK),
     (r"(longitudinal|trend|over time|week.over.week|yoy|past exp)", Intent.LONGITUDINAL),
-    (r"(compar|vs\.?|versus|difference|against|side.by.side)",  Intent.COMPARE),
-    (r"(anomal|outlier|weird|unexpected|strange|spike|dip)",    Intent.ANOMALY),
-    (r"(learn|histor|previous|before|we ran|last time)",        Intent.LEARNINGS),
-    (r"(kpi|metric|measure|track|baseline)",                    Intent.METRICS),
-    (r"(cohort|variant|group|arm|assignment|balance)",          Intent.COHORT),
-    (r"(assum|alpha|power|sample size|threshold|guardrail)",    Intent.ASSUMPTION),
+    (r"(compar|vs\.?|versus|difference|against|side.by.side)", Intent.COMPARE),
+    (r"(anomal|outlier|weird|unexpected|strange|spike|dip)", Intent.ANOMALY),
+    (r"(learn|histor|previous|before|we ran|last time)", Intent.LEARNINGS),
+    (r"(kpi|metric|measure|track|baseline)", Intent.METRICS),
+    (r"(cohort|variant|group|arm|assignment|balance)", Intent.COHORT),
+    (r"(assum|alpha|power|sample size|threshold|guardrail)", Intent.ASSUMPTION),
 ]
 
 
@@ -83,6 +89,7 @@ def detect_intent(question: str) -> str:
 # Resolves names from free text using the actual metric/dimension registries
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def extract_entities(question: str) -> Dict[str, Any]:
     q = question.lower()
     entities: Dict[str, Any] = {}
@@ -96,6 +103,7 @@ def extract_entities(question: str) -> Dict[str, Any]:
     # Metric names — match against registry
     try:
         from continum.datastore.semantic_layer import METRIC_REGISTRY
+
         matched_metrics = []
         for name, m in METRIC_REGISTRY.items():
             if name.lower() in q or m.display_name.lower() in q:
@@ -112,6 +120,7 @@ def extract_entities(question: str) -> Dict[str, Any]:
     # Segment extraction — match against dimension catalog
     try:
         from continum.datastore.semantic_layer import DIMENSION_CATALOG
+
         matched_segs = []
         for dim_name, dim in DIMENSION_CATALOG.items():
             # Check if dimension name appears

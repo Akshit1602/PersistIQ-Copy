@@ -19,11 +19,12 @@ the returned text + chips in the chat pane. Conversation state is a tiny dict
 (``stage``/``module_key``/``idx``/``collected``) round-tripped to the client, so
 the server stays stateless across turns.
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("continum.askdata.flow")
@@ -37,60 +38,84 @@ logger = logging.getLogger("continum.askdata.flow")
 # narrative stays stable even as modules are re-registered across phases.
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class PhaseStep:
-    key:      str
-    label:    str
-    blurb:    str
-    modules:  List[str]
+    key: str
+    label: str
+    blurb: str
+    modules: List[str]
 
 
 PHASE_PLAN: List[PhaseStep] = [
-    PhaseStep("discovery", "Discovery",
-              "connect data, validate it, and map the schema",
-              ["schema_discovery", "data_validation", "dimension_setup"]),
-    PhaseStep("planning", "Planning",
-              "size the opportunity, check power, define metrics and audience",
-              ["opportunity_sizing", "power_calculator", "metrics_and_tracking",
-               "audience_selection", "brief_generator"]),
-    PhaseStep("monitoring", "Live Monitoring",
-              "watch health and run sequential tests while the experiment is live",
-              ["health_monitor", "sequential_testing"]),
-    PhaseStep("analysis", "Analysis & Readout",
-              "read out the result, attribute the cause, and store the learning",
-              ["experiment_analysis", "causal_analysis", "simpsons_paradox",
-               "roi_tracker", "learnings_repository"]),
-    PhaseStep("deployment", "Deployment",
-              "model individual uplift and decide the rollout",
-              ["uplift_modeller", "decision_engine"]),
+    PhaseStep(
+        "discovery",
+        "Discovery",
+        "connect data, validate it, and map the schema",
+        ["schema_discovery", "data_validation", "dimension_setup"],
+    ),
+    PhaseStep(
+        "planning",
+        "Planning",
+        "size the opportunity, check power, define metrics and audience",
+        [
+            "opportunity_sizing",
+            "power_calculator",
+            "metrics_and_tracking",
+            "audience_selection",
+            "brief_generator",
+        ],
+    ),
+    PhaseStep(
+        "monitoring",
+        "Live Monitoring",
+        "watch health and run sequential tests while the experiment is live",
+        ["health_monitor", "sequential_testing"],
+    ),
+    PhaseStep(
+        "analysis",
+        "Analysis & Readout",
+        "read out the result, attribute the cause, and store the learning",
+        [
+            "experiment_analysis",
+            "causal_analysis",
+            "simpsons_paradox",
+            "roi_tracker",
+            "learnings_repository",
+        ],
+    ),
+    PhaseStep(
+        "deployment",
+        "Deployment",
+        "model individual uplift and decide the rollout",
+        ["uplift_modeller", "decision_engine"],
+    ),
 ]
 
 
 # Friendly names for chips / prose. Falls back to a humanised key.
 MODULE_LABELS: Dict[str, str] = {
-    "schema_discovery":     "Schema Discovery",
-    "data_validation":      "Data Validation",
-    "dimension_setup":      "Dimension Setup",
-    "opportunity_sizing":   "Opportunity Sizing",
-    "power_calculator":     "Power Calculator",
+    "schema_discovery": "Schema Discovery",
+    "data_validation": "Data Validation",
+    "dimension_setup": "Dimension Setup",
+    "opportunity_sizing": "Opportunity Sizing",
+    "power_calculator": "Power Calculator",
     "metrics_and_tracking": "KPI & Tracking Plan",
-    "audience_selection":   "Audience Selection",
-    "brief_generator":      "Experiment Brief",
-    "health_monitor":       "Health Monitor",
-    "sequential_testing":   "Sequential Testing",
-    "experiment_analysis":  "A/B Readout",
-    "causal_analysis":      "Causal Analysis",
-    "simpsons_paradox":     "Simpson's Paradox Check",
-    "roi_tracker":          "ROI Tracker",
+    "audience_selection": "Audience Selection",
+    "brief_generator": "Experiment Brief",
+    "health_monitor": "Health Monitor",
+    "sequential_testing": "Sequential Testing",
+    "experiment_analysis": "A/B Readout",
+    "causal_analysis": "Causal Analysis",
+    "simpsons_paradox": "Simpson's Paradox Check",
+    "roi_tracker": "ROI Tracker",
     "learnings_repository": "Learnings Repository",
-    "uplift_modeller":      "Uplift Modeller",
-    "decision_engine":      "Decision Engine",
+    "uplift_modeller": "Uplift Modeller",
+    "decision_engine": "Decision Engine",
 }
 
 # Module → its phase index in PHASE_PLAN, built once.
-_MODULE_PHASE: Dict[str, int] = {
-    m: i for i, step in enumerate(PHASE_PLAN) for m in step.modules
-}
+_MODULE_PHASE: Dict[str, int] = {m: i for i, step in enumerate(PHASE_PLAN) for m in step.modules}
 
 
 def module_label(key: str) -> str:
@@ -102,10 +127,23 @@ def module_label(key: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _TRIGGERS = (
-    "where am i", "what's next", "whats next", "what next", "next step",
-    "what should i do", "what do i do", "guide me", "walk me through",
-    "help me run", "start an experiment", "run an experiment", "where do i start",
-    "what step", "guide", "__next__", "__start__",
+    "where am i",
+    "what's next",
+    "whats next",
+    "what next",
+    "next step",
+    "what should i do",
+    "what do i do",
+    "guide me",
+    "walk me through",
+    "help me run",
+    "start an experiment",
+    "run an experiment",
+    "where do i start",
+    "what step",
+    "guide",
+    "__next__",
+    "__start__",
 )
 
 
@@ -141,6 +179,7 @@ def _is_default_token(text: str) -> bool:
 # LOCATE — "where are you in the process?"
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _ok_modules(session) -> List[str]:
     """Successfully-run module keys, in order, de-duplicated to the last run."""
     if session is None:
@@ -168,11 +207,15 @@ def locate(session) -> Dict[str, Any]:
     per_phase = []
     for i, step in enumerate(PHASE_PLAN):
         ran = [m for m in step.modules if m in done]
-        per_phase.append({
-            "key": step.key, "label": step.label,
-            "ran": ran, "total": len(step.modules),
-            "complete": len(ran) == len(step.modules),
-        })
+        per_phase.append(
+            {
+                "key": step.key,
+                "label": step.label,
+                "ran": ran,
+                "total": len(step.modules),
+                "complete": len(ran) == len(step.modules),
+            }
+        )
 
     active_exp = getattr(session, "active_experiment", None) if session else None
     n_runs = len(getattr(session, "execution_history", []) or []) if session else 0
@@ -181,10 +224,12 @@ def locate(session) -> Dict[str, Any]:
         line = "You haven't run anything yet — let's start at **Discovery**."
     else:
         cur = PHASE_PLAN[cur_idx]
-        line = (f"You're in **{cur.label}** "
-                f"({len(per_phase[cur_idx]['ran'])}/{len(cur.modules)} steps done). "
-                f"{n_runs} module run(s) so far"
-                + (f", on experiment **{active_exp}**." if active_exp else "."))
+        line = (
+            f"You're in **{cur.label}** "
+            f"({len(per_phase[cur_idx]['ran'])}/{len(cur.modules)} steps done). "
+            f"{n_runs} module run(s) so far"
+            + (f", on experiment **{active_exp}**." if active_exp else ".")
+        )
 
     return {
         "current_phase": cur_idx,
@@ -199,6 +244,7 @@ def locate(session) -> Dict[str, Any]:
 # SUGGEST — "what's the next step?"
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def suggest_next(session, limit: int = 4) -> List[Dict[str, str]]:
     """Ordered next-step suggestions: finish the current phase, then advance."""
     done = set(_ok_modules(session))
@@ -212,12 +258,14 @@ def suggest_next(session, limit: int = 4) -> List[Dict[str, str]]:
         if mod in seen or mod in done:
             return
         seen.add(mod)
-        out.append({
-            "module_key": mod,
-            "label": module_label(mod),
-            "phase": PHASE_PLAN[_MODULE_PHASE[mod]].label,
-            "reason": reason,
-        })
+        out.append(
+            {
+                "module_key": mod,
+                "label": module_label(mod),
+                "phase": PHASE_PLAN[_MODULE_PHASE[mod]].label,
+                "reason": reason,
+            }
+        )
 
     # 1) Unrun steps in the current phase.
     for m in PHASE_PLAN[cur_idx].modules:
@@ -237,8 +285,14 @@ def suggest_next(session, limit: int = 4) -> List[Dict[str, str]]:
     if not out:
         for m in PHASE_PLAN[3].modules[:limit]:
             seen.discard(m)  # allow re-running in the all-done case
-            out.append({"module_key": m, "label": module_label(m),
-                        "phase": PHASE_PLAN[3].label, "reason": "revisit analysis"})
+            out.append(
+                {
+                    "module_key": m,
+                    "label": module_label(m),
+                    "phase": PHASE_PLAN[3].label,
+                    "reason": "revisit analysis",
+                }
+            )
     return out[:limit]
 
 
@@ -264,8 +318,10 @@ def render_overview(prog: Dict[str, Any], sugg: List[Dict[str, str]]) -> str:
         for s in sugg:
             lines.append(f"  • **{s['label']}** — {s['reason']}")
     else:
-        lines.append("You've covered the whole lifecycle. Pick any module to re-run, "
-                     "or ask a data question.")
+        lines.append(
+            "You've covered the whole lifecycle. Pick any module to re-run, "
+            "or ask a data question."
+        )
     return "\n".join(lines)
 
 
@@ -273,14 +329,16 @@ def render_overview(prog: Dict[str, Any], sugg: List[Dict[str, str]]) -> str:
 # MODULE MATCHING — interpret the user's pick in the 'choosing' stage
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def match_module(text: str, session) -> Optional[str]:
     """Resolve a free-text / chip message to a module key, or 'askdata', or None."""
     t = (text or "").strip().lower()
     if not t:
         return None
 
-    if any(k in t for k in ("ask data", "askdata", "data question", "query the data",
-                            "ask a question")):
+    if any(
+        k in t for k in ("ask data", "askdata", "data question", "query the data", "ask a question")
+    ):
         return "askdata"
 
     # Exact key (chips send the key).
@@ -305,24 +363,38 @@ def match_module(text: str, session) -> Optional[str]:
 
     # Keyword fallbacks for natural phrasing.
     kw = {
-        "power": "power_calculator", "sample size": "power_calculator",
-        "opportunity": "opportunity_sizing", "sizing": "opportunity_sizing",
+        "power": "power_calculator",
+        "sample size": "power_calculator",
+        "opportunity": "opportunity_sizing",
+        "sizing": "opportunity_sizing",
         "brief": "brief_generator",
-        "kpi": "metrics_and_tracking", "metric": "metrics_and_tracking",
+        "kpi": "metrics_and_tracking",
+        "metric": "metrics_and_tracking",
         "tracking": "metrics_and_tracking",
-        "audience": "audience_selection", "lead": "audience_selection",
-        "health": "health_monitor", "srm": "health_monitor",
-        "sequential": "sequential_testing", "msprt": "sequential_testing",
-        "readout": "experiment_analysis", "a/b": "experiment_analysis",
-        "ab test": "experiment_analysis", "analysis": "experiment_analysis",
-        "causal": "causal_analysis", "attribution": "causal_analysis",
+        "audience": "audience_selection",
+        "lead": "audience_selection",
+        "health": "health_monitor",
+        "srm": "health_monitor",
+        "sequential": "sequential_testing",
+        "msprt": "sequential_testing",
+        "readout": "experiment_analysis",
+        "a/b": "experiment_analysis",
+        "ab test": "experiment_analysis",
+        "analysis": "experiment_analysis",
+        "causal": "causal_analysis",
+        "attribution": "causal_analysis",
         "simpson": "simpsons_paradox",
-        "roi": "roi_tracker", "revenue": "roi_tracker",
-        "learning": "learnings_repository", "repository": "learnings_repository",
+        "roi": "roi_tracker",
+        "revenue": "roi_tracker",
+        "learning": "learnings_repository",
+        "repository": "learnings_repository",
         "uplift": "uplift_modeller",
-        "decision": "decision_engine", "rollout": "decision_engine",
-        "discovery": "schema_discovery", "schema": "schema_discovery",
-        "validate": "data_validation", "validation": "data_validation",
+        "decision": "decision_engine",
+        "rollout": "decision_engine",
+        "discovery": "schema_discovery",
+        "schema": "schema_discovery",
+        "validate": "data_validation",
+        "validation": "data_validation",
         "dimension": "dimension_setup",
     }
     for frag, key in kw.items():
@@ -335,12 +407,14 @@ def match_module(text: str, session) -> Optional[str]:
 # SLOT FILLING — ask one question per input field
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _fields(config: Dict[str, Any]) -> List[Dict[str, Any]]:
     return list(config.get("fields") or [])
 
 
-def init_slots(module_key: str, config: Dict[str, Any],
-               active_experiment: str = "") -> Dict[str, Any]:
+def init_slots(
+    module_key: str, config: Dict[str, Any], active_experiment: str = ""
+) -> Dict[str, Any]:
     """Begin a fill for ``module_key``. Pre-seeds an active experiment if the
     module needs one, so we can offer it as the default rather than asking cold.
     """
@@ -423,8 +497,9 @@ def _match_option(field_spec: Dict[str, Any], raw: str) -> Optional[str]:
     return None
 
 
-def record_answer(state: Dict[str, Any], text: str,
-                  config: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[str]]:
+def record_answer(
+    state: Dict[str, Any], text: str, config: Dict[str, Any]
+) -> Tuple[Dict[str, Any], Optional[str]]:
     """Apply the user's answer to the current slot and advance. On a parse
     error the state is returned unchanged with an error message to re-prompt.
     """
@@ -451,8 +526,9 @@ def record_answer(state: Dict[str, Any], text: str,
     return state, None
 
 
-def format_question(state: Dict[str, Any],
-                    config: Dict[str, Any]) -> Tuple[str, List[Dict[str, str]]]:
+def format_question(
+    state: Dict[str, Any], config: Dict[str, Any]
+) -> Tuple[str, List[Dict[str, str]]]:
     """Prompt + chips for the current slot."""
     fields = _fields(config)
     idx = int(state.get("idx", 0))
@@ -498,8 +574,9 @@ def format_question(state: Dict[str, Any],
     return "\n".join(bits), chips
 
 
-def format_confirm(state: Dict[str, Any],
-                   config: Dict[str, Any]) -> Tuple[str, List[Dict[str, str]]]:
+def format_confirm(
+    state: Dict[str, Any], config: Dict[str, Any]
+) -> Tuple[str, List[Dict[str, str]]]:
     """Summary of gathered inputs + run / restart / cancel chips."""
     fields = {f["key"]: f for f in _fields(config)}
     title = config.get("title", module_label(state["module_key"]))
@@ -523,13 +600,25 @@ def format_confirm(state: Dict[str, Any],
 def run_fields(state: Dict[str, Any]) -> Dict[str, Any]:
     """The collected slot values to hand to /api/execute, dropping empties
     (mirrors the config form's collectFormValues)."""
-    return {k: v for k, v in (state.get("collected") or {}).items()
-            if v not in (None, "")}
+    return {k: v for k, v in (state.get("collected") or {}).items() if v not in (None, "")}
 
 
 __all__ = [
-    "PhaseStep", "PHASE_PLAN", "MODULE_LABELS", "module_label",
-    "is_flow_trigger", "is_restart", "is_yes", "is_no",
-    "locate", "suggest_next", "render_overview", "match_module",
-    "init_slots", "record_answer", "format_question", "format_confirm", "run_fields",
+    "PhaseStep",
+    "PHASE_PLAN",
+    "MODULE_LABELS",
+    "module_label",
+    "is_flow_trigger",
+    "is_restart",
+    "is_yes",
+    "is_no",
+    "locate",
+    "suggest_next",
+    "render_overview",
+    "match_module",
+    "init_slots",
+    "record_answer",
+    "format_question",
+    "format_confirm",
+    "run_fields",
 ]

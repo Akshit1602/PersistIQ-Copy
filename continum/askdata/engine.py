@@ -18,6 +18,7 @@ Thread-safety: the in-memory SQLite connection is shared with
 ``check_same_thread=False`` and graph invocations are serialized with a lock
 (LLM latency dominates, so this is not a throughput concern).
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,19 +29,36 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from .metadata import get_metadata, get_active_dataset_name
 from . import llm as _llm
+from .metadata import get_active_dataset_name, get_metadata
 
 logger = logging.getLogger("continum.askdata.engine")
 
 # Questions about the assistant itself / how to use the tool -> answer from README.
 _META_KEYWORDS = (
-    "what can you do", "what do you do", "who are you", "what are you",
-    "how do you work", "how do i use", "how to use", "what is askdata",
-    "what is this", "what is continum", "what is persist", "help me",
-    "your capabilities", "capabilities", "about you", "about yourself",
-    "what dataset", "which dataset", "what data do you", "what tables",
-    "explain yourself", "getting started", "how does this work",
+    "what can you do",
+    "what do you do",
+    "who are you",
+    "what are you",
+    "how do you work",
+    "how do i use",
+    "how to use",
+    "what is askdata",
+    "what is this",
+    "what is continum",
+    "what is persist",
+    "help me",
+    "your capabilities",
+    "capabilities",
+    "about you",
+    "about yourself",
+    "what dataset",
+    "which dataset",
+    "what data do you",
+    "what tables",
+    "explain yourself",
+    "getting started",
+    "how does this work",
 )
 
 
@@ -60,11 +78,12 @@ def _df_to_table(df: pd.DataFrame, limit: int = 50):
 class AskDataGraphEngine:
     def __init__(self, dataset: Optional[str] = None, db=None):
         import os
+
         # Make the chosen dataset authoritative for every graph node.
         self.dataset = dataset or get_active_dataset_name()
         os.environ["ACTIVE_DATASET"] = self.dataset
 
-        self._duckdb = db          # DuckDB handle for source="duckdb" datasets (else None)
+        self._duckdb = db  # DuckDB handle for source="duckdb" datasets (else None)
         self._conn: Optional[sqlite3.Connection] = None
         self._graph = None
         self._lock = threading.Lock()
@@ -81,18 +100,22 @@ class AskDataGraphEngine:
     def _build_db(self) -> sqlite3.Connection:
         conn = sqlite3.connect(":memory:", check_same_thread=False)
         meta = get_metadata(self.dataset)
-        logger.info("Building AskData SQLite for dataset '%s' (%s)",
-                    self.dataset, meta.get("domain_context"))
+        logger.info(
+            "Building AskData SQLite for dataset '%s' (%s)",
+            self.dataset,
+            meta.get("domain_context"),
+        )
         # DuckDB-backed dataset: snapshot the Layer-1 view(s) into this SQLite so the
         # existing NL -> SQLite -> insight -> chart path works unchanged.
         if meta.get("source") == "duckdb":
             if self._duckdb is None:
                 raise RuntimeError("Experiment data isn't ready yet (DuckDB still booting).")
             for table_name, sql in (meta.get("queries") or {}).items():
-                df = self._duckdb.cursor().execute(sql).df()      # DuckDB -> DataFrame
+                df = self._duckdb.cursor().execute(sql).df()  # DuckDB -> DataFrame
                 df.to_sql(table_name, conn, if_exists="replace", index=False)
-            logger.info("Snapshotted %d DuckDB table(s) into AskData SQLite",
-                        len(meta.get("queries") or {}))
+            logger.info(
+                "Snapshotted %d DuckDB table(s) into AskData SQLite", len(meta.get("queries") or {})
+            )
             return conn
         for file_info in meta["files"]:
             path = file_info["path"]
@@ -103,8 +126,9 @@ class AskDataGraphEngine:
                 if "date_col" in file_info:
                     date_col = file_info["date_col"]
                     date_format = file_info.get("date_format")
-                    df[date_col] = pd.to_datetime(
-                        df[date_col], format=date_format).dt.strftime("%Y-%m-%d")
+                    df[date_col] = pd.to_datetime(df[date_col], format=date_format).dt.strftime(
+                        "%Y-%m-%d"
+                    )
             elif fmt == "excel":
                 sheet_name = file_info.get("sheet_name", 0)
                 df = pd.read_excel(path, sheet_name=sheet_name)
@@ -121,6 +145,7 @@ class AskDataGraphEngine:
             if self._graph is not None:
                 return
             from .graph_logic import create_graph
+
             self._conn = self._build_db()
             self._graph = create_graph(self._conn)
             logger.info("AskData graph compiled (provider=%s)", self.provider)
@@ -129,8 +154,7 @@ class AskDataGraphEngine:
 
     def list_tables(self) -> List[str]:
         self._ensure()
-        cur = self._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        cur = self._conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         return [r[0] for r in cur.fetchall()]
 
     def preview(self, limit: int = 5) -> Dict[str, Any]:
@@ -169,6 +193,7 @@ class AskDataGraphEngine:
         # Torch-free README reader (works even when the ML stack is unavailable).
         try:
             from .readme import get_readme_context
+
             ctx = get_readme_context(q) or ""
         except Exception as e:
             logger.warning("README context unavailable: %s", e)
@@ -197,8 +222,13 @@ class AskDataGraphEngine:
                 f"'{self.dataset}' dataset ({meta.get('domain_context')})."
             )
         return {
-            "response": text, "sql": None, "table": [], "columns": [],
-            "visualizations": [], "error": None, "mode": "about",
+            "response": text,
+            "sql": None,
+            "table": [],
+            "columns": [],
+            "visualizations": [],
+            "error": None,
+            "mode": "about",
             "provider": self.provider,
         }
 
@@ -207,19 +237,31 @@ class AskDataGraphEngine:
     def ask(self, question: str, ui_context: Optional[dict] = None) -> Dict[str, Any]:
         question = (question or "").strip()
         if not question:
-            return {"response": "Ask me a question about the data.", "sql": None,
-                    "table": [], "columns": [], "error": None, "mode": "askdata",
-                    "provider": self.provider}
+            return {
+                "response": "Ask me a question about the data.",
+                "sql": None,
+                "table": [],
+                "columns": [],
+                "error": None,
+                "mode": "askdata",
+                "provider": self.provider,
+            }
 
         if _is_meta_question(question):
             return self._answer_about_self(question)
 
         if _llm.active_provider() == "unconfigured":
             return {
-                "response": ("I need an OpenAI API key to query the data. Add "
-                             "OPENAI_API_KEY to .streamlit/secrets.toml or .env and ask again."),
-                "sql": None, "table": [], "columns": [], "error": "unconfigured",
-                "mode": "askdata", "provider": "unconfigured",
+                "response": (
+                    "I need an OpenAI API key to query the data. Add "
+                    "OPENAI_API_KEY to .streamlit/secrets.toml or .env and ask again."
+                ),
+                "sql": None,
+                "table": [],
+                "columns": [],
+                "error": "unconfigured",
+                "mode": "askdata",
+                "provider": "unconfigured",
             }
 
         self._ensure()
@@ -229,8 +271,10 @@ class AskDataGraphEngine:
         # questions still work because the instruction is conditional).
         exp = (ui_context or {}).get("active_experiment")
         if self.dataset == "experiments" and exp:
-            question = (question + "  (Unless I explicitly ask to compare across experiments, "
-                        f"only consider rows where experiment_name = '{exp}'.)")
+            question = (
+                question + "  (Unless I explicitly ask to compare across experiments, "
+                f"only consider rows where experiment_name = '{exp}'.)"
+            )
 
         initial_state = {
             "user_question": question,
@@ -253,9 +297,15 @@ class AskDataGraphEngine:
                 result = self._graph.invoke(initial_state)
             except Exception as e:
                 logger.exception("AskData graph invocation failed")
-                return {"response": f"Sorry — I hit an error answering that: {e}",
-                        "sql": None, "table": [], "columns": [], "error": str(e),
-                        "mode": "askdata", "provider": self.provider}
+                return {
+                    "response": f"Sorry — I hit an error answering that: {e}",
+                    "sql": None,
+                    "table": [],
+                    "columns": [],
+                    "error": str(e),
+                    "mode": "askdata",
+                    "provider": self.provider,
+                }
 
             # Persist multi-turn state.
             self.history = result.get("history", self.history)
@@ -294,6 +344,7 @@ class AskDataGraphEngine:
 # ─────────────────────────────────────────────────────────────────────────────
 # Flask app-scoped singleton helper
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def get_askdata_engine(app=None, dataset: Optional[str] = None) -> AskDataGraphEngine:
     """Return a cached engine. If ``app`` is given, cache it on the app object."""
