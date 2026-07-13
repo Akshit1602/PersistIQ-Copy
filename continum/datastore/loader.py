@@ -35,7 +35,8 @@ def register_bronze(db: duckdb.DuckDBPyConnection, datasets: Dict[str, pd.DataFr
 def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
     logger.info("Building Silver layer")
 
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE silver_users AS
     SELECT
         _id AS user_id, _deleted AS is_deleted,
@@ -52,9 +53,11 @@ def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
         tax_exempt, accepted_teamspace_invitation_at, min_teamspace_created_at,
         split_part(email_address, '@', -1) AS email_domain
     FROM bronze_users_raw
-    """)
+    """
+    )
 
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE silver_quotes AS
     SELECT
         _id AS quote_id, _deleted AS is_deleted,
@@ -86,9 +89,11 @@ def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
         lead_time_days, auto_quoted_lead_time,
         calendar_days_to_order_conversion, business_days_to_order_conversion
     FROM bronze_quotes_raw
-    """)
+    """
+    )
 
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE silver_orders AS
     SELECT
         _id AS order_id, _deleted AS is_deleted, quote_id,
@@ -122,9 +127,11 @@ def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
         shipping_address_country, shipping_address_country_code,
         shipping_address_state, shipping_address_city
     FROM bronze_orders_raw
-    """)
+    """
+    )
 
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE silver_experiments AS
     SELECT
         experiment_id, group_id, group_name,
@@ -132,11 +139,13 @@ def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
         account_id, account_domain, quote_id, order_id,
         job_id, partner_id, user_dimensions
     FROM bronze_experiments_raw
-    """)
+    """
+    )
 
     # Backward-compat inquiry view
     logger.info("Creating backward compatibility inquiry view")
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE VIEW silver_inquiries AS
     SELECT
         q.quote_id AS inquiry_id, q.user_id,
@@ -147,14 +156,16 @@ def build_silver_layer(db: duckdb.DuckDBPyConnection) -> None:
         q.*
     FROM silver_quotes q
     LEFT JOIN silver_experiments e ON q.user_id = e.user_id
-    """)
+    """
+    )
     logger.info("Silver layer built")
 
 
 def build_gold_layer(db: duckdb.DuckDBPyConnection) -> None:
     logger.info("Building Gold experiment mart")
 
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE gold_experiment_mart AS
     WITH quotes_by_user AS (
         SELECT user_id,
@@ -186,10 +197,12 @@ def build_gold_layer(db: duckdb.DuckDBPyConnection) -> None:
     LEFT JOIN bronze_accounts_raw a ON u.erp_account_id = a._id
     LEFT JOIN quotes_by_user q ON u.user_id = q.user_id
     LEFT JOIN orders_by_user o ON u.user_id = o.user_id
-    """)
+    """
+    )
 
     logger.info("Building Gold experiment analysis table")
-    db.execute("""
+    db.execute(
+        """
     CREATE OR REPLACE TABLE gold_experiment_analysis AS
     WITH exposures AS (
         SELECT e.user_id, e.experiment_id, e.group_name AS variant, e.exposure_at AS created_at,
@@ -216,7 +229,8 @@ def build_gold_layer(db: duckdb.DuckDBPyConnection) -> None:
     SELECT j.*, j.experiment_id AS experiment_name
     FROM joined j
     WHERE j.variant IS NOT NULL
-    """)
+    """
+    )
 
     n = db.execute("SELECT COUNT(*) FROM gold_experiment_analysis").fetchone()[0]
     logger.info("Gold mart ready: %d rows in gold_experiment_analysis", n)
@@ -224,7 +238,8 @@ def build_gold_layer(db: duckdb.DuckDBPyConnection) -> None:
 
 def list_experiments(db: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     try:
-        return db.execute("""
+        return db.execute(
+            """
             SELECT experiment_name,
                    COUNT(DISTINCT variant)  AS n_variants,
                    COUNT(*)                 AS n_rows,
@@ -234,7 +249,8 @@ def list_experiments(db: duckdb.DuckDBPyConnection) -> pd.DataFrame:
             WHERE experiment_name IS NOT NULL
             GROUP BY experiment_name
             ORDER BY n_rows DESC
-        """).df()
+        """
+        ).df()
     except Exception as e:
         logger.warning("list_experiments failed: %s", e)
         return pd.DataFrame()

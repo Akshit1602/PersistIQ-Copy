@@ -330,13 +330,15 @@ class KnowledgeGraph:
         confidence_rank = {"confirmed": 3, "probable": 2, "tentative": 1}
         min_rank = confidence_rank.get(min_confidence, 1)
         try:
-            rows = self._db.execute("""
+            rows = self._db.execute(
+                """
                 SELECT node_id, properties
                 FROM kg_nodes
                 WHERE node_type = 'Learning'
                 ORDER BY updated_at DESC
                 LIMIT 50
-            """).fetchall()
+            """
+            ).fetchall()
             learnings = []
             for row in rows:
                 props = json.loads(row[1])
@@ -425,15 +427,19 @@ class KnowledgeGraph:
     def get_graph_summary(self) -> Dict[str, int]:
         summary = {}
         try:
-            node_counts = self._db.execute("""
+            node_counts = self._db.execute(
+                """
                 SELECT node_type, COUNT(*) FROM kg_nodes GROUP BY node_type
-            """).fetchall()
+            """
+            ).fetchall()
             for node_type, count in node_counts:
                 summary[f"nodes_{node_type}"] = count
 
-            edge_counts = self._db.execute("""
+            edge_counts = self._db.execute(
+                """
                 SELECT edge_type, COUNT(*) FROM kg_edges GROUP BY edge_type
-            """).fetchall()
+            """
+            ).fetchall()
             for edge_type, count in edge_counts:
                 summary[f"edges_{edge_type}"] = count
         except Exception as e:

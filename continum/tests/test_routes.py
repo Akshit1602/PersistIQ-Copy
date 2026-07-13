@@ -38,11 +38,13 @@ def synthetic_db():
     db.execute("CREATE VIEW silver_inquiries AS SELECT * FROM silver_inquiries")
 
     # gold_experiment_analysis
-    db.execute("""
+    db.execute(
+        """
         CREATE VIEW gold_experiment_analysis AS
         SELECT *, 'test_exp' AS experiment_name
         FROM silver_inquiries
-    """)
+    """
+    )
 
     return db
 

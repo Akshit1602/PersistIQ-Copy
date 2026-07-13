@@ -184,7 +184,8 @@ def run_causal_analysis(llm=None, db=None, **kwargs) -> Any:
     print("║  CAUSAL ANALYSIS".ljust(71) + "║")
     print("║  Choose the right method for your situation".ljust(71) + "║")
     print("╚" + "═" * 70 + "╝")
-    print("""
+    print(
+        """
   AFTER RANDOMISED A/B
   [1]  A/B Test Analysis        — gold standard, variant assignment was random
   [2]  Pre-Post Analysis        — 100% rollout, compare before vs after
@@ -198,7 +199,8 @@ def run_causal_analysis(llm=None, db=None, **kwargs) -> Any:
   [8]  ARIMA Counterfactual     — time-series counterfactual
   [9]  SARIMA                   — seasonal ARIMA
   [10] BSTS / Causal Impact     — state-space model
-""")
+"""
+    )
 
     from continum.experimentation.causal.methods import (
         run_arima,
@@ -225,20 +227,28 @@ def run_causal_analysis(llm=None, db=None, **kwargs) -> Any:
         exp_name = kwargs.get("experiment_name")
         if not exp_name:
             try:
-                experiments = db.execute("""
+                experiments = (
+                    db.execute(
+                        """
                     SELECT DISTINCT experiment_name
                     FROM gold_experiment_analysis
-                """).df()["experiment_name"].tolist()
+                """
+                    )
+                    .df()["experiment_name"]
+                    .tolist()
+                )
                 print("\n  Experiments:", experiments[:5])
                 exp_name = input("  ❓ Experiment name: ").strip()
             except Exception:
                 pass
         if exp_name:
             try:
-                df = db.execute(f"""
+                df = db.execute(
+                    f"""
                     SELECT * FROM gold_experiment_analysis
                     WHERE experiment_name = '{exp_name}'
-                """).df()
+                """
+                ).df()
             except Exception as e:
                 logger.warning("Could not load df: %s", e)
 
@@ -265,12 +275,14 @@ def run_causal_analysis(llm=None, db=None, **kwargs) -> Any:
     elif choice == "4":
         if db:
             try:
-                daily = db.execute("""
+                daily = db.execute(
+                    """
                     SELECT created_at::DATE AS d, AVG(CAST(converted_to_order AS DOUBLE)) AS v
                     FROM gold_experiment_analysis
                     WHERE experiment_name IS NOT NULL
                     GROUP BY d ORDER BY d
-                """).df()
+                """
+                ).df()
                 series = daily.set_index("d")["v"]
                 cutoff = str(series.index[len(series) // 2])
                 return run_its(series, cutoff, exp_name)
@@ -311,10 +323,12 @@ def run_pre_post_analysis(
 
     if df is None and db is not None:
         try:
-            df = db.execute("""
+            df = db.execute(
+                """
                 SELECT * FROM gold_experiment_analysis
                 ORDER BY created_at
-            """).df()
+            """
+            ).df()
         except Exception as e:
             print(f"  ❌ {e}")
             return {}
@@ -403,9 +417,15 @@ def run_simpsons_paradox_detector(llm=None, db=None, **kwargs) -> Dict:
         exp_name = kwargs.get("experiment_name")
         if not exp_name:
             try:
-                exps = db.execute("""
+                exps = (
+                    db.execute(
+                        """
                     SELECT DISTINCT experiment_name FROM gold_experiment_analysis
-                """).df()["experiment_name"].tolist()
+                """
+                    )
+                    .df()["experiment_name"]
+                    .tolist()
+                )
                 print("\n  Experiments:")
                 for i, e in enumerate(exps):
                     print(f"  [{i+1}] {e}")
@@ -415,10 +435,12 @@ def run_simpsons_paradox_detector(llm=None, db=None, **kwargs) -> Dict:
                 print(f"  ❌ {e}")
                 return {}
         try:
-            df = db.execute(f"""
+            df = db.execute(
+                f"""
                 SELECT * FROM gold_experiment_analysis
                 WHERE experiment_name = '{exp_name}'
-            """).df()
+            """
+            ).df()
         except Exception as e:
             print(f"  ❌ {e}")
             return {}
@@ -562,7 +584,8 @@ def run_roi_tracker(llm=None, db=None, **kwargs) -> Dict:
 
     # Build daily IOR series from gold layer
     try:
-        df_ts = db.execute("""
+        df_ts = db.execute(
+            """
             SELECT
                 created_at::DATE AS date,
                 AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
@@ -571,7 +594,8 @@ def run_roi_tracker(llm=None, db=None, **kwargs) -> Dict:
             WHERE converted_to_order IS NOT NULL
             GROUP BY created_at::DATE
             ORDER BY date
-        """).df()
+        """
+        ).df()
         df_ts["date"] = pd.to_datetime(df_ts["date"])
     except Exception as e:
         print(f"  ❌ Could not build daily series: {e}")
@@ -600,10 +624,15 @@ def run_roi_tracker(llm=None, db=None, **kwargs) -> Dict:
     cf = model["forecast"](post["date"])
     avg_aov = float(kwargs.get("avg_aov", 4000.0))
     try:
-        avg_aov = float(db.execute("""
+        avg_aov = float(
+            db.execute(
+                """
             SELECT AVG(order_value) FROM gold_experiment_analysis
             WHERE order_value > 0 AND converted_to_order = TRUE
-        """).fetchone()[0] or avg_aov)
+        """
+            ).fetchone()[0]
+            or avg_aov
+        )
     except Exception:
         pass
 
@@ -664,7 +693,8 @@ def run_learnings_repository(llm=None, db=None, **kwargs) -> Any:
 
     # Ensure learnings table exists
     try:
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS experiment_learnings (
                 id VARCHAR,
                 experiment_name VARCHAR,
@@ -679,16 +709,19 @@ def run_learnings_repository(llm=None, db=None, **kwargs) -> Any:
                 recorded_at VARCHAR,
                 recorded_by VARCHAR
             )
-        """)
+        """
+        )
     except Exception:
         pass
 
     if action == "3":
         try:
-            df = db.execute("""
+            df = db.execute(
+                """
                 SELECT id, experiment_name, ship_decision, outcome, recorded_at
                 FROM experiment_learnings ORDER BY recorded_at DESC
-            """).df()
+            """
+            ).df()
         except Exception as e:
             print(f"  ❌ {e}")
             return {}

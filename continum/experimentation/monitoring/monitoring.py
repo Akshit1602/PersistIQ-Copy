@@ -37,7 +37,8 @@ def run_health_monitor(
 
     # ── Load available experiments ────────────────────────────────────────────
     try:
-        exp_df = db.execute("""
+        exp_df = db.execute(
+            """
             SELECT DISTINCT experiment_name,
                    MIN(created_at)::DATE AS start_date,
                    MAX(created_at)::DATE AS end_date,
@@ -46,7 +47,8 @@ def run_health_monitor(
             WHERE experiment_name IS NOT NULL
             GROUP BY experiment_name
             ORDER BY start_date DESC
-        """).df()
+        """
+        ).df()
     except Exception as e:
         print(f"  ❌ Could not load experiments: {e}")
         return {}
@@ -76,10 +78,12 @@ def run_health_monitor(
             print("     ⚠️  Invalid choice")
 
     # ── Load data ─────────────────────────────────────────────────────────────
-    df = db.execute(f"""
+    df = db.execute(
+        f"""
         SELECT * FROM gold_experiment_analysis
         WHERE experiment_name = '{exp_name}'
-    """).df()
+    """
+    ).df()
 
     if df.empty:
         print(f"  ⚠️  No data for {exp_name}")
@@ -247,12 +251,14 @@ def run_sequential_testing(llm=None, db=None, **kwargs) -> Dict:
 
     # Load experiment
     try:
-        exp_list = db.execute("""
+        exp_list = db.execute(
+            """
             SELECT DISTINCT experiment_name, COUNT(*) AS n
             FROM gold_experiment_analysis
             WHERE experiment_name IS NOT NULL
             GROUP BY experiment_name ORDER BY n DESC
-        """).df()
+        """
+        ).df()
     except Exception as e:
         print(f"  ❌ {e}")
         return {}
@@ -270,11 +276,13 @@ def run_sequential_testing(llm=None, db=None, **kwargs) -> Dict:
             except (ValueError, IndexError):
                 pass
 
-    df = db.execute(f"""
+    df = db.execute(
+        f"""
         SELECT * FROM gold_experiment_analysis
         WHERE experiment_name = '{exp_name}'
         ORDER BY created_at
-    """).df()
+    """
+    ).df()
 
     variants = sorted(df["variant"].dropna().unique().tolist())
     control = next((v for v in variants if "control" in v.lower()), variants[0])

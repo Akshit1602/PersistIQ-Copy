@@ -90,14 +90,16 @@ def _pull_baselines(db=None) -> Dict[str, float]:
         return defaults
     try:
         _dc = _discover_cols(db)
-        row = db.execute(f"""
+        row = db.execute(
+            f"""
             SELECT
                 AVG(CAST({_dc["outcome"]} AS DOUBLE))           AS ior,
                 AVG(CASE WHEN {_dc["outcome"]} THEN {_dc["value"]} END)  AS aov,
                 COUNT(*) / 3.0                                         AS monthly_inquiries,
                 COUNT(*) / 90.0                                        AS daily_inquiries
             FROM (SELECT * FROM silver_inquiries LIMIT 90000)
-        """).fetchone()
+        """
+        ).fetchone()
         if row and row[0] is not None:
             defaults["ior"] = float(row[0] or 0.18)
             defaults["aov"] = float(row[1] or 4000)
@@ -369,7 +371,8 @@ def run_audience_selection(llm=None, db=None, **kwargs) -> Dict:
     if db is not None:
         try:
             _dc = _discover_cols(db)
-            df = db.execute(f"""
+            df = db.execute(
+                f"""
                 SELECT
                     user_id,
                     COUNT(*)                                      AS n_inquiries,
@@ -379,7 +382,8 @@ def run_audience_selection(llm=None, db=None, **kwargs) -> Dict:
                     MAX(created_at)                               AS last_activity
                 FROM silver_inquiries
                 GROUP BY user_id
-            """).df()
+            """
+            ).df()
             lo, hi = rules["ior_range"]
             eligible = df[
                 (df["personal_ior"].fillna(0) >= lo)

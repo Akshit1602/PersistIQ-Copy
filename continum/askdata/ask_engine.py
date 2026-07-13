@@ -118,14 +118,16 @@ def _retrieve_metric_data(db, question: str) -> Dict:
     q = question.lower()
     try:
         if "ior" in q or "conversion" in q or "rate" in q:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT
                     AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                     COUNT(*) AS n,
                     MIN(created_at) AS since,
                     MAX(created_at) AS until
                 FROM silver_inquiries
-            """).fetchone()
+            """
+            ).fetchone()
             if row:
                 data["ior"] = round(float(row[0] or 0), 4)
                 data["n"] = int(row[1])
@@ -133,31 +135,37 @@ def _retrieve_metric_data(db, question: str) -> Dict:
                 data["until"] = str(row[3])[:10]
 
         if "aov" in q or "order value" in q or "revenue" in q:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT AVG(order_value), SUM(order_value), COUNT(*)
                 FROM silver_inquiries WHERE converted_to_order = true AND order_value > 0
-            """).fetchone()
+            """
+            ).fetchone()
             if row:
                 data["aov"] = round(float(row[0] or 0), 2)
                 data["total_gmv"] = round(float(row[1] or 0), 2)
                 data["n_orders"] = int(row[2])
 
         if "volume" in q or "traffic" in q or "inquiries" in q:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT COUNT(*) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at))+1,0) AS daily_n
                 FROM silver_inquiries
-            """).fetchone()
+            """
+            ).fetchone()
             if row:
                 data["daily_inquiries"] = round(float(row[0] or 0), 1)
 
         if any(seg in q for seg in ["segment", "core", "growth", "enterprise"]):
-            rows = db.execute("""
+            rows = db.execute(
+                """
                 SELECT account_segment,
                        AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                        COUNT(*) AS n
                 FROM silver_inquiries WHERE account_segment IS NOT NULL
                 GROUP BY account_segment ORDER BY ior DESC
-            """).fetchall()
+            """
+            ).fetchall()
             data["segment_iors"] = {str(r[0]): round(float(r[1]), 4) for r in rows}
     except Exception as e:
         logger.debug("metric retrieval failed: %s", e)
@@ -169,9 +177,11 @@ def _retrieve_experiment_data(db, question: str) -> Dict:
     try:
         # Try to extract experiment name from question
         exp_name = None
-        rows = db.execute("""
+        rows = db.execute(
+            """
             SELECT DISTINCT experiment_name FROM gold_experiment_analysis
-        """).fetchall()
+        """
+        ).fetchall()
         known_exps = [str(r[0]) for r in rows]
         for exp in known_exps:
             if exp.lower() in question.lower():
@@ -179,7 +189,8 @@ def _retrieve_experiment_data(db, question: str) -> Dict:
                 break
 
         if exp_name:
-            df = db.execute(f"""
+            df = db.execute(
+                f"""
                 SELECT variant,
                        COUNT(*) AS n,
                        AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
@@ -187,16 +198,19 @@ def _retrieve_experiment_data(db, question: str) -> Dict:
                 FROM gold_experiment_analysis
                 WHERE experiment_name = '{exp_name}'
                 GROUP BY variant
-            """).df()
+            """
+            ).df()
             data["experiment"] = exp_name
             data["variants"] = df.to_dict("records")
 
         # Most recent experiments
-        recent = db.execute("""
+        recent = db.execute(
+            """
             SELECT experiment_name, COUNT(DISTINCT variant) AS n_variants, COUNT(*) AS n_obs
             FROM gold_experiment_analysis
             GROUP BY experiment_name ORDER BY n_obs DESC LIMIT 5
-        """).fetchall()
+        """
+        ).fetchall()
         data["available_experiments"] = [str(r[0]) for r in recent]
     except Exception as e:
         logger.debug("experiment retrieval failed: %s", e)
@@ -206,7 +220,8 @@ def _retrieve_experiment_data(db, question: str) -> Dict:
 def _retrieve_comparison_data(db, question: str) -> Dict:
     data: Dict = {}
     try:
-        df = db.execute("""
+        df = db.execute(
+            """
             SELECT
                 experiment_name,
                 variant,
@@ -214,7 +229,8 @@ def _retrieve_comparison_data(db, question: str) -> Dict:
                 COUNT(*) AS n
             FROM gold_experiment_analysis
             GROUP BY experiment_name, variant
-        """).df()
+        """
+        ).df()
 
         results = []
         for exp in df["experiment_name"].unique():
@@ -243,17 +259,21 @@ def _retrieve_comparison_data(db, question: str) -> Dict:
 def _retrieve_anomaly_data(db, question: str) -> Dict:
     data: Dict = {}
     try:
-        row = db.execute("""
+        row = db.execute(
+            """
             SELECT
                 AVG(CAST(converted_to_order AS DOUBLE)) AS ior_7d,
                 STDDEV(CAST(converted_to_order AS DOUBLE)) AS std_ior_7d
             FROM silver_inquiries
             WHERE created_at >= CURRENT_DATE - INTERVAL 7 DAY
-        """).fetchone()
-        row2 = db.execute("""
+        """
+        ).fetchone()
+        row2 = db.execute(
+            """
             SELECT AVG(CAST(converted_to_order AS DOUBLE)) AS ior_1d
             FROM silver_inquiries WHERE created_at >= CURRENT_DATE - INTERVAL 1 DAY
-        """).fetchone()
+        """
+        ).fetchone()
         if row and row[0] and row2 and row2[0]:
             mean_7d = float(row[0])
             std_7d = float(row[1] or mean_7d * 0.1)
@@ -272,14 +292,16 @@ def _retrieve_anomaly_data(db, question: str) -> Dict:
 def _retrieve_knowledge_data(db, question: str) -> Dict:
     data: Dict = {}
     try:
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS experiment_learnings (
                 id VARCHAR, experiment_name VARCHAR, ship_decision VARCHAR,
                 outcome TEXT, key_learning TEXT, what_worked TEXT,
                 what_didnt TEXT, recommendation TEXT, follow_ups TEXT,
                 tags TEXT, recorded_at VARCHAR, recorded_by VARCHAR
             )
-        """)
+        """
+        )
         df = db.execute("SELECT * FROM experiment_learnings ORDER BY recorded_at DESC").df()
         if len(df) > 0:
             q_words = set(re.sub(r"[^a-z ]", "", question.lower()).split())

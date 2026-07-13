@@ -23,11 +23,13 @@ def _load_experiment_df(db, exp_name: str) -> Optional[pd.DataFrame]:
     if db is None:
         return None
     try:
-        df = db.execute(f"""
+        df = db.execute(
+            f"""
             SELECT *
             FROM gold_experiment_analysis
             WHERE experiment_name = '{exp_name}'
-        """).df()
+        """
+        ).df()
         return df if len(df) > 0 else None
     except Exception as e:
         logger.warning("Could not load experiment data: %s", e)
@@ -38,13 +40,15 @@ def _load_timeseries(db) -> Optional[pd.Series]:
     if db is None:
         return None
     try:
-        df = db.execute("""
+        df = db.execute(
+            """
             SELECT
                 created_at::DATE AS date,
                 AVG(CAST(converted_to_order AS DOUBLE)) AS ior
             FROM silver_inquiries
             GROUP BY 1 ORDER BY 1
-        """).df()
+        """
+        ).df()
         if df.empty:
             return None
         s = df.set_index(pd.to_datetime(df["date"]))["ior"].astype(float)
@@ -74,11 +78,13 @@ def run_causal_analysis_full(
 
     if not experiment_name:
         try:
-            rows = db.execute("""
+            rows = db.execute(
+                """
                 SELECT DISTINCT experiment_name, COUNT(*) AS n
                 FROM gold_experiment_analysis
                 GROUP BY 1 ORDER BY 2 DESC LIMIT 10
-            """).fetchall()
+            """
+            ).fetchall()
             if not rows:
                 return {"error": "No experiments found in gold layer"}
             print("\n  Available experiments:")

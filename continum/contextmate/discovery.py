@@ -77,10 +77,12 @@ def run_schema_discovery(
     # ── Catalog scan ──────────────────────────────────────────────────────────
     print("\n  Scanning DuckDB catalog...")
     try:
-        catalog_df = db.execute("""
+        catalog_df = db.execute(
+            """
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = 'main' ORDER BY table_name
-        """).df()
+        """
+        ).df()
     except Exception:
         try:
             catalog_df = db.execute("SHOW TABLES").df()

@@ -62,13 +62,15 @@ def run_kpi_synthesis(
     baselines: Dict[str, float] = {}
     if db is not None:
         try:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT
                     AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                     AVG(CASE WHEN converted_to_order THEN order_value END) AS aov,
                     COUNT(*) / 90.0 AS daily_inq
                 FROM silver_inquiries
-            """).fetchone()
+            """
+            ).fetchone()
             if row and row[0] is not None:
                 baselines = {
                     "ior": float(row[0] or 0.18),
@@ -352,14 +354,16 @@ def run_historical_learning_retrieval(
 
     # Ensure table exists
     try:
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE IF NOT EXISTS experiment_learnings (
                 id VARCHAR, experiment_name VARCHAR, ship_decision VARCHAR,
                 outcome TEXT, key_learning TEXT, what_worked TEXT,
                 what_didnt TEXT, recommendation TEXT, follow_ups TEXT,
                 tags TEXT, recorded_at VARCHAR, recorded_by VARCHAR
             )
-        """)
+        """
+        )
     except Exception:
         pass
 
@@ -557,12 +561,14 @@ def run_next_step_generation(
     if db is not None:
         try:
             # Check if any running experiments are significant
-            df = db.execute("""
+            df = db.execute(
+                """
                 SELECT experiment_name, COUNT(DISTINCT variant) AS n_variants,
                        COUNT(*) AS n_obs
                 FROM gold_experiment_analysis
                 GROUP BY experiment_name
-            """).df()
+            """
+            ).df()
             if len(df) > 0 and not any(last_module == m for m in ["experiment_analysis"]):
                 steps.append(
                     {
@@ -676,12 +682,18 @@ def run_anomaly_synthesis(
                 GROUP BY d
             )
         """,
-        "null_variant": ("""
+        "null_variant": (
+            """
             SELECT
                 SUM(CASE WHEN variant IS NULL THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS null_pct
             FROM gold_experiment_analysis
             WHERE experiment_name = '{exp}'
-        """.format(exp=experiment_name) if experiment_name else None),
+        """.format(
+                exp=experiment_name
+            )
+            if experiment_name
+            else None
+        ),
     }
 
     for check_name, q in checks.items():
@@ -695,11 +707,13 @@ def run_anomaly_synthesis(
 
                 # Pull recent value for comparison
                 if check_name == "ior_anomaly":
-                    recent = db.execute("""
+                    recent = db.execute(
+                        """
                         SELECT AVG(CAST(converted_to_order AS DOUBLE))
                         FROM silver_inquiries
                         WHERE created_at >= CURRENT_DATE - INTERVAL 1 DAY
-                    """).fetchone()
+                    """
+                    ).fetchone()
                     if recent and recent[0] is not None:
                         recent_val = float(recent[0])
                         z = (recent_val - mean_v) / std_v if std_v > 0 else 0
@@ -721,12 +735,14 @@ def run_anomaly_synthesis(
     # Cross-variant imbalance check
     if experiment_name and db is not None:
         try:
-            df = db.execute(f"""
+            df = db.execute(
+                f"""
                 SELECT variant, COUNT(*) AS n
                 FROM gold_experiment_analysis
                 WHERE experiment_name = '{experiment_name}'
                 GROUP BY variant
-            """).df()
+            """
+            ).df()
             if len(df) > 1:
                 counts = df["n"].values
                 ratio = float(counts.min() / counts.max())
@@ -807,7 +823,8 @@ def run_cross_experiment_learning(
         return {"error": "no_db"}
 
     try:
-        df = db.execute("""
+        df = db.execute(
+            """
             SELECT
                 experiment_name,
                 variant,
@@ -816,7 +833,8 @@ def run_cross_experiment_learning(
                 AVG(COALESCE(order_value, 0)) AS aov
             FROM gold_experiment_analysis
             GROUP BY experiment_name, variant
-        """).df()
+        """
+        ).df()
     except Exception as e:
         return {"error": str(e)}
 

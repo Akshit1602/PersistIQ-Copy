@@ -2,7 +2,7 @@
   "session_id": "982e7c69",
   "client_name": "demo",
   "created_at": "2026-06-18T15:05:57.770708",
-  "last_active": "2026-07-13T07:50:57.742984",
+  "last_active": "2026-07-13T07:59:04.745426",
   "mode": "synthetic",
   "semantic_mappings": {},
   "active_metrics": [],
@@ -632,6 +632,30 @@
       "phase": "phase_1",
       "started_at": "2026-07-13T07:50:57.742957",
       "elapsed_s": 0.025,
+      "ok": true,
+      "error": "",
+      "summary": "['sample_size', 'duration']",
+      "outputs": {}
+    },
+    {
+      "run_id": "f8bdb430",
+      "module": "power_calculator",
+      "phase": "phase_1",
+      "started_at": "2026-07-13T07:59:04.742581",
+      "elapsed_s": 0.002,
+      "ok": true,
+      "error": "",
+      "summary": "['sample_size', 'duration']",
+      "outputs": {}
+    }
+  ],
+  "recommendations": [],
+  "context_keys": [
+    "power_calculator_result",
+    "experiment_result"
+  ]
+}d_at": "2026-07-13T07:59:04.745409",
+      "elapsed_s": 0.002,
       "ok": true,
       "error": "",
       "summary": "['sample_size', 'duration']",
