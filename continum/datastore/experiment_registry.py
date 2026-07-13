@@ -60,7 +60,9 @@ def load_registry(path: Optional[str] = None) -> List[Dict[str, Any]]:
         return []
 
 
-def list_registry(dataset: Optional[str] = None, path: Optional[str] = None) -> List[Dict[str, Any]]:
+def list_registry(
+    dataset: Optional[str] = None, path: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """Registered experiments, optionally filtered to a single ``dataset``.
 
     A blank/None ``dataset`` returns everything (the "no dataset selected → show

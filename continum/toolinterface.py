@@ -1055,67 +1055,169 @@ def _build_registry() -> None:
     # ── V4 — New notebook-ported modules + audience_selection V2 ─────────────
     try:
         from continum.modules.new_modules import (
-            run_funnel_analysis, run_cohort_analysis, run_retention_analysis,
-            run_churn_analysis, run_journey_analysis, run_opportunity_ranking,
-            run_hypothesis_generation, run_experiment_design, run_bayesian_analysis,
-            run_segment_deep_dive, run_driver_discovery, run_readout_generator,
-            run_executive_summary, run_long_term_effects, run_portfolio_management,
             run_audience_selection,
+            run_bayesian_analysis,
+            run_churn_analysis,
+            run_cohort_analysis,
+            run_driver_discovery,
+            run_executive_summary,
+            run_experiment_design,
+            run_funnel_analysis,
+            run_hypothesis_generation,
+            run_journey_analysis,
+            run_long_term_effects,
+            run_opportunity_ranking,
+            run_portfolio_management,
+            run_readout_generator,
+            run_retention_analysis,
+            run_segment_deep_dive,
         )
 
         _V4_MODULES = [
             # PRE-PLANNING: Opportunity Discovery
-            ("funnel_analysis",       run_funnel_analysis,       "pre_planning", "opportunity",
-             "Funnel stage analysis with segment breakdown and drop-off identification."),
-            ("cohort_analysis",       run_cohort_analysis,       "pre_planning", "opportunity",
-             "Monthly cohort analysis with trend detection."),
-            ("retention_analysis",    run_retention_analysis,    "pre_planning", "opportunity",
-             "Repeat purchase and retention rate analysis by segment."),
-            ("churn_analysis",        run_churn_analysis,        "pre_planning", "opportunity",
-             "Activity-based churn detection with 30/60/90 day windows."),
-            ("journey_analysis",      run_journey_analysis,      "pre_planning", "opportunity",
-             "User journey patterns: touchpoints, journey length, conversion paths."),
-            ("opportunity_ranking",   run_opportunity_ranking,   "pre_planning", "opportunity",
-             "Automated opportunity scoring by impact, confidence, and reach."),
+            (
+                "funnel_analysis",
+                run_funnel_analysis,
+                "pre_planning",
+                "opportunity",
+                "Funnel stage analysis with segment breakdown and drop-off identification.",
+            ),
+            (
+                "cohort_analysis",
+                run_cohort_analysis,
+                "pre_planning",
+                "opportunity",
+                "Monthly cohort analysis with trend detection.",
+            ),
+            (
+                "retention_analysis",
+                run_retention_analysis,
+                "pre_planning",
+                "opportunity",
+                "Repeat purchase and retention rate analysis by segment.",
+            ),
+            (
+                "churn_analysis",
+                run_churn_analysis,
+                "pre_planning",
+                "opportunity",
+                "Activity-based churn detection with 30/60/90 day windows.",
+            ),
+            (
+                "journey_analysis",
+                run_journey_analysis,
+                "pre_planning",
+                "opportunity",
+                "User journey patterns: touchpoints, journey length, conversion paths.",
+            ),
+            (
+                "opportunity_ranking",
+                run_opportunity_ranking,
+                "pre_planning",
+                "opportunity",
+                "Automated opportunity scoring by impact, confidence, and reach.",
+            ),
             # PRE-PLANNING: Hypothesis & Design
-            ("hypothesis_generation", run_hypothesis_generation, "pre_planning", "hypothesis",
-             "LLM-powered hypothesis generation with structured outputs. Tier 3."),
-            ("experiment_design",     run_experiment_design,     "pre_planning", "design",
-             "Experiment design recommender: A/B, DiD, ITS, PSM, Geo, and more."),
+            (
+                "hypothesis_generation",
+                run_hypothesis_generation,
+                "pre_planning",
+                "hypothesis",
+                "LLM-powered hypothesis generation with structured outputs. Tier 3.",
+            ),
+            (
+                "experiment_design",
+                run_experiment_design,
+                "pre_planning",
+                "design",
+                "Experiment design recommender: A/B, DiD, ITS, PSM, Geo, and more.",
+            ),
             # PRE-PLANNING: Audience Selection V2 override
-            ("audience_selection",    run_audience_selection, "pre_planning", "readiness",
-             "Advanced audience selection: propensity scoring, T/S-Learner, uplift-based targeting."),
+            (
+                "audience_selection",
+                run_audience_selection,
+                "pre_planning",
+                "readiness",
+                "Advanced audience selection: propensity scoring, T/S-Learner, uplift-based targeting.",
+            ),
             # POST ANALYSIS: Statistical
-            ("bayesian_analysis",     run_bayesian_analysis,     "post_analysis", "statistical",
-             "Bayesian A/B test with Beta posteriors, credible intervals, P(B>A)."),
+            (
+                "bayesian_analysis",
+                run_bayesian_analysis,
+                "post_analysis",
+                "statistical",
+                "Bayesian A/B test with Beta posteriors, credible intervals, P(B>A).",
+            ),
             # POST ANALYSIS: Insight Mining
-            ("segment_deep_dive",     run_segment_deep_dive,     "post_analysis", "insights",
-             "Segment-level treatment effects with best/worst segment identification."),
-            ("driver_discovery",      run_driver_discovery,      "post_analysis", "insights",
-             "Key driver identification for conversion using group-level impact scoring."),
+            (
+                "segment_deep_dive",
+                run_segment_deep_dive,
+                "post_analysis",
+                "insights",
+                "Segment-level treatment effects with best/worst segment identification.",
+            ),
+            (
+                "driver_discovery",
+                run_driver_discovery,
+                "post_analysis",
+                "insights",
+                "Key driver identification for conversion using group-level impact scoring.",
+            ),
             # POST ANALYSIS: Readout & Decision
-            ("readout_generator",     run_readout_generator,     "post_analysis", "readout",
-             "Full experiment readout document. LLM-enhanced (Tier 2). Accepts template upload."),
-            ("executive_summary",     run_executive_summary,     "post_analysis", "readout",
-             "One-page executive summary. LLM-enhanced (Tier 2). Accepts template upload."),
+            (
+                "readout_generator",
+                run_readout_generator,
+                "post_analysis",
+                "readout",
+                "Full experiment readout document. LLM-enhanced (Tier 2). Accepts template upload.",
+            ),
+            (
+                "executive_summary",
+                run_executive_summary,
+                "post_analysis",
+                "readout",
+                "One-page executive summary. LLM-enhanced (Tier 2). Accepts template upload.",
+            ),
             # POST ANALYSIS: Impact
-            ("long_term_effects",     run_long_term_effects,     "post_analysis", "impact",
-             "Persistence and decay analysis of treatment effects over time."),
+            (
+                "long_term_effects",
+                run_long_term_effects,
+                "post_analysis",
+                "impact",
+                "Persistence and decay analysis of treatment effects over time.",
+            ),
             # TOOLS
-            ("portfolio_management",  run_portfolio_management,  "tools", "intel",
-             "Experiment portfolio overview with success rates and ROI leaderboard."),
+            (
+                "portfolio_management",
+                run_portfolio_management,
+                "tools",
+                "intel",
+                "Experiment portfolio overview with success rates and ROI leaderboard.",
+            ),
         ]
 
         for name, fn, phase, cat, desc in _V4_MODULES:
             _REGISTRY.pop(name, None)
-            register_module(ModuleSpec(
-                name,
-                lambda state, llm=None, db=None, _fn=fn, **kw:
-                    _fn(state, llm=llm, db=db, **{k: v for k, v in kw.items() if k not in _STRIP_KEYS}),
-                phase, cat, desc,
-                requires_llm=(name in ("hypothesis_generation", "readout_generator", "executive_summary")),
-            ))
-        logger.info("V4: %d new modules registered (incl. audience_selection override)", len(_V4_MODULES))
+            register_module(
+                ModuleSpec(
+                    name,
+                    lambda state, llm=None, db=None, _fn=fn, **kw: _fn(
+                        state,
+                        llm=llm,
+                        db=db,
+                        **{k: v for k, v in kw.items() if k not in _STRIP_KEYS},
+                    ),
+                    phase,
+                    cat,
+                    desc,
+                    requires_llm=(
+                        name in ("hypothesis_generation", "readout_generator", "executive_summary")
+                    ),
+                )
+            )
+        logger.info(
+            "V4: %d new modules registered (incl. audience_selection override)", len(_V4_MODULES)
+        )
     except Exception as e:
         logger.debug("V4 new_modules import failed: %s", e)
 

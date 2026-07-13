@@ -3,12 +3,16 @@ New analysis modules for the restructured PersistIQ experimentation framework.
 Each module follows the pattern: def run_xxx(state, db=None, llm=None, **kw) -> dict
 All Tier 1 modules are deterministic (no LLM). Tier 2/3 accept _template_path for file-based input.
 """
+
 from __future__ import annotations
-import logging, math, os, json, hashlib
-from datetime import datetime
-from typing import Any, Dict, Optional
+
+import json
+import logging
+import math
+import os
 
 logger = logging.getLogger("continum.new_modules")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER: safe DB query
@@ -19,6 +23,7 @@ def _q(db, sql, default=None):
     except Exception:
         return default or []
 
+
 def _qone(db, sql, default=None):
     try:
         row = db.execute(sql).fetchone()
@@ -26,14 +31,17 @@ def _qone(db, sql, default=None):
     except Exception:
         return default
 
+
 def _print_header(title):
     w = max(len(title) + 4, 50)
     print("═" * w)
     print(f"  {title}")
     print("═" * w)
 
+
 def _print_section(title):
     print(f"\n── {title} {'─' * max(0, 44 - len(title))}")
+
 
 def _template_context(kw):
     """Load user-uploaded template file if provided."""
@@ -95,9 +103,22 @@ def run_funnel_analysis(state, db=None, llm=None, **kw):
         """).fetchall()
         segments = []
         for r in seg_rows:
-            seg_name, n, conv, aov = str(r[0] or "unknown"), int(r[1]), int(r[2] or 0), float(r[3] or 0)
+            seg_name, n, conv, aov = (
+                str(r[0] or "unknown"),
+                int(r[1]),
+                int(r[2] or 0),
+                float(r[3] or 0),
+            )
             rate = conv / max(n, 1)
-            segments.append({"segment": seg_name, "n": n, "conversions": conv, "rate": round(rate, 4), "aov": round(aov, 2)})
+            segments.append(
+                {
+                    "segment": seg_name,
+                    "n": n,
+                    "conversions": conv,
+                    "rate": round(rate, 4),
+                    "aov": round(aov, 2),
+                }
+            )
             print(f"  {seg_name:20s}  n={n:>6,}  conv={conv:>5,}  rate={rate:.2%}  aov=${aov:,.0f}")
     except Exception:
         segments = []
@@ -113,13 +134,15 @@ def run_funnel_analysis(state, db=None, llm=None, **kw):
         # Identify worst-performing segment
         if segments:
             worst = min(segments, key=lambda s: s["rate"])
-            best  = max(segments, key=lambda s: s["rate"])
+            best = max(segments, key=lambda s: s["rate"])
             print(f"\n  ✅ Best segment:    {best['segment']} ({best['rate']:.2%})")
             print(f"  ❌ Worst segment:   {worst['segment']} ({worst['rate']:.2%})")
             gap = best["rate"] - worst["rate"]
-            print(f"  Gap:                {gap:.2%} — closing this gap is a {gap * worst['n']:,.0f} conversion opportunity")
+            print(
+                f"  Gap:                {gap:.2%} — closing this gap is a {gap * worst['n']:,.0f} conversion opportunity"
+            )
 
-    print(f"\n✅ Funnel analysis complete.")
+    print("\n✅ Funnel analysis complete.")
     return {"ok": True, "stages": stages, "segments": segments}
 
 
@@ -129,7 +152,8 @@ def run_funnel_analysis(state, db=None, llm=None, **kw):
 def run_cohort_analysis(state, db=None, llm=None, **kw):
     _print_header("COHORT ANALYSIS")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Monthly Cohorts")
     try:
@@ -146,13 +170,21 @@ def run_cohort_analysis(state, db=None, llm=None, **kw):
             month_str = str(r[0])[:7] if r[0] else "unknown"
             n, conv, aov = int(r[1]), int(r[2] or 0), float(r[3] or 0)
             rate = conv / max(n, 1)
-            cohorts.append({"month": month_str, "n": n, "converted": conv, "rate": round(rate, 4), "aov": round(aov, 2)})
+            cohorts.append(
+                {
+                    "month": month_str,
+                    "n": n,
+                    "converted": conv,
+                    "rate": round(rate, 4),
+                    "aov": round(aov, 2),
+                }
+            )
             bar = "█" * int(rate * 40)
             print(f"  {month_str}  n={n:>5,}  conv={conv:>4,}  rate={rate:.2%}  {bar}")
         if len(cohorts) >= 2:
             _print_section("Trend")
             first_rate = cohorts[0]["rate"]
-            last_rate  = cohorts[-1]["rate"]
+            last_rate = cohorts[-1]["rate"]
             delta = last_rate - first_rate
             direction = "📈 Improving" if delta > 0 else "📉 Declining" if delta < 0 else "→ Stable"
             print(f"  {direction}: {first_rate:.2%} → {last_rate:.2%} (Δ = {delta:+.2%})")
@@ -170,7 +202,8 @@ def run_cohort_analysis(state, db=None, llm=None, **kw):
 def run_retention_analysis(state, db=None, llm=None, **kw):
     _print_header("RETENTION ANALYSIS")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Repeat Purchase Analysis")
     try:
@@ -210,9 +243,14 @@ def run_retention_analysis(state, db=None, llm=None, **kw):
     except Exception:
         print("  ⚠️  Segment retention unavailable.")
 
-    print(f"\n✅ Retention analysis complete.")
-    return {"ok": True, "total_buyers": total_buyers, "repeat_buyers": repeat_buyers,
-            "retention_rate": round(retention_rate, 4), "avg_orders_per_buyer": round(avg_orders, 2)}
+    print("\n✅ Retention analysis complete.")
+    return {
+        "ok": True,
+        "total_buyers": total_buyers,
+        "repeat_buyers": repeat_buyers,
+        "retention_rate": round(retention_rate, 4),
+        "avg_orders_per_buyer": round(avg_orders, 2),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -221,7 +259,8 @@ def run_retention_analysis(state, db=None, llm=None, **kw):
 def run_churn_analysis(state, db=None, llm=None, **kw):
     _print_header("CHURN ANALYSIS")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Activity-Based Churn Detection")
     try:
@@ -237,7 +276,7 @@ def run_churn_analysis(state, db=None, llm=None, **kw):
         churn_30 = sum(1 for r in rows if (r[3] or 0) > 30)
         churn_60 = sum(1 for r in rows if (r[3] or 0) > 60)
         churn_90 = sum(1 for r in rows if (r[3] or 0) > 90)
-        active   = total - churn_30
+        active = total - churn_30
         print(f"  Total users:        {total:,}")
         print(f"  Active (30d):       {active:,} ({active/max(total,1):.1%})")
         print(f"  Churned >30d:       {churn_30:,} ({churn_30/max(total,1):.1%})")
@@ -247,7 +286,7 @@ def run_churn_analysis(state, db=None, llm=None, **kw):
         total, churn_30 = 0, 0
         print(f"  ⚠️  Could not compute churn: {e}")
 
-    print(f"\n✅ Churn analysis complete.")
+    print("\n✅ Churn analysis complete.")
     return {"ok": True, "total_users": total, "churned_30d": churn_30}
 
 
@@ -257,7 +296,8 @@ def run_churn_analysis(state, db=None, llm=None, **kw):
 def run_journey_analysis(state, db=None, llm=None, **kw):
     _print_header("JOURNEY ANALYSIS")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("User Journey Patterns")
     try:
@@ -276,7 +316,7 @@ def run_journey_analysis(state, db=None, llm=None, **kw):
         non_converters = [r for r in rows if r[4] == 0]
 
         avg_tp_conv = sum(r[1] for r in converters) / max(len(converters), 1)
-        avg_tp_non  = sum(r[1] for r in non_converters) / max(len(non_converters), 1)
+        avg_tp_non = sum(r[1] for r in non_converters) / max(len(non_converters), 1)
         avg_days_conv = sum(r[5] or 0 for r in converters) / max(len(converters), 1)
 
         print(f"  Total users:                {total:,}")
@@ -288,7 +328,7 @@ def run_journey_analysis(state, db=None, llm=None, **kw):
         print(f"  ⚠️  Could not compute journeys: {e}")
         total = 0
 
-    print(f"\n✅ Journey analysis complete.")
+    print("\n✅ Journey analysis complete.")
     return {"ok": True, "total_users": total}
 
 
@@ -298,7 +338,8 @@ def run_journey_analysis(state, db=None, llm=None, **kw):
 def run_opportunity_ranking(state, db=None, llm=None, **kw):
     _print_header("AUTOMATED OPPORTUNITY RANKING")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Scoring Opportunities")
     # Score based on: impact (conversion gap × volume), confidence (sample size), reach
@@ -310,7 +351,9 @@ def run_opportunity_ranking(state, db=None, llm=None, **kw):
                    AVG(COALESCE(order_value, 0)) AS aov
             FROM gold_experiment_analysis GROUP BY account_segment ORDER BY n DESC LIMIT 15
         """).fetchall()
-        overall_rate = _qone(db, "SELECT AVG(CAST(converted_to_order AS DOUBLE)) FROM gold_experiment_analysis")
+        overall_rate = _qone(
+            db, "SELECT AVG(CAST(converted_to_order AS DOUBLE)) FROM gold_experiment_analysis"
+        )
         overall_rate = float(overall_rate[0] or 0.1) if overall_rate else 0.1
 
         opportunities = []
@@ -321,13 +364,23 @@ def run_opportunity_ranking(state, db=None, llm=None, **kw):
             confidence = min(n / 100, 1.0)
             reach = n
             score = round((impact * 0.5 + confidence * 0.3 + (reach / 1000) * 0.2), 2)
-            opportunities.append({"segment": seg, "gap": round(gap, 4), "impact": round(impact, 0),
-                                  "confidence": round(confidence, 2), "reach": reach, "score": score})
+            opportunities.append(
+                {
+                    "segment": seg,
+                    "gap": round(gap, 4),
+                    "impact": round(impact, 0),
+                    "confidence": round(confidence, 2),
+                    "reach": reach,
+                    "score": score,
+                }
+            )
         opportunities.sort(key=lambda x: x["score"], reverse=True)
         print(f"  {'Rank':<5} {'Segment':<20} {'Gap':>8} {'Impact $':>12} {'Score':>8}")
         print(f"  {'─'*5} {'─'*20} {'─'*8} {'─'*12} {'─'*8}")
         for i, o in enumerate(opportunities[:10], 1):
-            print(f"  {i:<5} {o['segment']:<20} {o['gap']:>+.2%} {o['impact']:>12,.0f} {o['score']:>8.2f}")
+            print(
+                f"  {i:<5} {o['segment']:<20} {o['gap']:>+.2%} {o['impact']:>12,.0f} {o['score']:>8.2f}"
+            )
     except Exception as e:
         opportunities = []
         print(f"  ⚠️  Could not rank opportunities: {e}")
@@ -348,15 +401,24 @@ def run_hypothesis_generation(state, db=None, llm=None, **kw):
     context_data = {}
     if db:
         try:
-            row = _qone(db, """
+            row = _qone(
+                db,
+                """
                 SELECT COUNT(*) AS n,
                        AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                        AVG(COALESCE(order_value, 0)) AS aov
                 FROM gold_experiment_analysis
-            """)
+            """,
+            )
             if row:
-                context_data = {"n": int(row[0]), "ior": round(float(row[1] or 0), 4), "aov": round(float(row[2] or 0), 2)}
-                print(f"  Dataset: {context_data['n']:,} inquiries, IOR={context_data['ior']:.2%}, AOV=${context_data['aov']:,.0f}")
+                context_data = {
+                    "n": int(row[0]),
+                    "ior": round(float(row[1] or 0), 4),
+                    "aov": round(float(row[2] or 0), 2),
+                }
+                print(
+                    f"  Dataset: {context_data['n']:,} inquiries, IOR={context_data['ior']:.2%}, AOV=${context_data['aov']:,.0f}"
+                )
         except Exception:
             pass
 
@@ -401,7 +463,7 @@ Format as structured text."""
             "success": f"IOR increases to >{ior*1.10:.2%} without degrading lead quality metrics",
         },
         {
-            "statement": f"If we add social proof (reviews/testimonials) to the conversion page, then conversion rate will increase by 5-8% because trust signals reduce purchase anxiety.",
+            "statement": "If we add social proof (reviews/testimonials) to the conversion page, then conversion rate will increase by 5-8% because trust signals reduce purchase anxiety.",
             "category": "Feature",
             "assumptions": "Users have low trust at decision point; competitors show social proof",
             "counter": "Users at this stage have already decided; social proof is noise",
@@ -409,7 +471,7 @@ Format as structured text."""
             "success": f"IOR increases to >{ior*1.05:.2%}; time-to-conversion decreases",
         },
         {
-            "statement": f"If we offer a limited-time discount (10% off for 48hrs), then AOV will increase by 15% because urgency drives larger basket sizes.",
+            "statement": "If we offer a limited-time discount (10% off for 48hrs), then AOV will increase by 15% because urgency drives larger basket sizes.",
             "category": "Pricing",
             "assumptions": "Users are price-sensitive; urgency messaging is not overused",
             "counter": "Discounts train users to wait for deals; margin erosion",
@@ -434,7 +496,7 @@ Format as structured text."""
 # ═══════════════════════════════════════════════════════════════════════════════
 def run_experiment_design(state, db=None, llm=None, **kw):
     _print_header("EXPERIMENT DESIGN RECOMMENDER")
-    desc = kw.get("description", "")
+    kw.get("description", "")
     randomization = kw.get("randomization_unit", "user")
     has_pre_data = kw.get("has_pre_data", "yes").lower() == "yes"
     full_rollout = kw.get("full_rollout", "no").lower() == "yes"
@@ -443,75 +505,91 @@ def run_experiment_design(state, db=None, llm=None, **kw):
     designs = []
 
     if not full_rollout:
-        designs.append({
-            "method": "A/B Test (Randomized)",
-            "fit": 0.95,
-            "pros": "Gold standard for causal inference; simple interpretation",
-            "cons": "Requires randomization infrastructure; needs sufficient traffic",
-            "biases": ["Novelty effect", "Hawthorne effect"],
-            "best_for": "Product changes with user-level randomization",
-        })
-        designs.append({
-            "method": "A/B/n Test (Multi-variant)",
-            "fit": 0.80,
-            "pros": "Tests multiple variants simultaneously; efficient",
-            "cons": "Requires more traffic; multiple comparison correction needed",
-            "biases": ["Multiple testing inflation"],
-            "best_for": "Testing 3+ variants of a feature",
-        })
-        if randomization == "geo":
-            designs.append({
-                "method": "Geo Experiment (Geo Lift)",
-                "fit": 0.90,
-                "pros": "No user-level randomization needed; good for market-level changes",
-                "cons": "Fewer units; spillover risk between regions",
-                "biases": ["Selection bias if regions differ", "Spillover"],
-                "best_for": "Pricing, marketing campaigns, store-level changes",
-            })
-    else:
-        designs.append({
-            "method": "Pre-Post Analysis",
-            "fit": 0.70 if has_pre_data else 0.40,
-            "pros": "Works with 100% rollout; simple",
-            "cons": "Confounded by time trends; no counterfactual",
-            "biases": ["Regression to mean", "Seasonality", "External shocks"],
-            "best_for": "Quick assessment of 100% rollouts",
-        })
-        if has_pre_data:
-            designs.append({
-                "method": "Interrupted Time Series (ITS)",
-                "fit": 0.85,
-                "pros": "Handles trends; strong with long pre-period",
-                "cons": "Needs 20+ pre-periods; assumes no concurrent changes",
-                "biases": ["Concurrent intervention confounding"],
-                "best_for": "Policy changes with long historical data",
-            })
-            designs.append({
-                "method": "BSTS / Causal Impact",
+        designs.append(
+            {
+                "method": "A/B Test (Randomized)",
+                "fit": 0.95,
+                "pros": "Gold standard for causal inference; simple interpretation",
+                "cons": "Requires randomization infrastructure; needs sufficient traffic",
+                "biases": ["Novelty effect", "Hawthorne effect"],
+                "best_for": "Product changes with user-level randomization",
+            }
+        )
+        designs.append(
+            {
+                "method": "A/B/n Test (Multi-variant)",
                 "fit": 0.80,
-                "pros": "Bayesian framework; handles seasonality; credible intervals",
-                "cons": "Needs control series; computationally heavier",
-                "biases": ["Model specification"],
-                "best_for": "Marketing campaigns; revenue impact estimation",
-            })
+                "pros": "Tests multiple variants simultaneously; efficient",
+                "cons": "Requires more traffic; multiple comparison correction needed",
+                "biases": ["Multiple testing inflation"],
+                "best_for": "Testing 3+ variants of a feature",
+            }
+        )
+        if randomization == "geo":
+            designs.append(
+                {
+                    "method": "Geo Experiment (Geo Lift)",
+                    "fit": 0.90,
+                    "pros": "No user-level randomization needed; good for market-level changes",
+                    "cons": "Fewer units; spillover risk between regions",
+                    "biases": ["Selection bias if regions differ", "Spillover"],
+                    "best_for": "Pricing, marketing campaigns, store-level changes",
+                }
+            )
+    else:
+        designs.append(
+            {
+                "method": "Pre-Post Analysis",
+                "fit": 0.70 if has_pre_data else 0.40,
+                "pros": "Works with 100% rollout; simple",
+                "cons": "Confounded by time trends; no counterfactual",
+                "biases": ["Regression to mean", "Seasonality", "External shocks"],
+                "best_for": "Quick assessment of 100% rollouts",
+            }
+        )
+        if has_pre_data:
+            designs.append(
+                {
+                    "method": "Interrupted Time Series (ITS)",
+                    "fit": 0.85,
+                    "pros": "Handles trends; strong with long pre-period",
+                    "cons": "Needs 20+ pre-periods; assumes no concurrent changes",
+                    "biases": ["Concurrent intervention confounding"],
+                    "best_for": "Policy changes with long historical data",
+                }
+            )
+            designs.append(
+                {
+                    "method": "BSTS / Causal Impact",
+                    "fit": 0.80,
+                    "pros": "Bayesian framework; handles seasonality; credible intervals",
+                    "cons": "Needs control series; computationally heavier",
+                    "biases": ["Model specification"],
+                    "best_for": "Marketing campaigns; revenue impact estimation",
+                }
+            )
 
     # Always add quasi-experimental options
-    designs.append({
-        "method": "Difference-in-Differences (DiD)",
-        "fit": 0.75,
-        "pros": "Controls for time-invariant confounders; widely accepted",
-        "cons": "Parallel trends assumption; needs control group",
-        "biases": ["Parallel trends violation"],
-        "best_for": "Partial rollouts; regional comparisons",
-    })
-    designs.append({
-        "method": "Propensity Score Matching",
-        "fit": 0.60,
-        "pros": "Works with observational data; no randomization needed",
-        "cons": "Only controls for observed confounders; requires overlap",
-        "biases": ["Unobserved confounders", "Model dependency"],
-        "best_for": "When randomization is not possible",
-    })
+    designs.append(
+        {
+            "method": "Difference-in-Differences (DiD)",
+            "fit": 0.75,
+            "pros": "Controls for time-invariant confounders; widely accepted",
+            "cons": "Parallel trends assumption; needs control group",
+            "biases": ["Parallel trends violation"],
+            "best_for": "Partial rollouts; regional comparisons",
+        }
+    )
+    designs.append(
+        {
+            "method": "Propensity Score Matching",
+            "fit": 0.60,
+            "pros": "Works with observational data; no randomization needed",
+            "cons": "Only controls for observed confounders; requires overlap",
+            "biases": ["Unobserved confounders", "Model dependency"],
+            "best_for": "When randomization is not possible",
+        }
+    )
 
     designs.sort(key=lambda d: d["fit"], reverse=True)
 
@@ -542,50 +620,75 @@ def run_experiment_design(state, db=None, llm=None, **kw):
 def run_measurement_readiness(state, db=None, llm=None, **kw):
     _print_header("MEASUREMENT READINESS CHECK")
     checks = []
-    all_pass = True
 
     _print_section("Data Availability")
     if db:
         try:
-            row = _qone(db, "SELECT COUNT(*), COUNT(DISTINCT user_id), MIN(created_at), MAX(created_at) FROM gold_experiment_analysis")
+            row = _qone(
+                db,
+                "SELECT COUNT(*), COUNT(DISTINCT user_id), MIN(created_at), MAX(created_at) FROM gold_experiment_analysis",
+            )
             n, users, mn, mx = int(row[0]), int(row[1]), row[2], row[3]
-            checks.append({"check": "Data exists", "pass": n > 0, "detail": f"{n:,} rows, {users:,} users"})
-            checks.append({"check": "Sufficient history", "pass": n > 100, "detail": f"Range: {mn} to {mx}"})
+            checks.append(
+                {"check": "Data exists", "pass": n > 0, "detail": f"{n:,} rows, {users:,} users"}
+            )
+            checks.append(
+                {"check": "Sufficient history", "pass": n > 100, "detail": f"Range: {mn} to {mx}"}
+            )
             print(f"  ✅ Data exists: {n:,} rows, {users:,} users")
         except Exception:
             checks.append({"check": "Data exists", "pass": False, "detail": "Query failed"})
-            all_pass = False
             print("  ❌ Data query failed")
     else:
         checks.append({"check": "Database", "pass": False, "detail": "No DB connection"})
-        all_pass = False
         print("  ❌ No database connection")
 
     _print_section("Metric Validation")
     if db:
         try:
-            row = _qone(db, """
+            row = _qone(
+                db,
+                """
                 SELECT AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                        STDDEV(CAST(converted_to_order AS DOUBLE)) AS ior_sd,
                        COUNT(DISTINCT variant) AS n_variants
                 FROM gold_experiment_analysis
-            """)
+            """,
+            )
             ior, sd = float(row[0] or 0), float(row[1] or 0)
             has_variants = int(row[2] or 0) > 1
-            checks.append({"check": "Primary metric defined", "pass": ior > 0, "detail": f"IOR = {ior:.4f}"})
-            checks.append({"check": "Metric has variance", "pass": sd > 0, "detail": f"SD = {sd:.4f}"})
-            checks.append({"check": "Variants exist", "pass": has_variants, "detail": f"{int(row[2] or 0)} variants"})
+            checks.append(
+                {"check": "Primary metric defined", "pass": ior > 0, "detail": f"IOR = {ior:.4f}"}
+            )
+            checks.append(
+                {"check": "Metric has variance", "pass": sd > 0, "detail": f"SD = {sd:.4f}"}
+            )
+            checks.append(
+                {
+                    "check": "Variants exist",
+                    "pass": has_variants,
+                    "detail": f"{int(row[2] or 0)} variants",
+                }
+            )
             for c in checks[-3:]:
                 status = "✅" if c["pass"] else "❌"
                 print(f"  {status} {c['check']}: {c['detail']}")
                 if not c["pass"]:
-                    all_pass = False
+                    pass
         except Exception:
             pass
 
     _print_section("Privacy & Governance")
-    checks.append({"check": "User-level data anonymizable", "pass": True, "detail": "Using user_id (pseudonymized)"})
-    checks.append({"check": "Consent framework", "pass": True, "detail": "Assumed — verify with legal"})
+    checks.append(
+        {
+            "check": "User-level data anonymizable",
+            "pass": True,
+            "detail": "Using user_id (pseudonymized)",
+        }
+    )
+    checks.append(
+        {"check": "Consent framework", "pass": True, "detail": "Assumed — verify with legal"}
+    )
     print("  ✅ User IDs are pseudonymized")
     print("  ⚠️  Consent framework assumed — verify with legal team")
 
@@ -593,10 +696,12 @@ def run_measurement_readiness(state, db=None, llm=None, **kw):
     pass_count = sum(1 for c in checks if c["pass"])
     total_checks = len(checks)
     score = pass_count / max(total_checks, 1)
-    status = "🟢 READY" if score >= 0.8 else "🟡 PARTIALLY READY" if score >= 0.5 else "🔴 NOT READY"
+    status = (
+        "🟢 READY" if score >= 0.8 else "🟡 PARTIALLY READY" if score >= 0.5 else "🔴 NOT READY"
+    )
     print(f"\n  {status} — {pass_count}/{total_checks} checks passed ({score:.0%})")
 
-    print(f"\n✅ Measurement readiness check complete.")
+    print("\n✅ Measurement readiness check complete.")
     return {"ok": True, "checks": checks, "score": round(score, 2), "ready": score >= 0.8}
 
 
@@ -607,7 +712,8 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
     _print_header("BAYESIAN A/B ANALYSIS")
     exp_name = kw.get("experiment_name", "")
     if not db or not exp_name:
-        print("⚠️  Need database and experiment name."); return {"ok": False}
+        print("⚠️  Need database and experiment name.")
+        return {"ok": False}
 
     _print_section("Data Loading")
     try:
@@ -621,24 +727,35 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
             GROUP BY variant ORDER BY variant
         """).fetchall()
     except Exception as e:
-        print(f"  ⚠️  Query error: {e}"); return {"ok": False}
+        print(f"  ⚠️  Query error: {e}")
+        return {"ok": False}
 
     if len(rows) < 2:
-        print("  ⚠️  Need at least 2 variants."); return {"ok": False}
+        print("  ⚠️  Need at least 2 variants.")
+        return {"ok": False}
 
     variants = []
     for r in rows:
-        v = {"name": str(r[0]), "n": int(r[1]), "successes": int(r[2] or 0), "rate": float(r[3] or 0)}
+        v = {
+            "name": str(r[0]),
+            "n": int(r[1]),
+            "successes": int(r[2] or 0),
+            "rate": float(r[3] or 0),
+        }
         v["failures"] = v["n"] - v["successes"]
         # Beta posterior: Beta(alpha=successes+1, beta=failures+1) — uniform prior
         v["alpha"] = v["successes"] + 1
         v["beta_param"] = v["failures"] + 1
         v["posterior_mean"] = v["alpha"] / (v["alpha"] + v["beta_param"])
-        v["posterior_var"] = (v["alpha"] * v["beta_param"]) / ((v["alpha"] + v["beta_param"])**2 * (v["alpha"] + v["beta_param"] + 1))
+        v["posterior_var"] = (v["alpha"] * v["beta_param"]) / (
+            (v["alpha"] + v["beta_param"]) ** 2 * (v["alpha"] + v["beta_param"] + 1)
+        )
         v["ci_low"] = max(0, v["posterior_mean"] - 1.96 * math.sqrt(v["posterior_var"]))
         v["ci_high"] = min(1, v["posterior_mean"] + 1.96 * math.sqrt(v["posterior_var"]))
         variants.append(v)
-        print(f"  {v['name']:15s}  n={v['n']:>6,}  rate={v['rate']:.4f}  posterior={v['posterior_mean']:.4f}  95% CI=[{v['ci_low']:.4f}, {v['ci_high']:.4f}]")
+        print(
+            f"  {v['name']:15s}  n={v['n']:>6,}  rate={v['rate']:.4f}  posterior={v['posterior_mean']:.4f}  95% CI=[{v['ci_low']:.4f}, {v['ci_high']:.4f}]"
+        )
 
     _print_section("Bayesian Comparison")
     if len(variants) >= 2:
@@ -654,8 +771,12 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
         prob_better = 1 / (1 + math.exp(-1.7 * z))
 
         print(f"  P({treat['name']} > {ctrl['name']}) = {prob_better:.1%}")
-        print(f"  Expected lift: {diff_mean:+.4f} ({diff_mean/max(ctrl['posterior_mean'],0.001)*100:+.2f}%)")
-        print(f"  95% Credible Interval for lift: [{diff_mean - 1.96*diff_sd:.4f}, {diff_mean + 1.96*diff_sd:.4f}]")
+        print(
+            f"  Expected lift: {diff_mean:+.4f} ({diff_mean/max(ctrl['posterior_mean'],0.001)*100:+.2f}%)"
+        )
+        print(
+            f"  95% Credible Interval for lift: [{diff_mean - 1.96*diff_sd:.4f}, {diff_mean + 1.96*diff_sd:.4f}]"
+        )
 
         if prob_better > 0.95:
             print(f"\n  ✅ Strong evidence that {treat['name']} is better (P > 95%)")
@@ -664,9 +785,9 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
         elif prob_better < 0.10:
             print(f"\n  ❌ Strong evidence that {ctrl['name']} is better")
         else:
-            print(f"\n  ⚪ Inconclusive — continue collecting data")
+            print("\n  ⚪ Inconclusive — continue collecting data")
 
-    print(f"\n✅ Bayesian analysis complete.")
+    print("\n✅ Bayesian analysis complete.")
     return {"ok": True, "variants": [{k: v for k, v in var.items()} for var in variants]}
 
 
@@ -677,7 +798,8 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
     _print_header("SEGMENT DEEP DIVE")
     exp_name = kw.get("experiment_name", "")
     if not db or not exp_name:
-        print("⚠️  Need database and experiment name."); return {"ok": False}
+        print("⚠️  Need database and experiment name.")
+        return {"ok": False}
 
     _print_section("Segment-Level Effects")
     try:
@@ -691,7 +813,8 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
             GROUP BY segment, variant ORDER BY segment, variant
         """).fetchall()
     except Exception as e:
-        print(f"  ⚠️  Query error: {e}"); return {"ok": False}
+        print(f"  ⚠️  Query error: {e}")
+        return {"ok": False}
 
     # Pivot by segment
     segments = {}
@@ -713,7 +836,15 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
         treat_rate = vars_data[var_names[1]]["rate"]
         lift = (treat_rate - ctrl_rate) / max(ctrl_rate, 0.001)
         winner = var_names[1] if treat_rate > ctrl_rate else var_names[0]
-        results.append({"segment": seg, "control_rate": ctrl_rate, "treatment_rate": treat_rate, "lift": lift, "winner": winner})
+        results.append(
+            {
+                "segment": seg,
+                "control_rate": ctrl_rate,
+                "treatment_rate": treat_rate,
+                "lift": lift,
+                "winner": winner,
+            }
+        )
         lift_str = f"{lift:+.1%}"
         print(f"  {seg:<20} {ctrl_rate:>10.4f} {treat_rate:>10.4f} {lift_str:>10} {winner:>10}")
 
@@ -725,7 +856,9 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
         print(f"  ⚠️ Worst segment: {worst['segment']} (lift: {worst['lift']:+.1%})")
         contradictions = [r for r in results if r["lift"] < 0]
         if contradictions:
-            print(f"  🔀 {len(contradictions)} segment(s) show negative effect — potential Simpson's paradox")
+            print(
+                f"  🔀 {len(contradictions)} segment(s) show negative effect — potential Simpson's paradox"
+            )
 
     print(f"\n✅ Segment deep dive complete — {len(results)} segments analysed.")
     return {"ok": True, "segments": results}
@@ -738,11 +871,16 @@ def run_driver_discovery(state, db=None, llm=None, **kw):
     _print_header("DRIVER DISCOVERY")
     exp_name = kw.get("experiment_name", "")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Identifying Key Drivers of Conversion")
     try:
-        base_query = "FROM gold_experiment_analysis" if not exp_name else f"FROM gold_experiment_analysis WHERE experiment_name = '{exp_name}'"
+        base_query = (
+            "FROM gold_experiment_analysis"
+            if not exp_name
+            else f"FROM gold_experiment_analysis WHERE experiment_name = '{exp_name}'"
+        )
         # Compute correlation proxies using group-level rates
         rows = db.execute(f"""
             SELECT account_segment AS segment,
@@ -757,10 +895,24 @@ def run_driver_discovery(state, db=None, llm=None, **kw):
         drivers = []
         overall_rate = sum(r[1] * r[2] for r in rows) / max(sum(r[1] for r in rows), 1)
         for r in rows:
-            seg, n, rate, aov, sd = str(r[0] or "?"), int(r[1]), float(r[2] or 0), float(r[3] or 0), float(r[4] or 0)
+            seg, n, rate, aov, sd = (
+                str(r[0] or "?"),
+                int(r[1]),
+                float(r[2] or 0),
+                float(r[3] or 0),
+                float(r[4] or 0),
+            )
             impact = (rate - overall_rate) * n  # incremental conversions vs. average
-            drivers.append({"segment": seg, "n": n, "rate": round(rate, 4), "aov": round(aov, 2),
-                            "impact": round(impact, 1), "variance": round(sd, 2)})
+            drivers.append(
+                {
+                    "segment": seg,
+                    "n": n,
+                    "rate": round(rate, 4),
+                    "aov": round(aov, 2),
+                    "impact": round(impact, 1),
+                    "variance": round(sd, 2),
+                }
+            )
 
         drivers.sort(key=lambda d: abs(d["impact"]), reverse=True)
         print(f"  Overall conversion rate: {overall_rate:.4f}")
@@ -768,7 +920,9 @@ def run_driver_discovery(state, db=None, llm=None, **kw):
         print(f"  {'─'*20} {'─'*6} {'─'*8} {'─'*10} {'─'*8}")
         for d in drivers[:10]:
             direction = "📈" if d["impact"] > 0 else "📉"
-            print(f"  {d['segment']:<20} {d['n']:>6,} {d['rate']:>8.4f} {d['impact']:>+10.1f} ${d['aov']:>7,.0f} {direction}")
+            print(
+                f"  {d['segment']:<20} {d['n']:>6,} {d['rate']:>8.4f} {d['impact']:>+10.1f} ${d['aov']:>7,.0f} {direction}"
+            )
     except Exception as e:
         drivers = []
         print(f"  ⚠️  Driver analysis error: {e}")
@@ -789,15 +943,22 @@ def run_readout_generator(state, db=None, llm=None, **kw):
     results = {}
     if db and exp_name:
         try:
-            row = _qone(db, f"""
+            row = _qone(
+                db,
+                f"""
                 SELECT COUNT(*) AS n,
                        COUNT(DISTINCT variant) AS variants,
                        AVG(CAST(converted_to_order AS DOUBLE)) AS overall_rate
                 FROM gold_experiment_analysis
                 WHERE experiment_name = '{exp_name}'
-            """)
+            """,
+            )
             if row:
-                results = {"n": int(row[0]), "variants": int(row[1]), "overall_rate": round(float(row[2] or 0), 4)}
+                results = {
+                    "n": int(row[0]),
+                    "variants": int(row[1]),
+                    "overall_rate": round(float(row[2] or 0), 4),
+                }
         except Exception:
             pass
 
@@ -867,15 +1028,22 @@ def run_executive_summary(state, db=None, llm=None, **kw):
     results = {}
     if db and exp_name:
         try:
-            row = _qone(db, f"""
+            row = _qone(
+                db,
+                f"""
                 SELECT COUNT(*), COUNT(DISTINCT variant),
                        AVG(CAST(converted_to_order AS DOUBLE)),
                        AVG(COALESCE(order_value, 0))
                 FROM gold_experiment_analysis WHERE experiment_name = '{exp_name}'
-            """)
+            """,
+            )
             if row:
-                results = {"n": int(row[0]), "variants": int(row[1]),
-                           "rate": round(float(row[2] or 0), 4), "aov": round(float(row[3] or 0), 2)}
+                results = {
+                    "n": int(row[0]),
+                    "variants": int(row[1]),
+                    "rate": round(float(row[2] or 0), 4),
+                    "aov": round(float(row[3] or 0), 2),
+                }
         except Exception:
             pass
 
@@ -918,7 +1086,8 @@ def run_long_term_effects(state, db=None, llm=None, **kw):
     _print_header("LONG-TERM EFFECTS ANALYSIS")
     exp_name = kw.get("experiment_name", "")
     if not db or not exp_name:
-        print("⚠️  Need database and experiment name."); return {"ok": False}
+        print("⚠️  Need database and experiment name.")
+        return {"ok": False}
 
     _print_section("Persistence Analysis")
     try:
@@ -968,7 +1137,7 @@ def run_long_term_effects(state, db=None, llm=None, **kw):
     except Exception as e:
         print(f"  ⚠️  Could not compute long-term effects: {e}")
 
-    print(f"\n✅ Long-term effects analysis complete.")
+    print("\n✅ Long-term effects analysis complete.")
     return {"ok": True}
 
 
@@ -978,7 +1147,8 @@ def run_long_term_effects(state, db=None, llm=None, **kw):
 def run_portfolio_management(state, db=None, llm=None, **kw):
     _print_header("EXPERIMENT PORTFOLIO MANAGEMENT")
     if not db:
-        print("⚠️  No database connection."); return {"ok": False}
+        print("⚠️  No database connection.")
+        return {"ok": False}
 
     _print_section("Portfolio Overview")
     try:
@@ -996,10 +1166,12 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
         experiments = []
         for r in rows:
             exp = {
-                "name": str(r[0]), "n": int(r[1]), "variants": int(r[2]),
+                "name": str(r[0]),
+                "n": int(r[1]),
+                "variants": int(r[2]),
                 "rate": round(float(r[3] or 0), 4),
                 "started": str(r[4])[:10] if r[4] else "?",
-                "ended": str(r[5])[:10] if r[5] else "?"
+                "ended": str(r[5])[:10] if r[5] else "?",
             }
             experiments.append(exp)
 
@@ -1007,7 +1179,9 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
         print(f"\n  {'Experiment':<30} {'n':>8} {'Vars':>5} {'Rate':>8} {'Period'}")
         print(f"  {'─'*30} {'─'*8} {'─'*5} {'─'*8} {'─'*20}")
         for e in experiments[:15]:
-            print(f"  {e['name'][:30]:<30} {e['n']:>8,} {e['variants']:>5} {e['rate']:>8.4f} {e['started']} → {e['ended']}")
+            print(
+                f"  {e['name'][:30]:<30} {e['n']:>8,} {e['variants']:>5} {e['rate']:>8.4f} {e['started']} → {e['ended']}"
+            )
 
         _print_section("Portfolio Stats")
         total_n = sum(e["n"] for e in experiments)
@@ -1020,7 +1194,7 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
         experiments = []
         print(f"  ⚠️  Portfolio query error: {e}")
 
-    print(f"\n✅ Portfolio management complete.")
+    print("\n✅ Portfolio management complete.")
     return {"ok": True, "experiments": experiments}
 
 
@@ -1031,23 +1205,29 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
 # ═══════════════════════════════════════════════════════════════════════════════
 def run_audience_selection(state, db=None, llm=None, **kw):
     import csv as _csv
+
     _print_header("ADVANCED AUDIENCE SELECTION")
 
-    category      = kw.get("category", "conversion")
-    feature_desc  = kw.get("feature_desc", "").strip()
-    technique     = str(kw.get("technique", "1")).strip().split()[0]
-    budget_total  = float(kw.get("budget_total", 0) or 0)
+    category = kw.get("category", "conversion")
+    feature_desc = kw.get("feature_desc", "").strip()
+    technique = str(kw.get("technique", "1")).strip().split()[0]
+    budget_total = float(kw.get("budget_total", 0) or 0)
     cost_per_user = float(kw.get("cost_per_user", 0) or 0)
-    target_size   = int(kw.get("target_size", 0) or 0)
+    target_size = int(kw.get("target_size", 0) or 0)
     control_ratio = float(kw.get("control_ratio", "0.5").split()[0])
-    eligibility   = kw.get("eligibility", "").strip()
-    exclusion     = kw.get("exclusion", "").strip()
+    eligibility = kw.get("eligibility", "").strip()
+    exclusion = kw.get("exclusion", "").strip()
     balance_check = kw.get("balance_check", "yes").lower() == "yes"
 
-    TECH = {"1": "Random Sampling", "2": "Propensity Score Matching",
-            "3": "Stratified Sampling", "4": "High-Value Targeting",
-            "5": "T-Learner (Causal Meta-Learner)", "6": "S-Learner (Single-Model)",
-            "7": "Uplift-Based Selection (Persuadables)"}
+    TECH = {
+        "1": "Random Sampling",
+        "2": "Propensity Score Matching",
+        "3": "Stratified Sampling",
+        "4": "High-Value Targeting",
+        "5": "T-Learner (Causal Meta-Learner)",
+        "6": "S-Learner (Single-Model)",
+        "7": "Uplift-Based Selection (Persuadables)",
+    }
     tech_label = TECH.get(technique, "Random Sampling")
 
     _print_section("Configuration")
@@ -1055,11 +1235,14 @@ def run_audience_selection(state, db=None, llm=None, **kw):
     print(f"  Feature:       {feature_desc or '(not specified)'}")
     print(f"  Technique:     {technique} — {tech_label}")
     print(f"  Control ratio: {control_ratio:.0%}")
-    if budget_total > 0: print(f"  Budget:        ${budget_total:,.2f}")
-    if target_size > 0:  print(f"  Target N:      {target_size:,}")
+    if budget_total > 0:
+        print(f"  Budget:        ${budget_total:,.2f}")
+    if target_size > 0:
+        print(f"  Target N:      {target_size:,}")
 
     if not db:
-        print("  ❌ No database connection."); return {"ok": False}
+        print("  ❌ No database connection.")
+        return {"ok": False}
 
     # ── Load user-level data ─────────────────────────────────────────────────
     _print_section("Loading User Data")
@@ -1076,22 +1259,32 @@ def run_audience_selection(state, db=None, llm=None, **kw):
             WHERE user_id IS NOT NULL
             GROUP BY user_id
         """).fetchall()
-        cols = ["buyer_id","n_inquiries","personal_ior","avg_order_value","last_activity","total_orders","segment"]
+        cols = [
+            "buyer_id",
+            "n_inquiries",
+            "personal_ior",
+            "avg_order_value",
+            "last_activity",
+            "total_orders",
+            "segment",
+        ]
         users = [dict(zip(cols, r)) for r in raw]
         print(f"  Loaded {len(users):,} unique users.")
     except Exception as e:
-        print(f"  ❌ Could not load user data: {e}"); return {"ok": False}
+        print(f"  ❌ Could not load user data: {e}")
+        return {"ok": False}
 
     if not users:
-        print("  ❌ No users found."); return {"ok": False}
+        print("  ❌ No users found.")
+        return {"ok": False}
 
     # ── Apply filters ────────────────────────────────────────────────────────
     pool = users
     if eligibility and eligibility.lower() not in ("", "all"):
-        pool = [u for u in pool if eligibility.lower() in str(u.get("segment","")).lower()]
+        pool = [u for u in pool if eligibility.lower() in str(u.get("segment", "")).lower()]
         print(f"  Eligibility '{eligibility}': {len(pool):,} retained")
     if exclusion and exclusion.lower() not in ("", "none"):
-        pool = [u for u in pool if exclusion.lower() not in str(u.get("segment","")).lower()]
+        pool = [u for u in pool if exclusion.lower() not in str(u.get("segment", "")).lower()]
         print(f"  Exclusion '{exclusion}': {len(pool):,} remaining")
 
     # Budget cap
@@ -1105,6 +1298,7 @@ def run_audience_selection(state, db=None, llm=None, **kw):
     # ── Compute features for all users ───────────────────────────────────────
     _print_section(f"Applying: {tech_label}")
     import random
+
     random.seed(42)
 
     for u in pool:
@@ -1125,11 +1319,12 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         u["f_aov"] = u["avg_order_value"] / aov_max
         u["f_inq"] = u["n_inquiries"] / inq_max
 
-    cat_w = {"conversion":  {"ior": .5, "ord": .3, "aov": .15, "inq": .05},
-             "acquisition": {"ior": .2, "ord": .15, "aov": .55, "inq": .10},
-             "retention":   {"ior": .3, "ord": .5, "aov": .10, "inq": .10},
-             "engagement":  {"ior": .35,"ord": .35,"aov": .15, "inq": .15}
-    }.get(category, {"ior": .5, "ord": .3, "aov": .15, "inq": .05})
+    cat_w = {
+        "conversion": {"ior": 0.5, "ord": 0.3, "aov": 0.15, "inq": 0.05},
+        "acquisition": {"ior": 0.2, "ord": 0.15, "aov": 0.55, "inq": 0.10},
+        "retention": {"ior": 0.3, "ord": 0.5, "aov": 0.10, "inq": 0.10},
+        "engagement": {"ior": 0.35, "ord": 0.35, "aov": 0.15, "inq": 0.15},
+    }.get(category, {"ior": 0.5, "ord": 0.3, "aov": 0.15, "inq": 0.05})
 
     if technique == "1":
         # Random sampling
@@ -1142,14 +1337,20 @@ def run_audience_selection(state, db=None, llm=None, **kw):
     elif technique == "2":
         # Propensity Score Matching — logistic-like scoring
         for u in pool:
-            z = (cat_w["ior"]*u["f_ior"] + cat_w["ord"]*u["f_ord"] +
-                 cat_w["aov"]*u["f_aov"] + cat_w["inq"]*u["f_inq"])
+            z = (
+                cat_w["ior"] * u["f_ior"]
+                + cat_w["ord"] * u["f_ord"]
+                + cat_w["aov"] * u["f_aov"]
+                + cat_w["inq"] * u["f_inq"]
+            )
             # Logistic transformation
-            u["propensity_score"] = round(1.0 / (1.0 + math.exp(-5*(z - 0.5))), 4)
+            u["propensity_score"] = round(1.0 / (1.0 + math.exp(-5 * (z - 0.5))), 4)
             u["selection_method"] = "propensity_score_matching"
         pool.sort(key=lambda u: u["propensity_score"], reverse=True)
         selected = pool[:eff_target]
-        print(f"  Propensity model: logistic(IOR×{cat_w['ior']:.1f} + Orders×{cat_w['ord']:.1f} + AOV×{cat_w['aov']:.2f} + Freq×{cat_w['inq']:.2f})")
+        print(
+            f"  Propensity model: logistic(IOR×{cat_w['ior']:.1f} + Orders×{cat_w['ord']:.1f} + AOV×{cat_w['aov']:.2f} + Freq×{cat_w['inq']:.2f})"
+        )
 
     elif technique == "3":
         # Stratified sampling
@@ -1187,9 +1388,9 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         # For users without orders (T=0 proxy): IOR=0
         for u in pool:
             # T=1 outcome estimate (if treated): weighted by engagement signals
-            mu_1 = 0.15 + 0.4*u["f_ior"] + 0.2*u["f_inq"] + 0.1*u["f_aov"]
+            mu_1 = 0.15 + 0.4 * u["f_ior"] + 0.2 * u["f_inq"] + 0.1 * u["f_aov"]
             # T=0 outcome estimate (if not treated): baseline with lower response
-            mu_0 = 0.08 + 0.3*u["f_ior"] + 0.05*u["f_inq"]
+            mu_0 = 0.08 + 0.3 * u["f_ior"] + 0.05 * u["f_inq"]
             # CATE = E[Y(1)] - E[Y(0)]
             cate = mu_1 - mu_0
             u["cate"] = round(cate, 4)
@@ -1206,9 +1407,11 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         print("  Building S-Learner: single model with treatment indicator")
         for u in pool:
             # Single model: Y = f(X, T)
-            base = 0.10 + 0.35*u["f_ior"] + 0.15*u["f_inq"] + 0.10*u["f_aov"] + 0.05*u["f_ord"]
+            base = (
+                0.10 + 0.35 * u["f_ior"] + 0.15 * u["f_inq"] + 0.10 * u["f_aov"] + 0.05 * u["f_ord"]
+            )
             # Treatment effect modulation: higher for engaged users
-            treat_effect = 0.02 + 0.08*u["f_ior"] + 0.04*u["f_inq"]
+            treat_effect = 0.02 + 0.08 * u["f_ior"] + 0.04 * u["f_inq"]
             u["cate"] = round(treat_effect, 4)
             u["propensity_score"] = round(min(1, base + treat_effect), 4)
             u["selection_method"] = "s_learner"
@@ -1220,11 +1423,13 @@ def run_audience_selection(state, db=None, llm=None, **kw):
     else:
         # Technique 7: Uplift-based — target persuadables (avoid sleeping dogs & sure things)
         print("  Uplift-based selection: identifying persuadables")
-        print("  Filtering out 'sure things' (would convert anyway) and 'sleeping dogs' (would be harmed)")
+        print(
+            "  Filtering out 'sure things' (would convert anyway) and 'sleeping dogs' (would be harmed)"
+        )
         for u in pool:
             # Classify into quadrants based on baseline + treatment sensitivity
             baseline = u["f_ior"]
-            sensitivity = 0.3*u["f_inq"] + 0.2*u["f_aov"] + 0.1*u["f_ord"]
+            sensitivity = 0.3 * u["f_inq"] + 0.2 * u["f_aov"] + 0.1 * u["f_ord"]
             # Persuadable: low baseline but high sensitivity
             # Sure thing: high baseline regardless
             # Lost cause: low baseline, low sensitivity
@@ -1255,7 +1460,7 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         for u in pool:
             q = u.get("quadrant", "?")
             quad_counts[q] = quad_counts.get(q, 0) + 1
-        print(f"\n  Quadrant distribution:")
+        print("\n  Quadrant distribution:")
         for q in ["persuadable", "sure_thing", "lost_cause", "sleeping_dog"]:
             c = quad_counts.get(q, 0)
             pct = c / max(len(pool), 1) * 100
@@ -1288,7 +1493,9 @@ def run_audience_selection(state, db=None, llm=None, **kw):
             avg_ior = sum(u["personal_ior"] for u in grp_users) / len(grp_users)
             avg_prop = sum(u["propensity_score"] for u in grp_users) / len(grp_users)
             avg_aov = sum(u["avg_order_value"] for u in grp_users) / len(grp_users)
-            print(f"  {grp:<12}  n={len(grp_users):>6,}  avg_IOR={avg_ior:.4f}  avg_prop={avg_prop:.4f}  avg_AOV=${avg_aov:,.0f}")
+            print(
+                f"  {grp:<12}  n={len(grp_users):>6,}  avg_IOR={avg_ior:.4f}  avg_prop={avg_prop:.4f}  avg_AOV=${avg_aov:,.0f}"
+            )
 
     # ── Covariate balance diagnostics ────────────────────────────────────────
     if balance_check and n_sel > 0:
@@ -1299,13 +1506,19 @@ def run_audience_selection(state, db=None, llm=None, **kw):
             for feat in ["personal_ior", "avg_order_value", "n_inquiries", "total_orders"]:
                 c_mean = sum(u.get(feat, 0) for u in ctrl_users) / len(ctrl_users)
                 t_mean = sum(u.get(feat, 0) for u in treat_users) / len(treat_users)
-                c_var = sum((u.get(feat, 0) - c_mean)**2 for u in ctrl_users) / max(len(ctrl_users)-1, 1)
-                t_var = sum((u.get(feat, 0) - t_mean)**2 for u in treat_users) / max(len(treat_users)-1, 1)
+                c_var = sum((u.get(feat, 0) - c_mean) ** 2 for u in ctrl_users) / max(
+                    len(ctrl_users) - 1, 1
+                )
+                t_var = sum((u.get(feat, 0) - t_mean) ** 2 for u in treat_users) / max(
+                    len(treat_users) - 1, 1
+                )
                 pooled_sd = math.sqrt((c_var + t_var) / 2) if (c_var + t_var) > 0 else 1
                 smd = abs(t_mean - c_mean) / pooled_sd  # Standardized Mean Difference
                 status = "✅" if smd < 0.1 else "⚠️" if smd < 0.25 else "❌"
-                print(f"  {status} {feat:<20}  ctrl={c_mean:>10.4f}  treat={t_mean:>10.4f}  SMD={smd:.4f}")
-            print(f"\n  SMD < 0.1 = balanced ✅, 0.1-0.25 = acceptable ⚠️, > 0.25 = imbalanced ❌")
+                print(
+                    f"  {status} {feat:<20}  ctrl={c_mean:>10.4f}  treat={t_mean:>10.4f}  SMD={smd:.4f}"
+                )
+            print("\n  SMD < 0.1 = balanced ✅, 0.1-0.25 = acceptable ⚠️, > 0.25 = imbalanced ❌")
 
     # ── Segment breakdown ────────────────────────────────────────────────────
     _print_section("Segment Breakdown")
@@ -1314,8 +1527,10 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         seg = str(u.get("segment", "All"))
         seg_summary.setdefault(seg, {"n": 0, "ctrl": 0, "treat": 0})
         seg_summary[seg]["n"] += 1
-        if u["group"] == "control": seg_summary[seg]["ctrl"] += 1
-        else: seg_summary[seg]["treat"] += 1
+        if u["group"] == "control":
+            seg_summary[seg]["ctrl"] += 1
+        else:
+            seg_summary[seg]["treat"] += 1
     print(f"  {'Segment':<20} {'Total':>6} {'Control':>8} {'Treatment':>10}")
     print(f"  {'─'*20} {'─'*6} {'─'*8} {'─'*10}")
     for seg, v in sorted(seg_summary.items(), key=lambda x: x[1]["n"], reverse=True):
@@ -1328,9 +1543,18 @@ def run_audience_selection(state, db=None, llm=None, **kw):
         out_dir = os.path.join(os.getcwd(), "runtime_data", "audience")
         os.makedirs(out_dir, exist_ok=True)
         csv_path = os.path.join(out_dir, "audience_selection.csv")
-        write_cols = ["buyer_id", "group", "segment", "experiment_category",
-                      "personal_ior", "avg_order_value", "n_inquiries",
-                      "total_orders", "propensity_score", "selection_method"]
+        write_cols = [
+            "buyer_id",
+            "group",
+            "segment",
+            "experiment_category",
+            "personal_ior",
+            "avg_order_value",
+            "n_inquiries",
+            "total_orders",
+            "propensity_score",
+            "selection_method",
+        ]
         if technique in ("5", "6"):
             write_cols.insert(-1, "cate")
         if technique == "7":

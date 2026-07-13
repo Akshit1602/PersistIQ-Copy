@@ -385,46 +385,94 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Select experiment audiences using propensity modeling, causal/meta-learners, stratified sampling, or value-based targeting.",
             "needs_experiment": False,
             "fields": [
-                {"key": "feature_desc", "label": "Feature / change description",
-                 "type": "text", "default": "",
-                 "help": "What are you testing? e.g. 'Checkout redesign', 'New pricing page'"},
-                {"key": "category", "label": "Experiment category",
-                 "type": "select", "default": "conversion",
-                 "options": ["conversion", "acquisition", "retention", "engagement"],
-                 "help": "Determines propensity weights and segment priority"},
-                {"key": "technique", "label": "Selection technique",
-                 "type": "select", "default": "1",
-                 "options": [
-                     "1 — Random Sampling (uniform random draw from eligible pool)",
-                     "2 — Propensity Score Matching (logistic propensity model)",
-                     "3 — Stratified Sampling (proportional across segments)",
-                     "4 — High-Value / Top-N Targeting (rank by CLV proxy)",
-                     "5 — T-Learner (causal meta-learner for CATE estimation)",
-                     "6 — S-Learner (single-model treatment effect estimation)",
-                     "7 — Uplift-Based Selection (target persuadables only)",
-                 ],
-                 "option_values": ["1", "2", "3", "4", "5", "6", "7"],
-                 "help": "Choose method. Techniques 5-7 use causal ML for optimal targeting."},
-                {"key": "target_size", "label": "Target audience size (0 = all eligible)",
-                 "type": "int", "default": 0, "min": 0,
-                 "help": "Total users across control + treatment. 0 uses all eligible users."},
-                {"key": "control_ratio", "label": "Control group ratio",
-                 "type": "select", "default": "0.5",
-                 "options": ["0.5 — Equal (50/50)", "0.3 — 30% control / 70% treatment",
-                             "0.2 — 20% control / 80% treatment", "0.1 — 10% control / 90% treatment"],
-                 "option_values": ["0.5", "0.3", "0.2", "0.1"],
-                 "help": "Proportion allocated to control group"},
-                {"key": "budget_total", "label": "Total budget ($, 0 = no constraint)",
-                 "type": "float", "default": 0.0, "min": 0},
-                {"key": "cost_per_user", "label": "Cost per user ($)",
-                 "type": "float", "default": 0.0, "min": 0},
-                {"key": "eligibility", "label": "Eligibility filter (segment keyword, blank = all)",
-                 "type": "text", "default": ""},
-                {"key": "exclusion", "label": "Exclusion filter (segment keyword, blank = none)",
-                 "type": "text", "default": ""},
-                {"key": "balance_check", "label": "Run covariate balance diagnostics after selection?",
-                 "type": "select", "default": "yes", "options": ["yes", "no"],
-                 "help": "Validates that control and treatment groups are balanced on key covariates"},
+                {
+                    "key": "feature_desc",
+                    "label": "Feature / change description",
+                    "type": "text",
+                    "default": "",
+                    "help": "What are you testing? e.g. 'Checkout redesign', 'New pricing page'",
+                },
+                {
+                    "key": "category",
+                    "label": "Experiment category",
+                    "type": "select",
+                    "default": "conversion",
+                    "options": ["conversion", "acquisition", "retention", "engagement"],
+                    "help": "Determines propensity weights and segment priority",
+                },
+                {
+                    "key": "technique",
+                    "label": "Selection technique",
+                    "type": "select",
+                    "default": "1",
+                    "options": [
+                        "1 — Random Sampling (uniform random draw from eligible pool)",
+                        "2 — Propensity Score Matching (logistic propensity model)",
+                        "3 — Stratified Sampling (proportional across segments)",
+                        "4 — High-Value / Top-N Targeting (rank by CLV proxy)",
+                        "5 — T-Learner (causal meta-learner for CATE estimation)",
+                        "6 — S-Learner (single-model treatment effect estimation)",
+                        "7 — Uplift-Based Selection (target persuadables only)",
+                    ],
+                    "option_values": ["1", "2", "3", "4", "5", "6", "7"],
+                    "help": "Choose method. Techniques 5-7 use causal ML for optimal targeting.",
+                },
+                {
+                    "key": "target_size",
+                    "label": "Target audience size (0 = all eligible)",
+                    "type": "int",
+                    "default": 0,
+                    "min": 0,
+                    "help": "Total users across control + treatment. 0 uses all eligible users.",
+                },
+                {
+                    "key": "control_ratio",
+                    "label": "Control group ratio",
+                    "type": "select",
+                    "default": "0.5",
+                    "options": [
+                        "0.5 — Equal (50/50)",
+                        "0.3 — 30% control / 70% treatment",
+                        "0.2 — 20% control / 80% treatment",
+                        "0.1 — 10% control / 90% treatment",
+                    ],
+                    "option_values": ["0.5", "0.3", "0.2", "0.1"],
+                    "help": "Proportion allocated to control group",
+                },
+                {
+                    "key": "budget_total",
+                    "label": "Total budget ($, 0 = no constraint)",
+                    "type": "float",
+                    "default": 0.0,
+                    "min": 0,
+                },
+                {
+                    "key": "cost_per_user",
+                    "label": "Cost per user ($)",
+                    "type": "float",
+                    "default": 0.0,
+                    "min": 0,
+                },
+                {
+                    "key": "eligibility",
+                    "label": "Eligibility filter (segment keyword, blank = all)",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "exclusion",
+                    "label": "Exclusion filter (segment keyword, blank = none)",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "balance_check",
+                    "label": "Run covariate balance diagnostics after selection?",
+                    "type": "select",
+                    "default": "yes",
+                    "options": ["yes", "no"],
+                    "help": "Validates that control and treatment groups are balanced on key covariates",
+                },
             ],
         },
         "health_monitor": {
@@ -646,9 +694,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate experiment hypotheses with structured assumptions, counter-hypotheses, and risks. Tier 3 — LLM.",
             "needs_experiment": False,
             "fields": [
-                {"key": "description", "label": "Feature / opportunity description",
-                 "type": "textarea", "default": "",
-                 "help": "Describe what you want to test. LLM will generate structured hypotheses."},
+                {
+                    "key": "description",
+                    "label": "Feature / opportunity description",
+                    "type": "textarea",
+                    "default": "",
+                    "help": "Describe what you want to test. LLM will generate structured hypotheses.",
+                },
             ],
         },
         "experiment_design": {
@@ -656,16 +708,34 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Recommend the best experiment methodology (A/B, DiD, ITS, PSM, Geo, etc.) based on constraints. Tier 1.",
             "needs_experiment": False,
             "fields": [
-                {"key": "description", "label": "What are you testing?",
-                 "type": "text", "default": ""},
-                {"key": "randomization_unit", "label": "Randomization unit",
-                 "type": "select", "default": "user",
-                 "options": ["user", "session", "geo", "store", "cluster"],
-                 "help": "At what level can you randomize?"},
-                {"key": "full_rollout", "label": "Is this a 100% rollout (no control)?",
-                 "type": "select", "default": "no", "options": ["no", "yes"]},
-                {"key": "has_pre_data", "label": "Do you have pre-period historical data?",
-                 "type": "select", "default": "yes", "options": ["yes", "no"]},
+                {
+                    "key": "description",
+                    "label": "What are you testing?",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "randomization_unit",
+                    "label": "Randomization unit",
+                    "type": "select",
+                    "default": "user",
+                    "options": ["user", "session", "geo", "store", "cluster"],
+                    "help": "At what level can you randomize?",
+                },
+                {
+                    "key": "full_rollout",
+                    "label": "Is this a 100% rollout (no control)?",
+                    "type": "select",
+                    "default": "no",
+                    "options": ["no", "yes"],
+                },
+                {
+                    "key": "has_pre_data",
+                    "label": "Do you have pre-period historical data?",
+                    "type": "select",
+                    "default": "yes",
+                    "options": ["yes", "no"],
+                },
             ],
         },
         "bayesian_analysis": {
@@ -673,8 +743,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Bayesian A/B test with Beta posteriors, credible intervals, and P(B>A). Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "segment_deep_dive": {
@@ -682,8 +757,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Segment-level treatment effects with best/worst segment identification. Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "driver_discovery": {
@@ -691,8 +771,12 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Identify the key drivers of conversion using group-level impact scoring. Tier 1.",
             "needs_experiment": False,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment (optional — blank for overall)",
-                 "type": "text", "default": ""},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment (optional — blank for overall)",
+                    "type": "text",
+                    "default": "",
+                },
             ],
         },
         "readout_generator": {
@@ -700,8 +784,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate a full experiment readout document. Tier 2 — LLM optional.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "executive_summary": {
@@ -709,8 +798,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate a one-page executive summary. Tier 2 — LLM optional.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "long_term_effects": {
@@ -718,8 +812,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Persistence and decay analysis of treatment effects over time. Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "portfolio_management": {
@@ -1014,8 +1113,8 @@ def execute(module_key: str):
             # a text-only result is written there as a .md so EVERY run leaves a browsable,
             # downloadable artifact in the Output tab.
             import os
-            import shutil
             import re
+            import shutil
             from datetime import datetime
 
             from continum.askdata import readout as _readout
@@ -1024,11 +1123,13 @@ def execute(module_key: str):
             def _sanitize_path_segment(s: str) -> str:
                 if not s:
                     return "general"
-                s = re.sub(r'[^a-zA-Z0-9_\-]', '_', s)
-                s = s.strip('_')
+                s = re.sub(r"[^a-zA-Z0-9_\-]", "_", s)
+                s = s.strip("_")
                 return s or "general"
 
-            company = _sanitize_path_segment(app.ses.active_dataset or app.ses.client_name or "general")
+            company = _sanitize_path_segment(
+                app.ses.active_dataset or app.ses.client_name or "general"
+            )
             experiment = _sanitize_path_segment(exp or "general")
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
@@ -1313,9 +1414,15 @@ def _build_default_kwargs(module_key: str, exp: str, app) -> dict:
         "sequential_testing": {"select experiment": "1"},
         "causal_analysis": {"method_choice": "1"},
         "audience_selection": {
-            "category": "conversion", "feature_desc": "", "technique": "1",
-            "target_size": 0, "budget_total": 0.0, "cost_per_user": 0.0,
-            "eligibility": "", "exclusion": "", "control_ratio": "0.5",
+            "category": "conversion",
+            "feature_desc": "",
+            "technique": "1",
+            "target_size": 0,
+            "budget_total": 0.0,
+            "cost_per_user": 0.0,
+            "eligibility": "",
+            "exclusion": "",
+            "control_ratio": "0.5",
         },
         "brief_generator": {
             "description": "Checkout funnel optimisation",
@@ -1387,14 +1494,14 @@ def _build_answer_map(module_key: str, kw: dict) -> dict:
         cat_map = {"conversion": "1", "acquisition": "2", "retention": "3", "engagement": "4"}
         cat = kw.get("category", "conversion")
         m["experiment category"] = cat_map.get(cat, "1")
-        m["category"]            = str(cat)
-        m["feature_desc"]        = str(kw.get("feature_desc", ""))
-        m["technique"]           = str(kw.get("technique", "1")).split()[0]
-        m["target_size"]         = str(kw.get("target_size", "0"))
-        m["budget_total"]        = str(kw.get("budget_total", "0"))
-        m["cost_per_user"]       = str(kw.get("cost_per_user", "0"))
-        m["eligibility"]         = str(kw.get("eligibility", ""))
-        m["exclusion"]           = str(kw.get("exclusion", ""))
+        m["category"] = str(cat)
+        m["feature_desc"] = str(kw.get("feature_desc", ""))
+        m["technique"] = str(kw.get("technique", "1")).split()[0]
+        m["target_size"] = str(kw.get("target_size", "0"))
+        m["budget_total"] = str(kw.get("budget_total", "0"))
+        m["cost_per_user"] = str(kw.get("cost_per_user", "0"))
+        m["eligibility"] = str(kw.get("eligibility", ""))
+        m["exclusion"] = str(kw.get("exclusion", ""))
     elif module_key == "causal_analysis":
         m["choose method"] = str(kw.get("method_choice", "1"))
         m["experiment name"] = str(kw.get("experiment_name", ""))
