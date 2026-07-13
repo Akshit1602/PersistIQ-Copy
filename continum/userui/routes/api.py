@@ -1009,23 +1009,59 @@ def execute(module_key: str):
             except Exception:
                 pass
 
-            # ── Collect every run's output into the single outputs folder ────────
-            # Files the module generated are copied into OUTPUTS_DIR; a text-only
-            # result is written there as a .md so EVERY run leaves a browsable,
+            # ── Collect every run's output into structured nested folders ────────
+            # Files the module generated are copied into OUTPUTS_DIR/<company>/<experiment>/;
+            # a text-only result is written there as a .md so EVERY run leaves a browsable,
             # downloadable artifact in the Output tab.
             import os
             import shutil
+            import re
+            from datetime import datetime
 
             from continum.askdata import readout as _readout
             from continum.crosscutting.runtime_config import ensure_outputs_dir
 
+            def _sanitize_path_segment(s: str) -> str:
+                if not s:
+                    return "general"
+                s = re.sub(r'[^a-zA-Z0-9_\-]', '_', s)
+                s = s.strip('_')
+                return s or "general"
+
+            company = _sanitize_path_segment(app.ses.active_dataset or app.ses.client_name or "general")
+            experiment = _sanitize_path_segment(exp or "general")
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+
             outputs_dir = ensure_outputs_dir()
+            dest_dir = os.path.join(outputs_dir, company, experiment)
+            os.makedirs(dest_dir, exist_ok=True)
             collected: list[str] = []
 
-            raw_outputs = result.get("_outputs") if isinstance(result, dict) else None
+            # Gather all potential output files from the result dictionary
+            raw_outputs = []
+            if isinstance(result, dict):
+                _outs = result.get("_outputs")
+                if _outs:
+                    if isinstance(_outs, list):
+                        raw_outputs.extend(_outs)
+                    elif isinstance(_outs, str):
+                        raw_outputs.append(_outs)
+
+                # Include other robust keys returned by modules (e.g. output_file, result_file, csv_path)
+                for k in ["output_file", "result_file", "csv_path"]:
+                    val = result.get(k)
+                    if val and isinstance(val, str) and val not in raw_outputs:
+                        raw_outputs.append(val)
+
+            # Only copy files that actually exist
+            raw_outputs = [fp for fp in raw_outputs if os.path.exists(fp)]
+
             if raw_outputs:
                 for fpath in raw_outputs:
-                    dest = os.path.join(outputs_dir, os.path.basename(fpath))
+                    orig_name = os.path.basename(fpath)
+                    orig_base, ext = os.path.splitext(orig_name)
+                    new_name = f"{orig_base}_{company}_{experiment}_{timestamp}{ext}"
+                    dest = os.path.join(dest_dir, new_name)
                     try:
                         if os.path.abspath(fpath) != os.path.abspath(dest):
                             shutil.copy2(fpath, dest)
@@ -1040,7 +1076,8 @@ def execute(module_key: str):
                 # still accessible from the outputs folder.
                 try:
                     _rtext = _readout.result_to_text(result, summary, module_key)
-                    dest = os.path.join(outputs_dir, f"{module_key}_{run_id}.md")
+                    new_name = f"{module_key}_{company}_{experiment}_{timestamp}.md"
+                    dest = os.path.join(dest_dir, new_name)
                     with open(dest, "w", encoding="utf-8") as _fh:
                         _fh.write(_rtext or f"# {module_key}\n\n{summary or '(no textual result)'}")
                     collected.append(dest)
@@ -1161,21 +1198,24 @@ def list_all_outputs():
     ensure_outputs_dir()
     out = []
     try:
-        for name in os.listdir(OUTPUTS_DIR):
-            fpath = os.path.join(OUTPUTS_DIR, name)
-            if not os.path.isfile(fpath):
-                continue
-            st = os.stat(fpath)
-            out.append(
-                {
-                    "name": name,
-                    "path": fpath,
-                    "url": "/api/file?path=" + quote(fpath),
-                    "size": st.st_size,
-                    "mtime": st.st_mtime,
-                    "ext": os.path.splitext(name)[1].lower().lstrip("."),
-                }
-            )
+        for root, dirs, files in os.walk(OUTPUTS_DIR):
+            for file in files:
+                fpath = os.path.join(root, file)
+                if not os.path.isfile(fpath):
+                    continue
+                st = os.stat(fpath)
+                rel_path = os.path.relpath(fpath, OUTPUTS_DIR)
+                display_name = rel_path.replace(os.sep, " / ")
+                out.append(
+                    {
+                        "name": display_name,
+                        "path": fpath,
+                        "url": "/api/file?path=" + quote(fpath),
+                        "size": st.st_size,
+                        "mtime": st.st_mtime,
+                        "ext": os.path.splitext(file)[1].lower().lstrip("."),
+                    }
+                )
     except Exception:
         logger.exception("list outputs failed")
     out.sort(key=lambda r: r.get("mtime", 0), reverse=True)
