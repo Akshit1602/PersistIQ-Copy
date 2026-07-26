@@ -106,8 +106,7 @@ class PatternMiner:
     def _mine_metric_patterns(self) -> List[Dict]:
         try:
             db = self.memory._connect()
-            rows = db.execute(
-                """
+            rows = db.execute("""
                 SELECT primary_metric,
                        COUNT(*) AS n,
                        AVG(CASE WHEN is_significant THEN 1.0 ELSE 0.0 END) AS sig_rate,
@@ -118,8 +117,7 @@ class PatternMiner:
                 GROUP BY primary_metric
                 HAVING COUNT(*) >= 1
                 ORDER BY sig_rate DESC, n DESC
-            """
-            ).fetchall()
+            """).fetchall()
             if not self.memory._in_memory:
                 db.close()
             return [
@@ -139,14 +137,12 @@ class PatternMiner:
     def _mine_significance_rate(self) -> Dict:
         try:
             db = self.memory._connect()
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT COUNT(*) AS n_total,
                        SUM(CASE WHEN is_significant THEN 1 ELSE 0 END) AS n_sig,
                        AVG(CASE WHEN is_significant THEN 1.0 ELSE 0.0 END) AS sig_rate
                 FROM experiment_memory
-            """
-            ).fetchone()
+            """).fetchone()
             if not self.memory._in_memory:
                 db.close()
             if row:
@@ -162,8 +158,7 @@ class PatternMiner:
     def _mine_effect_sizes(self) -> Dict:
         try:
             db = self.memory._connect()
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT AVG(delta_pp) AS avg,
                        STDDEV(delta_pp) AS std,
                        MIN(delta_pp) AS min_val,
@@ -171,8 +166,7 @@ class PatternMiner:
                        MEDIAN(delta_pp) AS median_val
                 FROM experiment_memory
                 WHERE delta_pp IS NOT NULL
-            """
-            ).fetchone()
+            """).fetchone()
             if not self.memory._in_memory:
                 db.close()
             if row:
@@ -190,12 +184,10 @@ class PatternMiner:
     def _mine_srm_rate(self) -> float:
         try:
             db = self.memory._connect()
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT AVG(CASE WHEN srm_detected THEN 1.0 ELSE 0.0 END)
                 FROM experiment_memory
-            """
-            ).fetchone()
+            """).fetchone()
             if not self.memory._in_memory:
                 db.close()
             return round(float(row[0] or 0), 3) if row else 0.0

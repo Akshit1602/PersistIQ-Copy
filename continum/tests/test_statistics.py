@@ -667,14 +667,12 @@ class TestPipelineIntegration:
         )
 
         db = duckdb.connect(":memory:")
-        db.execute(
-            """
+        db.execute("""
             CREATE TABLE gold_experiment_analysis AS
             SELECT 'ctrl' AS variant, 0 AS converted_to_order,
                    '2025-01-01' AS created_at, 'exp1' AS experiment_name
             WHERE FALSE
-        """
-        )
+        """)
         result = run_experiment_analysis_pipeline(
             experiment_id="nonexistent",
             experiment_name="nonexistent",

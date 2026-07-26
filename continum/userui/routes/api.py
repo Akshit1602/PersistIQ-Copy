@@ -173,16 +173,14 @@ def _get_module_config(module_key: str, db) -> dict:
     baselines = {}
     if db:
         try:
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT
                     COUNT(*) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at)),0) AS daily_inq,
                     AVG(CAST(converted_to_order AS DOUBLE))                               AS ior,
                     COUNT(*) / 30.0                                                       AS monthly_inq,
                     AVG(COALESCE(order_value,0))                                          AS aov
                 FROM silver_inquiries
-            """
-            ).fetchone()
+            """).fetchone()
             if row:
                 baselines = {
                     "daily_inquiries": round(float(row[0] or 500), 0),
@@ -207,15 +205,13 @@ def _get_module_config(module_key: str, db) -> dict:
     experiments = []
     if db:
         try:
-            rows = db.execute(
-                """
+            rows = db.execute("""
                 SELECT DISTINCT experiment_name,
                        COUNT(*) AS n,
                        COUNT(DISTINCT variant) AS variants
                 FROM gold_experiment_analysis
                 GROUP BY experiment_name ORDER BY n DESC
-            """
-            ).fetchall()
+            """).fetchall()
             experiments = [{"name": r[0], "n": int(r[1]), "variants": int(r[2])} for r in rows]
         except Exception:
             pass
@@ -1323,14 +1319,12 @@ def _build_default_kwargs(module_key: str, exp: str, app) -> dict:
     db = getattr(app, "db", None)
     if db is not None:
         try:
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                        AVG(CASE WHEN converted_to_order THEN order_value END) AS aov,
                        COUNT(*) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at))+1,0) AS daily_n
                 FROM silver_inquiries WHERE converted_to_order IS NOT NULL
-            """
-            ).fetchone()
+            """).fetchone()
             if row and row[0]:
                 kw.update(
                     {
@@ -2748,16 +2742,14 @@ def copilot_portfolio():
     ASSUMED_AOV = 500.0  # same baseline default the rest of the app uses when the
     # synthetic dataset carries no order_value (AOV resolves to 0)
     try:
-        row = db.execute(
-            """
+        row = db.execute("""
             SELECT COUNT(DISTINCT experiment_name)                              AS n_experiments,
                    COUNT(*)                                                     AS n_inquiries,
                    AVG(CAST(converted_to_order AS DOUBLE))                      AS ior,
                    AVG(CASE WHEN converted_to_order = 1 THEN order_value END)   AS measured_aov,
                    SUM(CASE WHEN converted_to_order = 1 THEN COALESCE(order_value,0) ELSE 0 END) AS measured_gmv
             FROM gold_experiment_analysis
-        """
-        ).fetchone()
+        """).fetchone()
         n_exp, n_inq, ior, measured_aov, measured_gmv = row
         n_inq = int(n_inq or 0)
         ior = float(ior or 0.0)

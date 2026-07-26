@@ -68,15 +68,13 @@ def run_funnel_analysis(state, db=None, llm=None, **kw):
     # Detect funnel from gold_experiment_analysis (has standard columns)
     stages = {}
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT
                 COUNT(*) AS total,
                 SUM(CAST(converted_to_order AS INT)) AS converted,
                 AVG(COALESCE(order_value, 0)) AS avg_value
             FROM gold_experiment_analysis
-        """
-        ).fetchone()
+        """).fetchone()
         total, converted, avg_val = int(rows[0] or 0), int(rows[1] or 0), float(rows[2] or 0)
         stages = {
             "inquiries": total,
@@ -95,16 +93,14 @@ def run_funnel_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Segment Breakdown")
     try:
-        seg_rows = db.execute(
-            """
+        seg_rows = db.execute("""
             SELECT account_segment AS segment,
                    COUNT(*) AS n,
                    SUM(CAST(converted_to_order AS INT)) AS conv,
                    AVG(COALESCE(order_value, 0)) AS aov
             FROM gold_experiment_analysis
             GROUP BY account_segment ORDER BY n DESC LIMIT 10
-        """
-        ).fetchall()
+        """).fetchall()
         segments = []
         for r in seg_rows:
             seg_name, n, conv, aov = (
@@ -161,16 +157,14 @@ def run_cohort_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Monthly Cohorts")
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT DATE_TRUNC('month', created_at) AS cohort_month,
                    COUNT(*) AS n,
                    SUM(CAST(converted_to_order AS INT)) AS converted,
                    AVG(COALESCE(order_value, 0)) AS aov
             FROM gold_experiment_analysis
             GROUP BY cohort_month ORDER BY cohort_month
-        """
-        ).fetchall()
+        """).fetchall()
         cohorts = []
         for r in rows:
             month_str = str(r[0])[:7] if r[0] else "unknown"
@@ -213,14 +207,12 @@ def run_retention_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Repeat Purchase Analysis")
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT user_id, COUNT(*) AS orders
             FROM gold_experiment_analysis
             WHERE converted_to_order = 1
             GROUP BY user_id
-        """
-        ).fetchall()
+        """).fetchall()
         total_buyers = len(rows)
         repeat_buyers = sum(1 for r in rows if r[1] > 1)
         avg_orders = sum(r[1] for r in rows) / max(total_buyers, 1)
@@ -234,8 +226,7 @@ def run_retention_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Retention by Segment")
     try:
-        seg_rows = db.execute(
-            """
+        seg_rows = db.execute("""
             SELECT account_segment AS segment,
                    COUNT(DISTINCT user_id) AS buyers,
                    COUNT(DISTINCT CASE WHEN user_orders > 1 THEN user_id END) AS repeaters
@@ -244,8 +235,7 @@ def run_retention_analysis(state, db=None, llm=None, **kw):
                 FROM gold_experiment_analysis WHERE converted_to_order = 1
                 GROUP BY user_id, segment
             ) sub GROUP BY account_segment ORDER BY buyers DESC LIMIT 8
-        """
-        ).fetchall()
+        """).fetchall()
         for r in seg_rows:
             seg, buyers, reps = str(r[0] or "?"), int(r[1]), int(r[2] or 0)
             rt = reps / max(buyers, 1)
@@ -274,16 +264,14 @@ def run_churn_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Activity-Based Churn Detection")
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT user_id,
                    MAX(created_at) AS last_activity,
                    COUNT(*) AS total_actions,
                    DATEDIFF('day', MAX(created_at), CURRENT_DATE) AS days_inactive
             FROM gold_experiment_analysis
             GROUP BY user_id
-        """
-        ).fetchall()
+        """).fetchall()
         total = len(rows)
         churn_30 = sum(1 for r in rows if (r[3] or 0) > 30)
         churn_60 = sum(1 for r in rows if (r[3] or 0) > 60)
@@ -313,8 +301,7 @@ def run_journey_analysis(state, db=None, llm=None, **kw):
 
     _print_section("User Journey Patterns")
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT user_id,
                    COUNT(*) AS touchpoints,
                    MIN(created_at) AS first_touch,
@@ -323,8 +310,7 @@ def run_journey_analysis(state, db=None, llm=None, **kw):
                    DATEDIFF('day', MIN(created_at), MAX(created_at)) AS journey_days
             FROM gold_experiment_analysis
             GROUP BY user_id
-        """
-        ).fetchall()
+        """).fetchall()
         total = len(rows)
         converters = [r for r in rows if r[4] == 1]
         non_converters = [r for r in rows if r[4] == 0]
@@ -358,15 +344,13 @@ def run_opportunity_ranking(state, db=None, llm=None, **kw):
     _print_section("Scoring Opportunities")
     # Score based on: impact (conversion gap × volume), confidence (sample size), reach
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT account_segment AS segment,
                    COUNT(*) AS n,
                    AVG(CAST(converted_to_order AS DOUBLE)) AS rate,
                    AVG(COALESCE(order_value, 0)) AS aov
             FROM gold_experiment_analysis GROUP BY account_segment ORDER BY n DESC LIMIT 15
-        """
-        ).fetchall()
+        """).fetchall()
         overall_rate = _qone(
             db, "SELECT AVG(CAST(converted_to_order AS DOUBLE)) FROM gold_experiment_analysis"
         )
@@ -730,8 +714,7 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
 
     _print_section("Data Loading")
     try:
-        rows = db.execute(
-            f"""
+        rows = db.execute(f"""
             SELECT variant,
                    COUNT(*) AS n,
                    SUM(CAST(converted_to_order AS INT)) AS successes,
@@ -739,8 +722,7 @@ def run_bayesian_analysis(state, db=None, llm=None, **kw):
             FROM gold_experiment_analysis
             WHERE experiment_name = '{exp_name}'
             GROUP BY variant ORDER BY variant
-        """
-        ).fetchall()
+        """).fetchall()
     except Exception as e:
         print(f"  ⚠️  Query error: {e}")
         return {"ok": False}
@@ -818,8 +800,7 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
 
     _print_section("Segment-Level Effects")
     try:
-        rows = db.execute(
-            f"""
+        rows = db.execute(f"""
             SELECT account_segment AS segment, variant,
                    COUNT(*) AS n,
                    AVG(CAST(converted_to_order AS DOUBLE)) AS rate,
@@ -827,8 +808,7 @@ def run_segment_deep_dive(state, db=None, llm=None, **kw):
             FROM gold_experiment_analysis
             WHERE experiment_name = '{exp_name}'
             GROUP BY segment, variant ORDER BY segment, variant
-        """
-        ).fetchall()
+        """).fetchall()
     except Exception as e:
         print(f"  ⚠️  Query error: {e}")
         return {"ok": False}
@@ -899,8 +879,7 @@ def run_driver_discovery(state, db=None, llm=None, **kw):
             else f"FROM gold_experiment_analysis WHERE experiment_name = '{exp_name}'"
         )
         # Compute correlation proxies using group-level rates
-        rows = db.execute(
-            f"""
+        rows = db.execute(f"""
             SELECT account_segment AS segment,
                    COUNT(*) AS n,
                    AVG(CAST(converted_to_order AS DOUBLE)) AS conv_rate,
@@ -908,8 +887,7 @@ def run_driver_discovery(state, db=None, llm=None, **kw):
                    STDDEV(COALESCE(order_value, 0)) AS aov_sd
             {base_query}
             GROUP BY account_segment HAVING COUNT(*) > 10 ORDER BY conv_rate DESC
-        """
-        ).fetchall()
+        """).fetchall()
 
         drivers = []
         overall_rate = sum(r[1] * r[2] for r in rows) / max(sum(r[1] for r in rows), 1)
@@ -1110,8 +1088,7 @@ def run_long_term_effects(state, db=None, llm=None, **kw):
 
     _print_section("Persistence Analysis")
     try:
-        rows = db.execute(
-            f"""
+        rows = db.execute(f"""
             SELECT DATE_TRUNC('week', created_at) AS week,
                    variant,
                    COUNT(*) AS n,
@@ -1119,8 +1096,7 @@ def run_long_term_effects(state, db=None, llm=None, **kw):
             FROM gold_experiment_analysis
             WHERE experiment_name = '{exp_name}'
             GROUP BY week, variant ORDER BY week, variant
-        """
-        ).fetchall()
+        """).fetchall()
 
         weeks = {}
         for r in rows:
@@ -1173,8 +1149,7 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
 
     _print_section("Portfolio Overview")
     try:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT experiment_name,
                    COUNT(*) AS n,
                    COUNT(DISTINCT variant) AS variants,
@@ -1183,8 +1158,7 @@ def run_portfolio_management(state, db=None, llm=None, **kw):
                    MAX(created_at) AS ended
             FROM gold_experiment_analysis
             GROUP BY experiment_name ORDER BY n DESC
-        """
-        ).fetchall()
+        """).fetchall()
 
         experiments = []
         for r in rows:
@@ -1270,8 +1244,7 @@ def run_audience_selection(state, db=None, llm=None, **kw):
     # ── Load user-level data ─────────────────────────────────────────────────
     _print_section("Loading User Data")
     try:
-        raw = db.execute(
-            """
+        raw = db.execute("""
             SELECT user_id AS buyer_id,
                    COUNT(*) AS n_inquiries,
                    AVG(CAST(converted_to_order AS DOUBLE)) AS personal_ior,
@@ -1282,8 +1255,7 @@ def run_audience_selection(state, db=None, llm=None, **kw):
             FROM gold_experiment_analysis
             WHERE user_id IS NOT NULL
             GROUP BY user_id
-        """
-        ).fetchall()
+        """).fetchall()
         cols = [
             "buyer_id",
             "n_inquiries",

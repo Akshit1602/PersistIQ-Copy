@@ -38,13 +38,11 @@ def synthetic_db():
     db.execute("CREATE VIEW silver_inquiries AS SELECT * FROM silver_inquiries")
 
     # gold_experiment_analysis
-    db.execute(
-        """
+    db.execute("""
         CREATE VIEW gold_experiment_analysis AS
         SELECT *, 'test_exp' AS experiment_name
         FROM silver_inquiries
-    """
-    )
+    """)
 
     return db
 
@@ -619,6 +617,7 @@ class TestCopilotSelectionGate:
 class TestStreamlinedCredentials:
     def test_gemini_detection(self, monkeypatch):
         import os
+
         import continum
 
         # Mock GEMINI_API_KEY
@@ -632,6 +631,7 @@ class TestStreamlinedCredentials:
 
     def test_azure_detection(self, monkeypatch):
         import os
+
         import continum
 
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -647,6 +647,7 @@ class TestStreamlinedCredentials:
 
     def test_unconfigured_detection(self, monkeypatch):
         import os
+
         import continum
 
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)

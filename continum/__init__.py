@@ -169,7 +169,9 @@ def get_chat_llm():
     """Return a LangChain chat model or raise a RuntimeError if unconfigured."""
     prov = active_provider()
     if prov == "unconfigured":
-        raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
+        raise RuntimeError(
+            "LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env."
+        )
     return build_chat_model(prov, temperature=0)
 
 
@@ -202,7 +204,9 @@ class LLMClient:
         load_credentials()
         self.provider = active_provider()
         if self.provider == "unconfigured":
-            raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
+            raise RuntimeError(
+                "LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env."
+            )
 
         cfg = config or AGENT_CONFIG
         self.max_new_tokens = cfg.get("max_new_tokens", 2048)
@@ -229,7 +233,9 @@ class LLMClient:
     def ask(self, prompt: str, system: str = "") -> str:
         self._load()
         if self._chat is None:
-            raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
+            raise RuntimeError(
+                "LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env."
+            )
         try:
             messages = [("system", system or GROUNDING_SYSTEM), ("human", prompt)]
             resp = self._chat.invoke(messages)

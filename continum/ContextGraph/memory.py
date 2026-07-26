@@ -35,8 +35,7 @@ class CrossExperimentMemory:
     def _init_db(self) -> None:
         try:
             db = self._connect()
-            db.execute(
-                """
+            db.execute("""
                 CREATE TABLE IF NOT EXISTS experiment_memory (
                     experiment_id    VARCHAR,
                     experiment_name  VARCHAR,
@@ -54,10 +53,8 @@ class CrossExperimentMemory:
                     narrative        VARCHAR,
                     metadata         VARCHAR
                 )
-            """
-            )
-            db.execute(
-                """
+            """)
+            db.execute("""
                 CREATE TABLE IF NOT EXISTS anomaly_memory (
                     experiment_id    VARCHAR,
                     detected_at      VARCHAR,
@@ -69,10 +66,8 @@ class CrossExperimentMemory:
                     pct_change       DOUBLE,
                     resolved         BOOLEAN DEFAULT FALSE
                 )
-            """
-            )
-            db.execute(
-                """
+            """)
+            db.execute("""
                 CREATE TABLE IF NOT EXISTS metric_memory (
                     experiment_id    VARCHAR,
                     metric_name      VARCHAR,
@@ -81,10 +76,8 @@ class CrossExperimentMemory:
                     is_significant   BOOLEAN,
                     recorded_at      VARCHAR
                 )
-            """
-            )
-            db.execute(
-                """
+            """)
+            db.execute("""
                 CREATE TABLE IF NOT EXISTS learning_memory (
                     experiment_id    VARCHAR,
                     recorded_at      VARCHAR,
@@ -92,8 +85,7 @@ class CrossExperimentMemory:
                     learning         VARCHAR,
                     tags             VARCHAR
                 )
-            """
-            )
+            """)
             if not self._in_memory:
                 db.close()
             if not self._in_memory:
@@ -277,8 +269,7 @@ class CrossExperimentMemory:
                     for w in words[:5]
                 ]
             )
-            rows = db.execute(
-                f"""
+            rows = db.execute(f"""
                 SELECT experiment_id, experiment_name, recorded_at, verdict,
                        ship_recommendation, primary_metric, delta_pp, p_value,
                        is_significant, narrative
@@ -286,8 +277,7 @@ class CrossExperimentMemory:
                 WHERE {conditions}
                 ORDER BY recorded_at DESC
                 LIMIT {limit}
-            """
-            ).fetchall()
+            """).fetchall()
             if not self._in_memory:
                 db.close()
             cols = [
@@ -340,8 +330,7 @@ class CrossExperimentMemory:
     def get_successful_metrics(self, limit: int = 10) -> List[Dict]:
         try:
             db = self._connect()
-            rows = db.execute(
-                f"""
+            rows = db.execute(f"""
                 SELECT metric_name,
                        COUNT(*) AS n_experiments,
                        AVG(observed_delta) AS avg_delta,
@@ -351,8 +340,7 @@ class CrossExperimentMemory:
                 GROUP BY metric_name
                 ORDER BY n_experiments DESC, sig_rate DESC
                 LIMIT {limit}
-            """
-            ).fetchall()
+            """).fetchall()
             if not self._in_memory:
                 db.close()
             cols = ["metric_name", "n_experiments", "avg_delta", "sig_rate"]
@@ -365,15 +353,13 @@ class CrossExperimentMemory:
         try:
             db = self._connect()
             where = "WHERE resolved = FALSE" if unresolved_only else ""
-            rows = db.execute(
-                f"""
+            rows = db.execute(f"""
                 SELECT experiment_id, detected_at, anomaly_type, metric, severity, description
                 FROM anomaly_memory
                 {where}
                 ORDER BY detected_at DESC
                 LIMIT {limit}
-            """
-            ).fetchall()
+            """).fetchall()
             if not self._in_memory:
                 db.close()
             cols = [
