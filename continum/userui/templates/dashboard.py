@@ -1070,6 +1070,8 @@ async function bootstrapData() {
 
   try {
     liveModules = await Api.modules();
+    // Single source of truth for module names — see continum/ExpSuite/registry.py.
+    liveModules.forEach(m => { if (m.display_name) LABEL_OVERRIDES[m.name] = m.display_name; });
     renderAllGrids();
   } catch(e) { console.warn('modules fetch failed', e); }
 
@@ -1278,12 +1280,12 @@ function buildGrid(containerId, modules) {
   });
 }
 
-// Display-label overrides where the prettified key isn't the name we want to show.
-// The registry key (e.g. anomaly_synthesis) stays stable across the backend; only
-// the user-facing label changes here.
-const LABEL_OVERRIDES = {
-  anomaly_synthesis: 'Anomaly Detection',
-};
+// Display-label overrides — populated from the live registry's display_name
+// (GET /api/modules) as soon as it loads, in bootstrapData(). This is the
+// SAME name the backend uses for chat replies / guided-flow prose / MatchView
+// tool confirmations, so the card grid, modal, run/result labels, and the
+// AskAI chatbot can never name a module differently again.
+let LABEL_OVERRIDES = {};
 function humanize(key) {
   if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key];
   return key.split('_').map(w => w.charAt(0).toUpperCase()+w.slice(1)).join(' ');

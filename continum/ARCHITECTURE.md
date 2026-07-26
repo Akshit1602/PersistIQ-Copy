@@ -1,57 +1,60 @@
 # Continum — Architecture & Layout
 
-The package mirrors the **MatchView backend diagram**. Organising rule:
-**a diagram node with more than one immediate child becomes a folder; otherwise it's a single file** (within practical size limits).
+A lean module structure built entirely on **LangChain + LangGraph**. One secrets
+source (repo-root `.env`); one DuckDB warehouse built from `sample_data/<Dataset>/`.
 
 ## Query flow
 
 ```
-User UI ─▶ intentanalyser.py ─▶ orchestrator.py ─┬─▶ askdata/ ─▶ sql/viz/insight (graph_logic.py)
-(userui/)   (classify + entities) (route decider)  └─▶ toolinterface.py ─▶ experimentation/
-                                                                            insights/ ◀── post-run intelligence ──▶ User UI
+User UI ─▶ orchestration/ ─┬─▶ AskData/  (SQLGenerator → VisualGenerator → InsightGenerator)
+(userui/)  (intent (chatbot│            = a LangGraph
+ path only) + route        └─▶ ExpSuite/ (discovery/planning/monitoring/analysis/learnings)
+ decider + LangGraph)            │           reached manually, or as a chat tool-call
+                    ContextGraph/ ◀──────────┘   (tracks queries + module outputs; dataset-level KG)
+                    mapMeta/ ─────────────▶ DuckDB + per-dataset metadata (feeds AskData + ContextGraph)
 ```
+
+Manual experiment usage routes directly to an ExpSuite module. Chatbot usage is
+classified by `orchestration.intent` and routed by the rest of `orchestration`.
 
 ## Layout
 
-| Path | Diagram block | Role |
+| Path | Role | AI? |
 |---|---|---|
-| `userui/` | User UI | Flask app, routes, dashboard templates, health |
-| `contextmate/` | ContextMate | Clean raw data + generate/validate metadata (ingestion, contracts, synthetic, discovery) |
-| `datastore/` | Data Store | Loader, stores, cross-exp memory, lineage, inspectors, `semantic_layer.py` (ontology+metrics+dimensions) |
-| `intentanalyser.py` | Intent Analyser | Classify a query's intent + extract entities (single file → 0 children) |
-| `orchestrator.py` | Orchestrator | Route decider: `detect_tool` / `execute_tool` (single file → 0 children) |
-| `toolinterface.py` | Tool-Calling Interface | Module registry + `run_module` (single file) |
-| `askdata/` | AskData (SQL/Viz/Insight agents) | LangGraph engine; the 3 agents are `sql_node`/`visualization_node`/`insight_node` sections in `graph_logic.py`; `ask_engine.py`, `flow.py`, `readout.py`, `narrative_runtime.py` |
-| `experimentation/` | Experimentation Module Family | `analysis_dag`, `metric_planner`, `artifacts`, `enterprise`, `compare`, + `stats/ causal/ analytics/ monitoring/ post_analysis/` |
-| `insights/` | (post-run intelligence) | `insight_bus`, `patterns`, `session` (dead `cognition` + `recommendations` modules removed 2026-06-27) |
-| `crosscutting/` | (shared leaf utils) | `llm.py` (client+config+manager), `console.py`, `pdf.py`, `runtime_config.py` |
-| `tests/` | — | pytest suite (142 tests) |
+| `__init__.py` | Project-wide LLM init: `LLMClient` + credentials (`.env` only) + `get_chat_llm` + lifecycle manager | — |
+| `orchestration/` | Intent breakdown (`intent.py`, chatbot path only), path decider + AskData LangGraph (`graph.py`), MatchView tool-calling (`matchview.py`), LLM router (`router.py`), guided flow (`flow.py`), document Q&A (`readout.py`); exposes `ContinumEngine` / `get_askdata_engine`, and every public function directly (`from continum.orchestration import locate, format_question, ...` — name a function, not a file) | AI |
+| `AskData/` | 3 generators — `SQLGenerator` (NL→SQL on DuckDB), `VisualGenerator` (chart spec), `InsightGenerator` (insight from data or ContextGraph) | AI |
+| `ExpSuite/` | Experimentation framework: 5 phase folders (`discovery`, `planning`, `monitoring`, `analysis`, `learnings_repository`) + shared `stats/` + `artifacts.py` + `registry.py` + `modules.py` + `enterprise.py` | mostly algorithmic |
+| `ContextGraph/` | Knowledge graph + cross-experiment memory + session + insight bus + semantic layer + lineage | AI (emulated) |
+| `mapMeta/` | Scans `sample_data/<Dataset>/`, loads all into one DuckDB (Xometry medallion gold view kept), emits per-dataset metadata (`scanner.py`) | — |
+| `paths.py` | Where runtime state + generated outputs live: `RUNTIME_DATA_DIR`, `OUTPUTS_DIR`, `new_run_dir(module_key)` (segregated per-run output folders) | — |
+| `userui/` | Flask web console (unchanged UI); rewired to the modules above; also holds `pdf.py` (report rendering — an output concern) | — |
+| `tests/` | pytest suite | — |
 
-## Where did the old code go? (new ← old)
+There is no `crosscutting/` package: `llm.py` folded into `__init__.py`, `pdf.py` moved to `userui/` (it's an output generator), `runtime_config.py` became the top-level `paths.py`, and `console.py` (unused anywhere) was deleted outright.
 
-| New | Former location(s) |
+## Where the old code went (new ← old)
+
+| New | Former location |
 |---|---|
-| `intentanalyser.py` | `runtime/ask/copilot.py` (`Intent`, `detect_intent`, `extract_entities`) |
-| `orchestrator.py` | `runtime/ask/tools.py` (+ `_summarise` from the old shell executor) |
-| `toolinterface.py` | `api/dispatcher.py` |
-| `contextmate/` | `api/bootstrap`, `core/ingestion/contracts`, `core/synthetic/generator`, `phases/discovery` |
-| `datastore/` | `app/loader`, `core/intelligence/knowledge_graph`, `core/memory/stores`, `runtime/memory`, `core/orchestration/engine`→`lineage`, `runtime/inspect`, `core/semantic_layer/*`→`semantic_layer` |
-| `userui/` | `ui/*`, `core/health` |
-| `askdata/` | `runtime/ask/askdata/*`, `runtime/ask/flow`, `runtime/ask/readout`, `runtime/ask/intent`→`ask_engine`, `runtime/narrative`→`narrative_runtime` |
-| `experimentation/stats/` | `core/experimentation/*` |
-| `experimentation/causal/` | `core/causal/*` |
-| `experimentation/analytics/` | `core/analytics/*` |
-| `experimentation/monitoring/` | `core/monitoring/*`, `phases/monitoring/monitoring` |
-| `experimentation/post_analysis/` | `phases/analysis/*`, `phases/intelligence/synthesis` |
-| `experimentation/` (root) | `artifacts/types`→`artifacts`, `core/orchestration/dags/analysis_dag`, `core/intelligence/{metric_planner,analytical_reasoning,narrative}`, `runtime/{enterprise,compare}`, `phases/{planning,deployment}` |
-| `insights/` | `runtime/{intelligence→insight_bus, cognition, patterns, recommendations, session}` |
-| `crosscutting/` | `core/llm/*`→`llm`, `runtime/config`→`runtime_config`, `runtime/console`, `core/output/pdf` |
+| `__init__.py` (LLM) | `crosscutting/llm.py` (folded; `crosscutting/` no longer exists) |
+| `paths.py` | `crosscutting/runtime_config.py` |
+| `userui/pdf.py` | `crosscutting/pdf.py` |
+| `orchestration/intent.py` | `intentAnalyser.py` (formerly `intentanalyser.py`) — folded into `orchestration/` |
+| `orchestration/matchview.py` | `orchestrator.py` |
+| `orchestration/router.py` | `askrouter.py` |
+| `orchestration/graph.py` + `AskData/*` | `askdata/graph_logic.py` (split) + `askdata/engine.py` |
+| `orchestration/flow.py`, `orchestration/readout.py` | `askdata/flow.py`, `askdata/readout.py` |
+| `AskData/InsightGenerator.py` | `askdata/{insight_node, readme}` |
+| `ExpSuite/` | `experimentation/` (re-segregated into phases) + `modules/new_modules.py` |
+| `ExpSuite/registry.py` | `toolinterface.py` |
+| `ExpSuite/analysis/ask_engine.py` | `askdata/ask_engine.py` |
+| `ContextGraph/` | `datastore/` + `insights/` + `askdata/narrative_runtime.py` |
+| `mapMeta/` | `contextmate/` + `datastore/loader.py` + `askdata/metadata.py` |
 
-## Removed (legacy CLI/REPL, superseded by the web UI)
+## Data
 
-`cli.py`, `app/workflow.py`, `runtime/ask/copilot.py` (REPL loop), `runtime/shell/*`, and `dashboard.py.main.bak`.
-`compare.py`'s shell-driven interactive functions were dropped; its `_extract_metrics`/`_synthesise` (used by the web) remain.
-
-## Result
-
-35 → 16 folders; 114 → 86 Python files (−2,211 net lines); 142/142 tests green.
+`mapMeta.setup_database("./sample_data")` builds one in-memory DuckDB:
+Xometry (`Xometry/` 5 CSVs → Bronze→Silver→Gold `gold_experiment_analysis`, aliased `experiment_results`),
+Shell (`Shell/` → `dim_station`, `fact_station`), Walmart (`Walmart/` → `campaign_data`).
+DuckDB-native AskData queries whichever dataset `ACTIVE_DATASET` selects.

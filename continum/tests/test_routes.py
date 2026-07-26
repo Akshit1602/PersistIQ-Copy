@@ -80,7 +80,7 @@ def client(app):
 def tmp_registry(tmp_path, monkeypatch):
     """Point the experiment registry at a throwaway file so create/list tests
     don't touch the real runtime_data registry."""
-    from continum.datastore import experiment_registry as reg
+    from continum.ContextGraph import experiment_registry as reg
 
     monkeypatch.setattr(reg, "REGISTRY_FILE", str(tmp_path / "experiment_registry.json"))
     return reg
@@ -265,32 +265,32 @@ class TestExecuteRoutes:
 
 
 class TestCopilotToolDetection:
-    """Deterministic intent detection in continum.orchestrator (no LLM)."""
+    """Deterministic intent detection in continum.orchestration (no LLM)."""
 
     def test_audience_intent(self):
-        from continum.orchestrator import detect_tool
+        from continum.orchestration import detect_tool
 
         assert detect_tool("who should I target?").key == "audience"
 
     def test_deploy_intent(self):
-        from continum.orchestrator import KIND_DEPLOY, detect_tool
+        from continum.orchestration import KIND_DEPLOY, detect_tool
 
         t = detect_tool("launch this campaign now")
         assert t.key == "deploy" and t.kind == KIND_DEPLOY
 
     def test_howto_is_not_intercepted(self):
         # "How do I…" is a Guide question, not an action.
-        from continum.orchestrator import detect_tool
+        from continum.orchestration import detect_tool
 
         assert detect_tool("how do I launch a sequence?") is None
 
     def test_plain_data_question_not_intercepted(self):
-        from continum.orchestrator import detect_tool
+        from continum.orchestration import detect_tool
 
         assert detect_tool("how many orders are there") is None
 
     def test_deploy_warning_mentions_live(self):
-        from continum.orchestrator import deploy_warning, get_tool
+        from continum.orchestration import deploy_warning, get_tool
 
         assert "LIVE" in deploy_warning(get_tool("deploy"))
 
@@ -327,7 +327,7 @@ class TestCopilotRoutes:
 
 
 class _FakeLLM:
-    """Minimal stand-in for continum.crosscutting.llm.LLMClient."""
+    """Minimal stand-in for continum.LLMClient."""
 
     is_loaded = True
 
@@ -342,19 +342,19 @@ class TestLLMRouter:
     """continum.askrouter.llm_route — LLM-first selection with keyword fallback."""
 
     def test_extract_json_handles_code_fences(self):
-        from continum.askrouter import _extract_json
+        from continum.orchestration import _extract_json
 
         o = _extract_json('```json\n{"action": "data", "reason": "metric"}\n```')
         assert o == {"action": "data", "reason": "metric"}
 
     def test_extract_json_handles_bare_object_with_prose(self):
-        from continum.askrouter import _extract_json
+        from continum.orchestration import _extract_json
 
         o = _extract_json('Sure! {"action":"guide"} hope that helps')
         assert o == {"action": "guide"}
 
     def test_validate_accepts_valid_tool(self):
-        from continum.askrouter import _validate
+        from continum.orchestration import _validate
 
         d = _validate(
             {"action": "tool", "key": "causal", "reason": "why"},
@@ -364,18 +364,18 @@ class TestLLMRouter:
         assert d == {"action": "tool", "key": "causal", "module": "", "reason": "why"}
 
     def test_validate_rejects_unknown_key(self):
-        from continum.askrouter import _validate
+        from continum.orchestration import _validate
 
         assert _validate({"action": "tool", "key": "nope"}, {"causal"}, set()) is None
 
     def test_validate_rejects_unknown_module(self):
-        from continum.askrouter import _validate
+        from continum.orchestration import _validate
 
         assert _validate({"action": "module", "module": "nope"}, set(), {"forecasting"}) is None
 
     def test_validate_coerces_matchview_target_module_to_tool(self):
         # If the model names a MatchView target as a "module", route via the tool.
-        from continum.askrouter import _validate
+        from continum.orchestration import _validate
 
         d = _validate(
             {"action": "module", "module": "experiment_analysis"},
@@ -385,12 +385,12 @@ class TestLLMRouter:
         assert d["action"] == "tool" and d["key"] == "campaign_readout"
 
     def test_validate_rejects_bad_action(self):
-        from continum.askrouter import _validate
+        from continum.orchestration import _validate
 
         assert _validate({"action": "frobnicate"}, set(), set()) is None
 
     def test_route_abstains_without_llm(self):
-        from continum.askrouter import llm_route
+        from continum.orchestration import llm_route
 
         class _NoLLM:
             llm = None
@@ -398,7 +398,7 @@ class TestLLMRouter:
         assert llm_route(_NoLLM(), "what is the current IOR?") is None
 
     def test_route_abstains_when_llm_not_loaded(self, app):
-        from continum.askrouter import llm_route
+        from continum.orchestration import llm_route
 
         app.llm = _FakeLLM('{"action":"data"}')
         app.llm.is_loaded = False
@@ -410,8 +410,7 @@ class TestLLMRouter:
     def test_route_selects_tool_from_paraphrase(self, app):
         # A causal question with NO keyword trigger — detect_tool misses it, but the
         # LLM router maps it to the causal tool.
-        from continum.askrouter import llm_route
-        from continum.orchestrator import detect_tool
+        from continum.orchestration import detect_tool, llm_route
 
         q = "help me understand the reasons behind the shift in our results"
         assert detect_tool(q) is None  # keyword router would miss it

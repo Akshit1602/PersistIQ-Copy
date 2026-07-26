@@ -35,13 +35,13 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install duckdb pandas numpy scipy scikit-learn statsmodels \
-                      pydantic reportlab pytest pytest-cov
+                      pydantic reportlab openpyxl pytest pytest-cov
 
       - name: Run unit tests
         run: |
           python -m pytest continum/tests/test_statistics.py \
             -v --tb=short \
-            --cov=continum/experimentation/stats \
+            --cov=continum/ExpSuite/stats \
             --cov-report=term-missing \
             --cov-fail-under=60
 
@@ -80,22 +80,22 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic
+      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic reportlab
       - name: Test all public imports
         run: |
           python -c "
-          from continum.experimentation.stats.statistics import proportion_test, means_test, compute_sample_size
-          from continum.experimentation.stats.cuped import apply_cuped, bootstrap_ci, delta_method_ratio
-          from continum.experimentation.stats.bayesian import beta_binomial_test, bayesian_multi_arm
-          from continum.experimentation.stats.sequential import SequentialTester, compute_e_value
-          from continum.experimentation.stats.srm_detector import detect_srm
-          from continum.experimentation.stats.guardrails import run_guardrail_checks
-          from continum.experimentation.monitoring.detectors import detect_volume_anomaly, detect_distribution_shift
-          from continum.experimentation.monitoring.monitors import PipelineHealthMonitor, WatchtowerMonitor
-          from continum.experimentation.narrative import generate_executive_narrative
-          from continum.experimentation.metric_planner import METRICS_KB, gen_metrics_bundle
-          from continum.datastore.lineage import ExecutionRegistry
-          from continum.toolinterface import list_modules, _build_registry
+          from continum.ExpSuite.stats.statistics import proportion_test, means_test, compute_sample_size
+          from continum.ExpSuite.stats.cuped import apply_cuped, bootstrap_ci, delta_method_ratio
+          from continum.ExpSuite.stats.bayesian import beta_binomial_test, bayesian_multi_arm
+          from continum.ExpSuite.stats.sequential import SequentialTester, compute_e_value
+          from continum.ExpSuite.stats.srm_detector import detect_srm
+          from continum.ExpSuite.stats.guardrails import run_guardrail_checks
+          from continum.ExpSuite.discovery.detectors import detect_volume_anomaly, detect_distribution_shift
+          from continum.ExpSuite.discovery.monitors import PipelineHealthMonitor, WatchtowerMonitor
+          from continum.ExpSuite.analysis.narrative import generate_executive_narrative
+          from continum.ExpSuite.planning.metric_planner import METRICS_KB, gen_metrics_bundle
+          from continum.ContextGraph.lineage import ExecutionRegistry
+          from continum.ExpSuite.registry import list_modules, _build_registry
           _build_registry()
           mods = list_modules()
           assert len(mods) >= 18, f'Expected >= 18 modules, got {len(mods)}'
@@ -120,7 +120,7 @@ jobs:
           sys.path.insert(0, '.')
 
           # Generate minimal synthetic data
-          from continum.contextmate.synthetic_generator import generate_all
+          from continum.mapMeta import generate_all
           datasets = generate_all('./test_data', n_users=500, seed=42)
 
           # Set up DB
@@ -138,7 +138,7 @@ jobs:
           db.register('gold_experiment_analysis', df)
 
           # Run full pipeline
-          from continum.experimentation.analysis_dag import run_experiment_analysis_pipeline
+          from continum.ExpSuite.analysis.analysis_dag import run_experiment_analysis_pipeline
           result = run_experiment_analysis_pipeline(
               experiment_id='ci_test_exp',
               experiment_name='ci_test_exp',

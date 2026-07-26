@@ -11,8 +11,10 @@ statsmodels
 sqlglot
 scikit-learn
 snowflake-connector-python
+pydantic
 openai
 langchain-openai
+langchain-google-genai
 langgraph
 openpyxl
 flask

@@ -56,7 +56,7 @@ def experiments():
     # Warehouse experiments — only when the (Xometry) dataset matches or no filter.
     if app.db and dataset in ("", _WAREHOUSE_DATASET):
         try:
-            from continum.datastore.loader import list_experiments
+            from continum.mapMeta.loader import list_experiments
 
             df = list_experiments(app.db)
             for rec in df.to_dict(orient="records"):
@@ -68,7 +68,7 @@ def experiments():
 
     # User-created registry experiments (persisted metadata records).
     try:
-        from continum.datastore.experiment_registry import list_registry
+        from continum.ContextGraph.experiment_registry import list_registry
 
         for r in list_registry(dataset or None):
             variants = r.get("variants") or []
@@ -93,8 +93,8 @@ def experiments():
 def create_experiment():
     """Create a new experiment metadata record under a dataset. Persists to the
     JSON registry so it survives restarts and shows up in the dropdowns."""
-    from continum.askdata.metadata import list_datasets
-    from continum.datastore.experiment_registry import add_experiment
+    from continum.ContextGraph.experiment_registry import add_experiment
+    from continum.mapMeta import list_datasets
 
     app = _app()
     body = request.get_json(silent=True) or {}
@@ -109,7 +109,7 @@ def create_experiment():
     # registry, which add_experiment already guards).
     if dataset == _WAREHOUSE_DATASET and getattr(app, "db", None) is not None:
         try:
-            from continum.datastore.loader import list_experiments
+            from continum.mapMeta.loader import list_experiments
 
             existing = set(list_experiments(app.db).get("experiment_name", []))
             if name in existing:
@@ -155,7 +155,7 @@ def select_experiment():
 # ── modules list ──────────────────────────────────────────────────────────────
 @bp.route("/modules")
 def modules():
-    from continum.toolinterface import _build_registry, list_modules
+    from continum.ExpSuite.registry import _build_registry, list_modules
 
     _build_registry()
     return jsonify(list_modules())
@@ -173,14 +173,16 @@ def _get_module_config(module_key: str, db) -> dict:
     baselines = {}
     if db:
         try:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT
                     COUNT(*) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at)),0) AS daily_inq,
                     AVG(CAST(converted_to_order AS DOUBLE))                               AS ior,
                     COUNT(*) / 30.0                                                       AS monthly_inq,
                     AVG(COALESCE(order_value,0))                                          AS aov
                 FROM silver_inquiries
-            """).fetchone()
+            """
+            ).fetchone()
             if row:
                 baselines = {
                     "daily_inquiries": round(float(row[0] or 500), 0),
@@ -205,13 +207,15 @@ def _get_module_config(module_key: str, db) -> dict:
     experiments = []
     if db:
         try:
-            rows = db.execute("""
+            rows = db.execute(
+                """
                 SELECT DISTINCT experiment_name,
                        COUNT(*) AS n,
                        COUNT(DISTINCT variant) AS variants
                 FROM gold_experiment_analysis
                 GROUP BY experiment_name ORDER BY n DESC
-            """).fetchall()
+            """
+            ).fetchall()
             experiments = [{"name": r[0], "n": int(r[1]), "variants": int(r[2])} for r in rows]
         except Exception:
             pass
@@ -385,46 +389,94 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Select experiment audiences using propensity modeling, causal/meta-learners, stratified sampling, or value-based targeting.",
             "needs_experiment": False,
             "fields": [
-                {"key": "feature_desc", "label": "Feature / change description",
-                 "type": "text", "default": "",
-                 "help": "What are you testing? e.g. 'Checkout redesign', 'New pricing page'"},
-                {"key": "category", "label": "Experiment category",
-                 "type": "select", "default": "conversion",
-                 "options": ["conversion", "acquisition", "retention", "engagement"],
-                 "help": "Determines propensity weights and segment priority"},
-                {"key": "technique", "label": "Selection technique",
-                 "type": "select", "default": "1",
-                 "options": [
-                     "1 — Random Sampling (uniform random draw from eligible pool)",
-                     "2 — Propensity Score Matching (logistic propensity model)",
-                     "3 — Stratified Sampling (proportional across segments)",
-                     "4 — High-Value / Top-N Targeting (rank by CLV proxy)",
-                     "5 — T-Learner (causal meta-learner for CATE estimation)",
-                     "6 — S-Learner (single-model treatment effect estimation)",
-                     "7 — Uplift-Based Selection (target persuadables only)",
-                 ],
-                 "option_values": ["1", "2", "3", "4", "5", "6", "7"],
-                 "help": "Choose method. Techniques 5-7 use causal ML for optimal targeting."},
-                {"key": "target_size", "label": "Target audience size (0 = all eligible)",
-                 "type": "int", "default": 0, "min": 0,
-                 "help": "Total users across control + treatment. 0 uses all eligible users."},
-                {"key": "control_ratio", "label": "Control group ratio",
-                 "type": "select", "default": "0.5",
-                 "options": ["0.5 — Equal (50/50)", "0.3 — 30% control / 70% treatment",
-                             "0.2 — 20% control / 80% treatment", "0.1 — 10% control / 90% treatment"],
-                 "option_values": ["0.5", "0.3", "0.2", "0.1"],
-                 "help": "Proportion allocated to control group"},
-                {"key": "budget_total", "label": "Total budget ($, 0 = no constraint)",
-                 "type": "float", "default": 0.0, "min": 0},
-                {"key": "cost_per_user", "label": "Cost per user ($)",
-                 "type": "float", "default": 0.0, "min": 0},
-                {"key": "eligibility", "label": "Eligibility filter (segment keyword, blank = all)",
-                 "type": "text", "default": ""},
-                {"key": "exclusion", "label": "Exclusion filter (segment keyword, blank = none)",
-                 "type": "text", "default": ""},
-                {"key": "balance_check", "label": "Run covariate balance diagnostics after selection?",
-                 "type": "select", "default": "yes", "options": ["yes", "no"],
-                 "help": "Validates that control and treatment groups are balanced on key covariates"},
+                {
+                    "key": "feature_desc",
+                    "label": "Feature / change description",
+                    "type": "text",
+                    "default": "",
+                    "help": "What are you testing? e.g. 'Checkout redesign', 'New pricing page'",
+                },
+                {
+                    "key": "category",
+                    "label": "Experiment category",
+                    "type": "select",
+                    "default": "conversion",
+                    "options": ["conversion", "acquisition", "retention", "engagement"],
+                    "help": "Determines propensity weights and segment priority",
+                },
+                {
+                    "key": "technique",
+                    "label": "Selection technique",
+                    "type": "select",
+                    "default": "1",
+                    "options": [
+                        "1 — Random Sampling (uniform random draw from eligible pool)",
+                        "2 — Propensity Score Matching (logistic propensity model)",
+                        "3 — Stratified Sampling (proportional across segments)",
+                        "4 — High-Value / Top-N Targeting (rank by CLV proxy)",
+                        "5 — T-Learner (causal meta-learner for CATE estimation)",
+                        "6 — S-Learner (single-model treatment effect estimation)",
+                        "7 — Uplift-Based Selection (target persuadables only)",
+                    ],
+                    "option_values": ["1", "2", "3", "4", "5", "6", "7"],
+                    "help": "Choose method. Techniques 5-7 use causal ML for optimal targeting.",
+                },
+                {
+                    "key": "target_size",
+                    "label": "Target audience size (0 = all eligible)",
+                    "type": "int",
+                    "default": 0,
+                    "min": 0,
+                    "help": "Total users across control + treatment. 0 uses all eligible users.",
+                },
+                {
+                    "key": "control_ratio",
+                    "label": "Control group ratio",
+                    "type": "select",
+                    "default": "0.5",
+                    "options": [
+                        "0.5 — Equal (50/50)",
+                        "0.3 — 30% control / 70% treatment",
+                        "0.2 — 20% control / 80% treatment",
+                        "0.1 — 10% control / 90% treatment",
+                    ],
+                    "option_values": ["0.5", "0.3", "0.2", "0.1"],
+                    "help": "Proportion allocated to control group",
+                },
+                {
+                    "key": "budget_total",
+                    "label": "Total budget ($, 0 = no constraint)",
+                    "type": "float",
+                    "default": 0.0,
+                    "min": 0,
+                },
+                {
+                    "key": "cost_per_user",
+                    "label": "Cost per user ($)",
+                    "type": "float",
+                    "default": 0.0,
+                    "min": 0,
+                },
+                {
+                    "key": "eligibility",
+                    "label": "Eligibility filter (segment keyword, blank = all)",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "exclusion",
+                    "label": "Exclusion filter (segment keyword, blank = none)",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "balance_check",
+                    "label": "Run covariate balance diagnostics after selection?",
+                    "type": "select",
+                    "default": "yes",
+                    "options": ["yes", "no"],
+                    "help": "Validates that control and treatment groups are balanced on key covariates",
+                },
             ],
         },
         "health_monitor": {
@@ -646,9 +698,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate experiment hypotheses with structured assumptions, counter-hypotheses, and risks. Tier 3 — LLM.",
             "needs_experiment": False,
             "fields": [
-                {"key": "description", "label": "Feature / opportunity description",
-                 "type": "textarea", "default": "",
-                 "help": "Describe what you want to test. LLM will generate structured hypotheses."},
+                {
+                    "key": "description",
+                    "label": "Feature / opportunity description",
+                    "type": "textarea",
+                    "default": "",
+                    "help": "Describe what you want to test. LLM will generate structured hypotheses.",
+                },
             ],
         },
         "experiment_design": {
@@ -656,16 +712,34 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Recommend the best experiment methodology (A/B, DiD, ITS, PSM, Geo, etc.) based on constraints. Tier 1.",
             "needs_experiment": False,
             "fields": [
-                {"key": "description", "label": "What are you testing?",
-                 "type": "text", "default": ""},
-                {"key": "randomization_unit", "label": "Randomization unit",
-                 "type": "select", "default": "user",
-                 "options": ["user", "session", "geo", "store", "cluster"],
-                 "help": "At what level can you randomize?"},
-                {"key": "full_rollout", "label": "Is this a 100% rollout (no control)?",
-                 "type": "select", "default": "no", "options": ["no", "yes"]},
-                {"key": "has_pre_data", "label": "Do you have pre-period historical data?",
-                 "type": "select", "default": "yes", "options": ["yes", "no"]},
+                {
+                    "key": "description",
+                    "label": "What are you testing?",
+                    "type": "text",
+                    "default": "",
+                },
+                {
+                    "key": "randomization_unit",
+                    "label": "Randomization unit",
+                    "type": "select",
+                    "default": "user",
+                    "options": ["user", "session", "geo", "store", "cluster"],
+                    "help": "At what level can you randomize?",
+                },
+                {
+                    "key": "full_rollout",
+                    "label": "Is this a 100% rollout (no control)?",
+                    "type": "select",
+                    "default": "no",
+                    "options": ["no", "yes"],
+                },
+                {
+                    "key": "has_pre_data",
+                    "label": "Do you have pre-period historical data?",
+                    "type": "select",
+                    "default": "yes",
+                    "options": ["yes", "no"],
+                },
             ],
         },
         "bayesian_analysis": {
@@ -673,8 +747,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Bayesian A/B test with Beta posteriors, credible intervals, and P(B>A). Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "segment_deep_dive": {
@@ -682,8 +761,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Segment-level treatment effects with best/worst segment identification. Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "driver_discovery": {
@@ -691,8 +775,12 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Identify the key drivers of conversion using group-level impact scoring. Tier 1.",
             "needs_experiment": False,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment (optional — blank for overall)",
-                 "type": "text", "default": ""},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment (optional — blank for overall)",
+                    "type": "text",
+                    "default": "",
+                },
             ],
         },
         "readout_generator": {
@@ -700,8 +788,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate a full experiment readout document. Tier 2 — LLM optional.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "executive_summary": {
@@ -709,8 +802,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Generate a one-page executive summary. Tier 2 — LLM optional.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "long_term_effects": {
@@ -718,8 +816,13 @@ def _get_module_config(module_key: str, db) -> dict:
             "description": "Persistence and decay analysis of treatment effects over time. Tier 1.",
             "needs_experiment": True,
             "fields": [
-                {"key": "experiment_name", "label": "Experiment",
-                 "type": "experiment_select", "default": "", "options": experiments},
+                {
+                    "key": "experiment_name",
+                    "label": "Experiment",
+                    "type": "experiment_select",
+                    "default": "",
+                    "options": experiments,
+                },
             ],
         },
         "portfolio_management": {
@@ -737,7 +840,7 @@ def _get_module_config(module_key: str, db) -> dict:
         # they need an experiment) instead of a generic "Run this module.".
         desc, needs_exp = "", False
         try:
-            from continum.toolinterface import get_module
+            from continum.ExpSuite.registry import get_module
 
             spec = get_module(module_key)
             if spec is not None:
@@ -775,7 +878,7 @@ def execute(module_key: str):
         import io
         import sys
 
-        from continum.toolinterface import _build_registry, get_module, run_module
+        from continum.ExpSuite.registry import _build_registry, get_module, run_module
 
         _build_registry()
 
@@ -983,7 +1086,7 @@ def execute(module_key: str):
                     raise
             elapsed = time.monotonic() - t0
 
-            from continum.orchestrator import _summarise
+            from continum.orchestration import _summarise
 
             summary = _summarise(result, module_key)
             app.ses.set(f"{module_key}_result", result)
@@ -991,7 +1094,7 @@ def execute(module_key: str):
             app.ses.record_run(module_key, spec.phase, elapsed, ok=True, summary=summary)
             app.ses.save()
 
-            from continum.insights.insight_bus import publish_next_steps
+            from continum.ContextGraph.insight_bus import publish_next_steps
 
             publish_next_steps(module_key, app.bus)
             app.bus.success(module_key, f"{module_key} completed in {elapsed:.2f}s  {summary}")
@@ -1002,7 +1105,7 @@ def execute(module_key: str):
                 session_id=app.ses.session_id,
             )
             try:
-                from continum.askdata.narrative_runtime import get_narrative
+                from continum.ContextGraph import get_narrative
 
                 nr = get_narrative(bus=app.bus, session=app.ses, memory=app.mem)
                 nr.after_module(module_key, result)
@@ -1016,8 +1119,8 @@ def execute(module_key: str):
             import os
             import shutil
 
-            from continum.askdata import readout as _readout
-            from continum.crosscutting.runtime_config import ensure_outputs_dir
+            from continum.orchestration import add_generated, result_to_text
+            from continum.paths import ensure_outputs_dir
 
             outputs_dir = ensure_outputs_dir()
             collected: list[str] = []
@@ -1039,7 +1142,7 @@ def execute(module_key: str):
                 # No file artifact — persist the result text as markdown so it's
                 # still accessible from the outputs folder.
                 try:
-                    _rtext = _readout.result_to_text(result, summary, module_key)
+                    _rtext = result_to_text(result, summary, module_key)
                     dest = os.path.join(outputs_dir, f"{module_key}_{run_id}.md")
                     with open(dest, "w", encoding="utf-8") as _fh:
                         _fh.write(_rtext or f"# {module_key}\n\n{summary or '(no textual result)'}")
@@ -1061,7 +1164,7 @@ def execute(module_key: str):
                 _nr = sum(
                     1
                     for _fp in collected
-                    if _readout.add_generated(app, _fp, module=module_key, run_id=run_id)
+                    if add_generated(app, _fp, module=module_key, run_id=run_id)
                 )
                 if _nr:
                     emit(
@@ -1119,7 +1222,7 @@ def _serve_file_allowed_dirs() -> list:
     """Absolute dirs whose files /api/file may serve."""
     import os
 
-    from continum.crosscutting.runtime_config import OUTPUTS_DIR
+    from continum.paths import OUTPUTS_DIR
 
     home_out = os.path.join(os.path.expanduser("~"), "continum_outputs")
     cands = [
@@ -1156,7 +1259,7 @@ def list_all_outputs():
     """Everything in the outputs folder — the browsable Output tab (B4)."""
     import os
 
-    from continum.crosscutting.runtime_config import OUTPUTS_DIR, ensure_outputs_dir
+    from continum.paths import OUTPUTS_DIR, ensure_outputs_dir
 
     ensure_outputs_dir()
     out = []
@@ -1220,12 +1323,14 @@ def _build_default_kwargs(module_key: str, exp: str, app) -> dict:
     db = getattr(app, "db", None)
     if db is not None:
         try:
-            row = db.execute("""
+            row = db.execute(
+                """
                 SELECT AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                        AVG(CASE WHEN converted_to_order THEN order_value END) AS aov,
                        COUNT(*) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at))+1,0) AS daily_n
                 FROM silver_inquiries WHERE converted_to_order IS NOT NULL
-            """).fetchone()
+            """
+            ).fetchone()
             if row and row[0]:
                 kw.update(
                     {
@@ -1273,9 +1378,15 @@ def _build_default_kwargs(module_key: str, exp: str, app) -> dict:
         "sequential_testing": {"select experiment": "1"},
         "causal_analysis": {"method_choice": "1"},
         "audience_selection": {
-            "category": "conversion", "feature_desc": "", "technique": "1",
-            "target_size": 0, "budget_total": 0.0, "cost_per_user": 0.0,
-            "eligibility": "", "exclusion": "", "control_ratio": "0.5",
+            "category": "conversion",
+            "feature_desc": "",
+            "technique": "1",
+            "target_size": 0,
+            "budget_total": 0.0,
+            "cost_per_user": 0.0,
+            "eligibility": "",
+            "exclusion": "",
+            "control_ratio": "0.5",
         },
         "brief_generator": {
             "description": "Checkout funnel optimisation",
@@ -1347,14 +1458,14 @@ def _build_answer_map(module_key: str, kw: dict) -> dict:
         cat_map = {"conversion": "1", "acquisition": "2", "retention": "3", "engagement": "4"}
         cat = kw.get("category", "conversion")
         m["experiment category"] = cat_map.get(cat, "1")
-        m["category"]            = str(cat)
-        m["feature_desc"]        = str(kw.get("feature_desc", ""))
-        m["technique"]           = str(kw.get("technique", "1")).split()[0]
-        m["target_size"]         = str(kw.get("target_size", "0"))
-        m["budget_total"]        = str(kw.get("budget_total", "0"))
-        m["cost_per_user"]       = str(kw.get("cost_per_user", "0"))
-        m["eligibility"]         = str(kw.get("eligibility", ""))
-        m["exclusion"]           = str(kw.get("exclusion", ""))
+        m["category"] = str(cat)
+        m["feature_desc"] = str(kw.get("feature_desc", ""))
+        m["technique"] = str(kw.get("technique", "1")).split()[0]
+        m["target_size"] = str(kw.get("target_size", "0"))
+        m["budget_total"] = str(kw.get("budget_total", "0"))
+        m["cost_per_user"] = str(kw.get("cost_per_user", "0"))
+        m["eligibility"] = str(kw.get("eligibility", ""))
+        m["exclusion"] = str(kw.get("exclusion", ""))
     elif module_key == "causal_analysis":
         m["choose method"] = str(kw.get("method_choice", "1"))
         m["experiment name"] = str(kw.get("experiment_name", ""))
@@ -1513,7 +1624,7 @@ def intelligence():
 @bp.route("/inspect/<what>")
 def inspect_endpoint(what: str):
     app = _app()
-    from continum.datastore.inspect import inspect
+    from continum.ContextGraph.inspect import inspect
 
     report = inspect(what, session=app.ses, db=app.db, bus=app.bus, memory=app.mem)
     return jsonify(report)
@@ -1522,7 +1633,7 @@ def inspect_endpoint(what: str):
 @bp.route("/inspect")
 def inspect_all():
     app = _app()
-    from continum.datastore.inspect import inspect_all
+    from continum.ContextGraph.inspect import inspect_all
 
     return jsonify(inspect_all(session=app.ses, db=app.db, bus=app.bus, memory=app.mem))
 
@@ -1539,8 +1650,8 @@ def compare():
     if not app.db:
         return jsonify({"error": "No database connected"}), 503
 
-    from continum.experimentation.compare import _extract_metrics, _synthesise
-    from continum.toolinterface import _build_registry, run_module
+    from continum.ExpSuite.analysis.compare import _extract_metrics, _synthesise
+    from continum.ExpSuite.registry import _build_registry, run_module
 
     _build_registry()
     results = {}
@@ -1580,7 +1691,7 @@ def compare():
 @bp.route("/lineage")
 def lineage():
     app = _app()
-    from continum.datastore.inspect import inspect
+    from continum.ContextGraph.inspect import inspect
 
     return jsonify(inspect("lineage", session=app.ses, db=app.db))
 
@@ -1588,7 +1699,7 @@ def lineage():
 # ── audit ─────────────────────────────────────────────────────────────────────
 @bp.route("/llm/status")
 def llm_status_endpoint():
-    from continum.crosscutting.llm import llm_status
+    from continum import llm_status
 
     return jsonify(llm_status())
 
@@ -1601,7 +1712,7 @@ def llm_load():
 
     def _load():
         try:
-            from continum.crosscutting.llm import load_llm
+            from continum import load_llm
 
             app.llm = load_llm()
             st = app.llm.status()
@@ -1623,7 +1734,7 @@ def llm_load():
 @bp.route("/llm/unload", methods=["POST"])
 def llm_unload():
     app = _app()
-    from continum.crosscutting.llm import unload_llm
+    from continum import unload_llm
 
     unload_llm()
     app.llm = None
@@ -1633,7 +1744,7 @@ def llm_unload():
 @bp.route("/narrative")
 def narrative():
     app = _app()
-    from continum.askdata.narrative_runtime import get_narrative
+    from continum.ContextGraph import get_narrative
 
     nr = get_narrative(bus=app.bus, session=app.ses, memory=app.mem)
 
@@ -1656,7 +1767,7 @@ def narrative():
 @bp.route("/patterns")
 def patterns():
     app = _app()
-    from continum.insights.patterns import get_miner
+    from continum.ContextGraph.patterns import get_miner
 
     miner = get_miner(app.mem)
     report = miner.mine_all()
@@ -1799,7 +1910,7 @@ def insights():
 def next_steps():
     app = _app()
     try:
-        from continum.insights.insight_bus import InsightType
+        from continum.ContextGraph.insight_bus import InsightType
 
         bus = app.bus
         steps = bus.by_type(InsightType.NEXT_STEP)
@@ -1824,7 +1935,7 @@ def next_steps():
 #               dataset); also answers "about itself" questions from the README
 #   • auto    : routes guide-vs-data from the question text; the data path is
 #               the AskData engine (replaces the legacy ContinumCopilot)
-# Provide Azure/OpenAI creds (.env or .streamlit/secrets.toml) to run the engine
+# Provide Azure/OpenAI creds (.env) to run the engine
 # on GPT-4o; otherwise it uses a local fallback model. See runtime/ask/askdata/.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1952,7 +2063,7 @@ def _llm_is_loaded(app) -> bool:
     if app.llm is not None and getattr(app.llm, "is_loaded", False):
         return True
     try:
-        from continum.crosscutting.llm import llm_status
+        from continum import llm_status
 
         return bool(llm_status().get("is_loaded", False))
     except Exception:
@@ -2029,7 +2140,7 @@ def _capability_summary() -> str:
         "**🧪 Run experiment modules** — just ask for any of these:",
     ]
     try:
-        from continum.orchestrator import MATCHVIEW_TOOLS
+        from continum.orchestration import MATCHVIEW_TOOLS
 
         for t in MATCHVIEW_TOOLS:
             desc = (t.description or "").rstrip(".")
@@ -2063,7 +2174,7 @@ def _answer_guide(app, q: str, llm_loaded: bool) -> str:
     # Otherwise: README-grounded help, served by the AskData engine's torch-free
     # README reader (works with or without the local ML stack) and the provider-
     # agnostic LLM (Azure/OpenAI if configured, else local fallback).
-    from continum.askdata import get_askdata_engine
+    from continum.orchestration import get_askdata_engine
 
     return get_askdata_engine(app).about(q).get("response", "")
 
@@ -2130,10 +2241,10 @@ def _answer_meta(app, q: str) -> str:
     if "summar" in (q or "").lower():
         return _session_summary(app)
     try:
-        from continum.askdata import flow as F  # guided-flow planner
+        from continum.orchestration import locate, render_overview, suggest_next
 
-        prog = F.locate(app.ses)
-        return F.render_overview(prog, F.suggest_next(app.ses))
+        prog = locate(app.ses)
+        return render_overview(prog, suggest_next(app.ses))
     except Exception:
         logger.exception("next-step planner failed")
         return (
@@ -2154,23 +2265,25 @@ def _module_run_redirect(app, q: str):
         return None
     name = None
     try:
-        from continum.askdata import flow as F
+        from continum.orchestration import match_module, module_label
 
-        mod = F.match_module(q, app.ses)
+        mod = match_module(q, app.ses)
         if mod and mod != "askdata":
-            name = mod.replace("_", " ").title()
+            name = module_label(mod)
     except Exception:
         pass
     if name is None:  # typo-tolerant net for the guided-flow-only modules
-        for label, kws in (
-            ("Opportunity Sizing", ("opportun", "oppurtun", "sizing", "sizeing", "size the")),
-            ("Power Calculator", ("power calc", "sample size", " mde", "powered enough")),
-            ("Learnings Repository", ("learning", "learnings")),
-            ("KPI & Tracking Plan", ("tracking plan", "kpi")),
-            ("Experiment Brief", ("experiment brief",)),
+        from continum.orchestration import module_label
+
+        for key, kws in (
+            ("opportunity_sizing", ("opportun", "oppurtun", "sizing", "sizeing", "size the")),
+            ("power_calculator", ("power calc", "sample size", " mde", "powered enough")),
+            ("learnings_repository", ("learning", "learnings")),
+            ("metrics_and_tracking", ("tracking plan", "kpi")),
+            ("brief_generator", ("experiment brief",)),
         ):
             if any(k in ql for k in kws):
-                name = label
+                name = module_label(key)
                 break
     if name is None:
         return None
@@ -2192,13 +2305,14 @@ def _module_redirect_msg(app, module_name: str):
     user at its dashboard card / input form."""
     if not module_name:
         return None
-    label = module_name.replace("_", " ").title()
+    label = module_name.replace("_", " ").title()  # fallback if unregistered
     desc = ""
     try:
-        from continum.toolinterface import get_module
+        from continum.ExpSuite.registry import get_module
 
         spec = get_module(module_name)
         if spec is not None:
+            label = spec.display_name
             desc = (spec.description or "").strip()
     except Exception:
         pass
@@ -2218,7 +2332,7 @@ def _answer_data(app, q: str, ui_context: dict, llm_loaded: bool) -> dict:
     # Azure/OpenAI when credentials are configured, else a local fallback model.
     # It builds its own in-memory SQLite from the bundled dataset (so it does
     # not depend on the live DuckDB) and answers "about itself" from the README.
-    from continum.askdata import get_askdata_engine
+    from continum.orchestration import get_askdata_engine
 
     eng = get_askdata_engine(app)
     return eng.ask(q, ui_context=ui_context)
@@ -2227,7 +2341,7 @@ def _answer_data(app, q: str, ui_context: dict, llm_loaded: bool) -> dict:
 def _copilot_suggestions(app, q: str, mode: str) -> list:
     out: list = []
     try:
-        from continum.intentanalyser import Intent, detect_intent
+        from continum.orchestration import Intent, detect_intent
 
         follow = {
             Intent.SIGNIFICANCE: ["Why is it (not) significant?", "Show the segment breakdown"],
@@ -2246,7 +2360,7 @@ def _copilot_suggestions(app, q: str, mode: str) -> list:
         pass
     if mode in ("data", "askdata"):
         try:
-            from continum.askdata import get_metadata as _askdata_meta
+            from continum.mapMeta import get_metadata as _askdata_meta
 
             out += _askdata_meta().get("suggested_questions", [])[:3]
         except Exception:
@@ -2279,10 +2393,10 @@ def _maybe_readout_answer(app, q: str, force: bool = False):
     None so normal routing runs. With `force`, answers even with no saved outputs
     (readout.answer gives a friendly 'no readouts yet' message)."""
     try:
-        from continum.askdata import readout as _readout
+        from continum.orchestration import answer, get_store, is_readout_question
 
-        if force or (_readout.get_store(app) and _readout.is_readout_question(q)):
-            return _readout.answer(app, q).get("response", "")
+        if force or (get_store(app) and is_readout_question(q)):
+            return answer(app, q).get("response", "")
     except Exception:
         logger.exception("readout answer failed")
     return None
@@ -2291,7 +2405,7 @@ def _maybe_readout_answer(app, q: str, force: bool = False):
 @bp.route("/copilot/ask", methods=["POST"])
 def copilot_ask():
     # MatchView tool-calling layer: detect a module intent → confirm → execute.
-    from continum.orchestrator import (
+    from continum.orchestration import (
         KIND_DATA,
         KIND_DEPLOY,
         confirmation_message,
@@ -2299,7 +2413,7 @@ def copilot_ask():
         execute_tool,
         get_tool,
     )
-    from continum.orchestrator import deploy_warning as _deploy_warning
+    from continum.orchestration import deploy_warning as _deploy_warning
 
     app = _app()
     body = request.get_json(silent=True) or {}
@@ -2409,7 +2523,7 @@ def copilot_ask():
     #   routing LLM call is only made when actually needed.
     else:
         try:
-            from continum.askrouter import llm_route
+            from continum.orchestration import llm_route
 
             # A11 — faster pathing: an explicit keyword tool match (high precision,
             # e.g. "run the readout", "is it healthy", "deploy") needs no routing
@@ -2541,9 +2655,9 @@ def copilot_ask():
 def copilot_metadata():
     # Describe the AskData engine's connected dataset (used to seed chips).
     try:
-        from continum.askdata import get_active_dataset_name
-        from continum.askdata import get_metadata as _askdata_meta
-        from continum.askdata.llm import active_provider
+        from continum import active_provider
+        from continum.mapMeta import get_active_dataset_name
+        from continum.mapMeta import get_metadata as _askdata_meta
 
         meta = _askdata_meta()
         tables = list((meta.get("column_descriptions") or {}).keys())
@@ -2566,7 +2680,7 @@ def copilot_metadata():
 def copilot_datasets():
     # List the AskData datasets available to switch between (data view + switcher).
     try:
-        from continum.askdata.metadata import METADATA, get_display_name, list_datasets
+        from continum.mapMeta import METADATA, get_display_name, list_datasets
 
         items = [
             {
@@ -2591,8 +2705,8 @@ def copilot_set_dataset():
     # Switch the active AskData dataset by rebuilding the cached engine.
     import os
 
-    from continum.askdata.engine import AskDataGraphEngine
-    from continum.askdata.metadata import get_metadata, list_datasets
+    from continum.mapMeta import list_datasets
+    from continum.orchestration import get_orchestrator
 
     app = _app()
     body = request.get_json(silent=True) or {}
@@ -2600,11 +2714,11 @@ def copilot_set_dataset():
     if name not in list_datasets():
         return jsonify({"error": "unknown dataset: " + name}), 400
     # DuckDB-backed datasets need the booted warehouse — guard the boot race.
-    if get_metadata(name).get("source") == "duckdb" and getattr(app, "db", None) is None:
+    if getattr(app, "db", None) is None:
         return jsonify({"error": "Experiment data is still loading — try again in a moment."}), 503
     try:
         os.environ["ACTIVE_DATASET"] = name
-        app._askdata_graph = AskDataGraphEngine(dataset=name, db=getattr(app, "db", None))
+        get_orchestrator(app, dataset=name, rebuild=True)
         # Keep the session's gating state in sync with the AskData engine so the
         # chatbot knows a dataset/company is now selected.
         if getattr(app, "ses", None) is not None:
@@ -2634,14 +2748,16 @@ def copilot_portfolio():
     ASSUMED_AOV = 500.0  # same baseline default the rest of the app uses when the
     # synthetic dataset carries no order_value (AOV resolves to 0)
     try:
-        row = db.execute("""
+        row = db.execute(
+            """
             SELECT COUNT(DISTINCT experiment_name)                              AS n_experiments,
                    COUNT(*)                                                     AS n_inquiries,
                    AVG(CAST(converted_to_order AS DOUBLE))                      AS ior,
                    AVG(CASE WHEN converted_to_order = 1 THEN order_value END)   AS measured_aov,
                    SUM(CASE WHEN converted_to_order = 1 THEN COALESCE(order_value,0) ELSE 0 END) AS measured_gmv
             FROM gold_experiment_analysis
-        """).fetchone()
+        """
+        ).fetchone()
         n_exp, n_inq, ior, measured_aov, measured_gmv = row
         n_inq = int(n_inq or 0)
         ior = float(ior or 0.0)
@@ -2682,7 +2798,7 @@ def copilot_portfolio():
 def copilot_data_preview():
     # Sample rows from every table of the connected dataset (the data view).
     try:
-        from continum.askdata import get_askdata_engine
+        from continum.orchestration import get_askdata_engine
 
         eng = get_askdata_engine(_app())
         return jsonify(eng.preview(limit=5))
@@ -2699,14 +2815,14 @@ def copilot_data_preview():
 
 @bp.route("/copilot/readouts")
 def copilot_readouts():
-    from continum.askdata import readout as R
+    from continum.orchestration import list_readouts
 
-    return jsonify({"readouts": R.list_readouts(_app())})
+    return jsonify({"readouts": list_readouts(_app())})
 
 
 @bp.route("/copilot/readout/upload", methods=["POST"])
 def copilot_readout_upload():
-    from continum.askdata import readout as R
+    from continum.orchestration import add_uploaded, list_readouts
 
     app = _app()
     files = request.files.getlist("files")
@@ -2717,7 +2833,7 @@ def copilot_readout_upload():
     added = []
     for f in files:
         try:
-            item = R.add_uploaded(app, f.filename or "readout", f.read())
+            item = add_uploaded(app, f.filename or "readout", f.read())
             added.append(
                 {
                     "id": item["id"],
@@ -2733,7 +2849,7 @@ def copilot_readout_upload():
         {
             "added": added,
             "count": len([a for a in added if not a.get("error")]),
-            "readouts": R.list_readouts(app),
+            "readouts": list_readouts(app),
         }
     )
 
@@ -2741,7 +2857,7 @@ def copilot_readout_upload():
 @bp.route("/copilot/readout/register", methods=["POST"])
 def copilot_readout_register():
     # Register a finished run's generated outputs (PDF/text) as readouts.
-    from continum.askdata import readout as R
+    from continum.orchestration import add_generated, list_readouts
 
     app = _app()
     body = request.get_json(silent=True) or {}
@@ -2749,17 +2865,17 @@ def copilot_readout_register():
     paths = app.stream_queues.get(f"files_{run_id}", []) if run_id else []
     added = []
     for p in paths:
-        item = R.add_generated(app, p, run_id=run_id)
+        item = add_generated(app, p, run_id=run_id)
         if item:
             added.append({"id": item["id"], "name": item["name"], "n_chars": item["n_chars"]})
-    return jsonify({"added": added, "count": len(added), "readouts": R.list_readouts(app)})
+    return jsonify({"added": added, "count": len(added), "readouts": list_readouts(app)})
 
 
 @bp.route("/copilot/readouts/clear", methods=["POST"])
 def copilot_readouts_clear():
-    from continum.askdata import readout as R
+    from continum.orchestration import clear
 
-    n = R.clear(_app())
+    n = clear(_app())
     return jsonify({"cleared": n, "readouts": []})
 
 
@@ -2776,12 +2892,12 @@ def copilot_readouts_clear():
 
 def _flow_reply(state: dict, config: dict, *, error: str = None, extra: dict = None):
     """Render a filling/confirm flow state into the chat payload."""
-    from continum.askdata import flow as F
+    from continum.orchestration import format_confirm, format_question
 
     if state.get("stage") == "filling":
-        text, chips = F.format_question(state, config)
+        text, chips = format_question(state, config)
     elif state.get("stage") == "confirm":
-        text, chips = F.format_confirm(state, config)
+        text, chips = format_confirm(state, config)
     else:
         text, chips = "", []
     if error:
@@ -2801,7 +2917,19 @@ def _flow_reply(state: dict, config: dict, *, error: str = None, extra: dict = N
 
 @bp.route("/copilot/flow", methods=["POST"])
 def copilot_flow():
-    from continum.askdata import flow as F
+    from continum.orchestration import (
+        init_slots,
+        is_no,
+        is_restart,
+        is_yes,
+        locate,
+        match_module,
+        module_label,
+        record_answer,
+        render_overview,
+        run_fields,
+        suggest_next,
+    )
 
     app = _app()
     body = request.get_json(silent=True) or {}
@@ -2825,9 +2953,9 @@ def copilot_flow():
     active_exp = uic.get("active_experiment") or (ses.active_experiment if ses else "") or ""
 
     def _overview(note: str = ""):
-        prog = F.locate(ses)
-        sugg = F.suggest_next(ses)
-        text = F.render_overview(prog, sugg)
+        prog = locate(ses)
+        sugg = suggest_next(ses)
+        text = render_overview(prog, sugg)
         if note:
             text = note + "\n\n" + text
         chips = [{"label": s["label"], "value": s["module_key"]} for s in sugg]
@@ -2845,14 +2973,14 @@ def copilot_flow():
 
     try:
         # (Re)start → overview + next-step suggestions.
-        if not st or F.is_restart(msg):
+        if not st or is_restart(msg):
             return _overview()
 
         stage = st.get("stage")
 
         # ── Pick a step ──────────────────────────────────────────────────────
         if stage == "choosing":
-            mod = F.match_module(msg, ses)
+            mod = match_module(msg, ses)
             if mod == "askdata":
                 return jsonify(
                     {
@@ -2867,13 +2995,13 @@ def copilot_flow():
             if not mod:
                 return _overview("I didn't catch which step you meant — pick one:")
             cfg = _get_module_config(mod, app.db)
-            return _flow_reply(F.init_slots(mod, cfg, active_exp), cfg)
+            return _flow_reply(init_slots(mod, cfg, active_exp), cfg)
 
         # ── Fill one input slot per turn ─────────────────────────────────────
         if stage == "filling":
             mod = st.get("module_key")
             cfg = _get_module_config(mod, app.db)
-            new_state, err = F.record_answer(st, msg, cfg)
+            new_state, err = record_answer(st, msg, cfg)
             return _flow_reply(new_state, cfg, error=err)
 
         # ── Confirm → hand off to execution ──────────────────────────────────
@@ -2882,13 +3010,13 @@ def copilot_flow():
             low = msg.strip().lower()
             if low == "__edit__" or "start over" in low or low == "edit":
                 cfg = _get_module_config(mod, app.db)
-                return _flow_reply(F.init_slots(mod, cfg, active_exp), cfg)
-            if low == "__cancel__" or F.is_no(msg):
+                return _flow_reply(init_slots(mod, cfg, active_exp), cfg)
+            if low == "__cancel__" or is_no(msg):
                 return _overview("No problem — cancelled that step.")
-            if F.is_yes(msg) or "run" in low:
+            if is_yes(msg) or "run" in low:
                 cfg = _get_module_config(mod, app.db)
-                title = cfg.get("title", F.module_label(mod))
-                fields = F.run_fields(st)
+                title = module_label(mod)
+                fields = run_fields(st)
                 try:
                     app.aud.record(
                         "copilot_flow_run",

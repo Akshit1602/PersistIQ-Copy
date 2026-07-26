@@ -9,7 +9,7 @@ import pytest
 
 class TestProportionTest:
     def test_null_effect_not_significant(self, null_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         ctrl = null_experiment["ctrl"]
         treat = null_experiment["treat"]
@@ -23,7 +23,7 @@ class TestProportionTest:
         assert r["ci_lo_pp"] <= r["ci_hi_pp"]
 
     def test_positive_effect_significant(self, positive_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -33,7 +33,7 @@ class TestProportionTest:
         assert r["delta_pp"] > 0
 
     def test_negative_effect_detected(self, negative_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         ctrl = negative_experiment["ctrl"]
         treat = negative_experiment["treat"]
@@ -42,7 +42,7 @@ class TestProportionTest:
         assert r["delta_pp"] < 0
 
     def test_ci_contains_zero_under_null(self, null_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         rng = np.random.default_rng(99)
         n_trials, n_zero_in_ci = 200, 0
@@ -58,7 +58,7 @@ class TestProportionTest:
         assert coverage > 0.88, f"CI coverage under null: {coverage:.2f} (expected ~0.95)"
 
     def test_bonferroni_adjustment(self, positive_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -71,7 +71,7 @@ class TestProportionTest:
         assert r_bonf["ci_hi_pp"] > r_nominal["ci_hi_pp"]  # wider CI
 
     def test_zero_conversions(self):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         r = proportion_test(1000, 0, 1000, 0)
         assert r["rate_control"] == 0.0
@@ -79,14 +79,14 @@ class TestProportionTest:
         assert r["delta_pp"] == 0.0
 
     def test_all_conversions(self):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         r = proportion_test(1000, 1000, 1000, 999)
         assert r["rate_control"] == pytest.approx(1.0)
         assert r["rate_treatment"] == pytest.approx(0.999)
 
     def test_output_keys_complete(self, positive_experiment):
-        from continum.experimentation.stats.statistics import proportion_test
+        from continum.ExpSuite.stats.statistics import proportion_test
 
         ctrl, treat = positive_experiment["ctrl"], positive_experiment["treat"]
         r = proportion_test(len(ctrl), int(ctrl.sum()), len(treat), int(treat.sum()))
@@ -121,7 +121,7 @@ class TestProportionTest:
 
 class TestMeansTest:
     def test_detects_aov_lift(self, revenue_arrays):
-        from continum.experimentation.stats.statistics import means_test
+        from continum.ExpSuite.stats.statistics import means_test
 
         r = means_test(revenue_arrays["ctrl"], revenue_arrays["treat"])
         assert r["mean_control"] == pytest.approx(4000, rel=0.20)
@@ -130,7 +130,7 @@ class TestMeansTest:
         assert r["delta_abs"] > 0
 
     def test_winsorisation_reduces_variance(self, rng):
-        from continum.experimentation.stats.statistics import means_test
+        from continum.ExpSuite.stats.statistics import means_test
 
         # Add extreme outlier
         ctrl = np.append(rng.exponential(4000, 999), [1_000_000.0])
@@ -141,7 +141,7 @@ class TestMeansTest:
         assert abs(r_wins["mean_control"] - 4000) < abs(r_raw["mean_control"] - 4000)
 
     def test_insufficient_data_returns_error(self):
-        from continum.experimentation.stats.statistics import means_test
+        from continum.ExpSuite.stats.statistics import means_test
 
         r = means_test(np.array([1.0]), np.array([2.0, 3.0]))
         assert "error" in r
@@ -154,21 +154,21 @@ class TestMeansTest:
 
 class TestSampleSize:
     def test_larger_mde_needs_less_n(self):
-        from continum.experimentation.stats.statistics import compute_sample_size
+        from continum.ExpSuite.stats.statistics import compute_sample_size
 
         r5 = compute_sample_size(0.18, 0.18 * 0.05)  # 5% MDE
         r10 = compute_sample_size(0.18, 0.18 * 0.10)  # 10% MDE
         assert r5["n_per_variant"] > r10["n_per_variant"]
 
     def test_higher_power_needs_more_n(self):
-        from continum.experimentation.stats.statistics import compute_sample_size
+        from continum.ExpSuite.stats.statistics import compute_sample_size
 
         r80 = compute_sample_size(0.18, 0.018, power=0.80)
         r90 = compute_sample_size(0.18, 0.018, power=0.90)
         assert r90["n_per_variant"] > r80["n_per_variant"]
 
     def test_more_variants_increases_total(self):
-        from continum.experimentation.stats.statistics import compute_sample_size
+        from continum.ExpSuite.stats.statistics import compute_sample_size
 
         r2 = compute_sample_size(0.18, 0.018, n_variants=2)
         r4 = compute_sample_size(0.18, 0.018, n_variants=4)
@@ -176,7 +176,7 @@ class TestSampleSize:
         assert r4["n_per_variant"] == r2["n_per_variant"]
 
     def test_baseline_included_in_output(self):
-        from continum.experimentation.stats.statistics import compute_sample_size
+        from continum.ExpSuite.stats.statistics import compute_sample_size
 
         r = compute_sample_size(0.20, 0.02)
         assert r["baseline_rate"] == pytest.approx(0.20)
@@ -190,21 +190,21 @@ class TestSampleSize:
 
 class TestSRM:
     def test_balanced_no_srm(self, balanced_srm_counts):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         r = detect_srm(balanced_srm_counts)
         assert not r.srm_detected
         assert r.severity.value == "none"
 
     def test_imbalanced_srm_detected(self, imbalanced_srm_counts):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         r = detect_srm(imbalanced_srm_counts)
         assert r.srm_detected
         assert r.severity.value in ("moderate", "severe")
 
     def test_g_test_calibration(self, balanced_srm_counts):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         r = detect_srm(balanced_srm_counts)
         # Both chi2 and G-test should agree on no-SRM
@@ -212,7 +212,7 @@ class TestSRM:
         assert r.p_value_g > 0.05
 
     def test_relative_bias_correct(self, imbalanced_srm_counts):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         r = detect_srm(imbalanced_srm_counts)
         # treatment is under-represented by (3500-4250)/4250 ≈ -17.6%
@@ -220,20 +220,20 @@ class TestSRM:
         assert bias_treat < -0.10, f"Expected negative bias; got {bias_treat}"
 
     def test_root_cause_hints_nonempty_on_srm(self, imbalanced_srm_counts):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         r = detect_srm(imbalanced_srm_counts)
         assert len(r.root_cause_hints) > 0
 
     def test_three_way_srm(self):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         counts = {"ctrl": 3000, "treat_a": 3000, "treat_b": 1000}
         r = detect_srm(counts)
         assert r.srm_detected
 
     def test_type1_error_rate(self):
-        from continum.experimentation.stats.srm_detector import detect_srm
+        from continum.ExpSuite.stats.srm_detector import detect_srm
 
         rng = np.random.default_rng(7)
         n_false_positives = 0
@@ -255,7 +255,7 @@ class TestSRM:
 
 class TestCUPED:
     def test_variance_reduction_positive(self, cuped_arrays):
-        from continum.experimentation.stats.cuped import apply_cuped
+        from continum.ExpSuite.stats.cuped import apply_cuped
 
         r = apply_cuped(
             cuped_arrays["post_ctrl"],
@@ -267,7 +267,7 @@ class TestCUPED:
         assert r.variance_adjusted < r.variance_raw
 
     def test_theta_sign_correct(self, cuped_arrays):
-        from continum.experimentation.stats.cuped import apply_cuped
+        from continum.ExpSuite.stats.cuped import apply_cuped
 
         r = apply_cuped(
             cuped_arrays["post_ctrl"],
@@ -279,8 +279,8 @@ class TestCUPED:
         assert r.theta > 0
 
     def test_adjusted_delta_closer_to_truth(self, cuped_arrays):
-        from continum.experimentation.stats.cuped import apply_cuped
-        from continum.experimentation.stats.statistics import means_test
+        from continum.ExpSuite.stats.cuped import apply_cuped
+        from continum.ExpSuite.stats.statistics import means_test
 
         post_c = cuped_arrays["post_ctrl"]
         post_t = cuped_arrays["post_treat"]
@@ -293,7 +293,7 @@ class TestCUPED:
         assert r_cuped.se_adj > 0
 
     def test_low_correlation_triggers_warning(self, rng):
-        from continum.experimentation.stats.cuped import apply_cuped
+        from continum.ExpSuite.stats.cuped import apply_cuped
 
         n = 500
         y_c = rng.normal(0.18, 0.05, n)
@@ -305,7 +305,7 @@ class TestCUPED:
         assert len(r.warnings) > 0, "Should warn on low-correlation covariate"
 
     def test_power_gain_formula(self):
-        from continum.experimentation.stats.cuped import cuped_power_gain
+        from continum.ExpSuite.stats.cuped import cuped_power_gain
 
         r = cuped_power_gain(rho=0.7, baseline_rate=0.18, mde_abs=0.018)
         # ρ=0.7 → 1-0.49 = 51% variance reduction → ~51% fewer samples needed
@@ -314,7 +314,7 @@ class TestCUPED:
         assert r["n_per_variant_cuped"] < r["n_per_variant_raw"]
 
     def test_delta_method_ratio(self, revenue_arrays):
-        from continum.experimentation.stats.cuped import delta_method_ratio
+        from continum.ExpSuite.stats.cuped import delta_method_ratio
 
         ctrl = revenue_arrays["ctrl"]
         treat = revenue_arrays["treat"]
@@ -328,7 +328,7 @@ class TestCUPED:
         assert 0 <= r["p_value"] <= 1
 
     def test_bootstrap_ci_contains_true_delta(self, positive_experiment, rng):
-        from continum.experimentation.stats.cuped import bootstrap_ci
+        from continum.ExpSuite.stats.cuped import bootstrap_ci
 
         ctrl = positive_experiment["ctrl"].astype(float)
         treat = positive_experiment["treat"].astype(float)
@@ -346,7 +346,7 @@ class TestCUPED:
 
 class TestBayesian:
     def test_positive_experiment_high_prob_treat_better(self, positive_experiment):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -356,7 +356,7 @@ class TestBayesian:
         ), f"Expected high P(T>C) for positive experiment; got {r['prob_treat_better']}"
 
     def test_null_experiment_uncertain(self):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         rng = np.random.default_rng(0)
         probs = []
@@ -372,7 +372,7 @@ class TestBayesian:
         ), f"Average P(T>C) over 30 null experiments should be ~0.5; got {avg:.3f}"
 
     def test_hdi_is_shorter_than_equal_tailed(self, positive_experiment):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -382,7 +382,7 @@ class TestBayesian:
         assert hdi_width > 0
 
     def test_posterior_mean_near_observed(self, positive_experiment):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -394,7 +394,7 @@ class TestBayesian:
         assert r["posterior_mean_treat"] == pytest.approx(obs_rate_t, abs=0.005)
 
     def test_expected_loss_ship_lower_for_positive(self, positive_experiment):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         ctrl = positive_experiment["ctrl"]
         treat = positive_experiment["treat"]
@@ -403,7 +403,7 @@ class TestBayesian:
         assert r["expected_loss_ship"] < r["expected_loss_hold"]
 
     def test_multi_arm(self, rng):
-        from continum.experimentation.stats.bayesian import bayesian_multi_arm
+        from continum.ExpSuite.stats.bayesian import bayesian_multi_arm
 
         arm_data = {
             "control": (3000, 540),
@@ -417,14 +417,14 @@ class TestBayesian:
         assert r["recommended_arm"] == "treat_a"
 
     def test_normal_normal_positive(self, revenue_arrays):
-        from continum.experimentation.stats.bayesian import normal_normal_test
+        from continum.ExpSuite.stats.bayesian import normal_normal_test
 
         r = normal_normal_test(revenue_arrays["ctrl"], revenue_arrays["treat"])
         assert r["prob_treat_better"] > 0.50
         assert r["delta_posterior_mean"] > 0
 
     def test_output_keys_present(self, positive_experiment):
-        from continum.experimentation.stats.bayesian import beta_binomial_test
+        from continum.ExpSuite.stats.bayesian import beta_binomial_test
 
         ctrl, treat = positive_experiment["ctrl"], positive_experiment["treat"]
         r = beta_binomial_test(len(ctrl), int(ctrl.sum()), len(treat), int(treat.sum()))
@@ -451,7 +451,7 @@ class TestBayesian:
 
 class TestSequential:
     def test_e_value_at_least_one_under_null(self, rng):
-        from continum.experimentation.stats.sequential import compute_e_value
+        from continum.ExpSuite.stats.sequential import compute_e_value
 
         e_values = []
         for _ in range(300):
@@ -466,14 +466,14 @@ class TestSequential:
         ), f"E[E_t] = {np.mean(e_values):.3f} under null (expected ≤ 1)"
 
     def test_large_effect_triggers_boundary(self):
-        from continum.experimentation.stats.sequential import compute_e_value
+        from continum.ExpSuite.stats.sequential import compute_e_value
 
         # Very large effect, large sample — should exceed 1/0.05 = 20
         e = compute_e_value(5000, 1000, 5000, 1200)
         assert e >= 20, f"Expected e-value ≥ 20 for +4pp effect; got {e:.2f}"
 
     def test_type1_error_rate_controlled(self, rng):
-        from continum.experimentation.stats.sequential import SequentialTester
+        from continum.ExpSuite.stats.sequential import SequentialTester
 
         n_false = 0
         n_trials = 200
@@ -489,7 +489,7 @@ class TestSequential:
         assert fpr < 0.20, f"Sequential test type-I error too high: {fpr:.3f}"
 
     def test_always_valid_ci_monotone_shrinks(self, rng):
-        from continum.experimentation.stats.sequential import confidence_sequence
+        from continum.ExpSuite.stats.sequential import confidence_sequence
 
         widths = []
         for n in [100, 500, 2000, 10000]:
@@ -502,7 +502,7 @@ class TestSequential:
             assert widths[i] > widths[i + 1], f"CS width should shrink: widths={widths}"
 
     def test_obrien_fleming_cumulative_alpha(self):
-        from continum.experimentation.stats.sequential import obrien_fleming_boundary
+        from continum.ExpSuite.stats.sequential import obrien_fleming_boundary
 
         bounds = obrien_fleming_boundary(4, [0.25, 0.50, 0.75, 1.0], alpha=0.05)
         for b in bounds:
@@ -511,7 +511,7 @@ class TestSequential:
         assert bounds[-1]["alpha_spent_total"] == pytest.approx(0.05, abs=0.001)
 
     def test_e_to_p_conversion(self):
-        from continum.experimentation.stats.sequential import e_value_to_p
+        from continum.ExpSuite.stats.sequential import e_value_to_p
 
         assert e_value_to_p(1.0) == pytest.approx(1.0)
         assert e_value_to_p(20.0) == pytest.approx(0.05)
@@ -519,7 +519,7 @@ class TestSequential:
         assert e_value_to_p(0.5) == pytest.approx(1.0)
 
     def test_sequential_tester_state_accumulates(self):
-        from continum.experimentation.stats.sequential import SequentialTester
+        from continum.ExpSuite.stats.sequential import SequentialTester
 
         tester = SequentialTester(alpha=0.05, planned_n=5000)
         for batch in range(5):
@@ -537,7 +537,7 @@ class TestSequential:
 
 class TestGuardrails:
     def test_no_breach_when_ok(self, rng):
-        from continum.experimentation.stats.guardrails import (
+        from continum.ExpSuite.stats.guardrails import (
             GuardrailSpec,
             GuardrailStatus,
             run_guardrail_checks,
@@ -552,7 +552,7 @@ class TestGuardrails:
         assert not result.stop_experiment
 
     def test_hard_stop_on_floor_breach(self, rng):
-        from continum.experimentation.stats.guardrails import (
+        from continum.ExpSuite.stats.guardrails import (
             GuardrailSpec,
             GuardrailStatus,
             run_guardrail_checks,
@@ -566,7 +566,7 @@ class TestGuardrails:
         assert result.stop_experiment
 
     def test_relative_harm_detected(self, rng):
-        from continum.experimentation.stats.guardrails import (
+        from continum.ExpSuite.stats.guardrails import (
             GuardrailSpec,
             run_guardrail_checks,
         )
@@ -582,7 +582,7 @@ class TestGuardrails:
         assert result.any_breach or result.any_hard_stop
 
     def test_summary_message_populated(self, rng):
-        from continum.experimentation.stats.guardrails import (
+        from continum.ExpSuite.stats.guardrails import (
             GuardrailSpec,
             run_guardrail_checks,
         )
@@ -594,7 +594,7 @@ class TestGuardrails:
         assert len(result.summary_message) > 0
 
     def test_missing_metric_skipped_gracefully(self, rng):
-        from continum.experimentation.stats.guardrails import (
+        from continum.ExpSuite.stats.guardrails import (
             GuardrailSpec,
             run_guardrail_checks,
         )
@@ -616,7 +616,7 @@ class TestPipelineIntegration:
     def test_full_pipeline_returns_result(self, experiment_df):
         import duckdb
 
-        from continum.experimentation.analysis_dag import (
+        from continum.ExpSuite.analysis.analysis_dag import (
             run_experiment_analysis_pipeline,
         )
 
@@ -640,7 +640,7 @@ class TestPipelineIntegration:
     def test_pipeline_segment_slices_populated(self, experiment_df):
         import duckdb
 
-        from continum.experimentation.analysis_dag import (
+        from continum.ExpSuite.analysis.analysis_dag import (
             run_experiment_analysis_pipeline,
         )
 
@@ -662,17 +662,19 @@ class TestPipelineIntegration:
     def test_pipeline_handles_empty_df_gracefully(self):
         import duckdb
 
-        from continum.experimentation.analysis_dag import (
+        from continum.ExpSuite.analysis.analysis_dag import (
             run_experiment_analysis_pipeline,
         )
 
         db = duckdb.connect(":memory:")
-        db.execute("""
+        db.execute(
+            """
             CREATE TABLE gold_experiment_analysis AS
             SELECT 'ctrl' AS variant, 0 AS converted_to_order,
                    '2025-01-01' AS created_at, 'exp1' AS experiment_name
             WHERE FALSE
-        """)
+        """
+        )
         result = run_experiment_analysis_pipeline(
             experiment_id="nonexistent",
             experiment_name="nonexistent",
@@ -686,7 +688,7 @@ class TestPipelineIntegration:
     def test_pipeline_srm_detected_in_result(self, rng):
         import duckdb
 
-        from continum.experimentation.analysis_dag import (
+        from continum.ExpSuite.analysis.analysis_dag import (
             run_experiment_analysis_pipeline,
         )
 
@@ -723,7 +725,7 @@ class TestDetectors:
     def test_volume_anomaly_clean(self, rng):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_volume_anomaly
+        from continum.ExpSuite.discovery.detectors import detect_volume_anomaly
 
         idx = pd.date_range("2025-01-01", periods=40, freq="D")
         vals = pd.Series(rng.normal(500, 20, 40), index=idx)
@@ -734,7 +736,7 @@ class TestDetectors:
     def test_volume_anomaly_spike(self, rng):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_volume_anomaly
+        from continum.ExpSuite.discovery.detectors import detect_volume_anomaly
 
         idx = pd.date_range("2025-01-01", periods=40, freq="D")
         vals = pd.Series([500.0] * 39 + [5000.0], index=idx)  # 10x spike
@@ -745,7 +747,7 @@ class TestDetectors:
     def test_distribution_shift_detected(self):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_distribution_shift
+        from continum.ExpSuite.discovery.detectors import detect_distribution_shift
 
         baseline = pd.Series({"A": 1000, "B": 1000, "C": 1000})
         today = pd.Series({"A": 2800, "B": 100, "C": 100})
@@ -757,7 +759,7 @@ class TestDetectors:
     def test_freshness_stale(self):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_freshness
+        from continum.ExpSuite.discovery.detectors import detect_freshness
 
         stale = pd.Timestamp.now() - pd.Timedelta(hours=48)
         r = detect_freshness(stale, sla_hours=24)
@@ -766,7 +768,7 @@ class TestDetectors:
     def test_freshness_fresh(self):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_freshness
+        from continum.ExpSuite.discovery.detectors import detect_freshness
 
         fresh = pd.Timestamp.now() - pd.Timedelta(minutes=5)
         r = detect_freshness(fresh, sla_hours=24)
@@ -775,7 +777,7 @@ class TestDetectors:
     def test_null_spike_detected(self, rng):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import detect_null_spike
+        from continum.ExpSuite.discovery.detectors import detect_null_spike
 
         df = pd.DataFrame(
             {
@@ -789,7 +791,7 @@ class TestDetectors:
     def test_profile_dataframe_numeric_stats(self, revenue_arrays):
         import pandas as pd
 
-        from continum.experimentation.monitoring.detectors import profile_dataframe
+        from continum.ExpSuite.discovery.detectors import profile_dataframe
 
         df = pd.DataFrame(
             {
@@ -806,7 +808,7 @@ class TestDetectors:
 
 class TestMetricPlanner:
     def test_infer_kpi_config_no_llm_returns_defaults(self):
-        from continum.experimentation.metric_planner import infer_kpi_config
+        from continum.ExpSuite.planning.metric_planner import infer_kpi_config
 
         m, i, p, u = infer_kpi_config("Some feature", llm=None)
         assert m in ("mvp", "iteration", "critical")
@@ -814,7 +816,7 @@ class TestMetricPlanner:
         assert p in ("leading", "balanced", "lagging")
 
     def test_gen_metrics_bundle_has_all_sections(self):
-        from continum.experimentation.metric_planner import gen_metrics_bundle
+        from continum.ExpSuite.planning.metric_planner import gen_metrics_bundle
 
         r = gen_metrics_bundle("Checkout redesign", "conversion", llm=None)
         for section in (
@@ -828,13 +830,13 @@ class TestMetricPlanner:
             assert len(r[section]) > 10
 
     def test_format_past_learnings_empty(self):
-        from continum.experimentation.metric_planner import format_past_learnings
+        from continum.ExpSuite.planning.metric_planner import format_past_learnings
 
         r = format_past_learnings([])
         assert "No relevant" in r
 
     def test_format_past_learnings_with_data(self):
-        from continum.experimentation.metric_planner import format_past_learnings
+        from continum.ExpSuite.planning.metric_planner import format_past_learnings
 
         learnings = [
             {
@@ -850,7 +852,7 @@ class TestMetricPlanner:
         assert "Mobile matters" in r
 
     def test_infer_constraints_no_llm(self):
-        from continum.experimentation.metric_planner import infer_constraints_from_description
+        from continum.ExpSuite.planning.metric_planner import infer_constraints_from_description
 
         c, u = infer_constraints_from_description("New checkout flow", llm=None)
         assert "can_randomise" in c
@@ -861,8 +863,8 @@ class TestNarrative:
     def test_template_narrative_structure(self, experiment_df):
         import duckdb
 
-        from continum.experimentation.analysis_dag import run_experiment_analysis_pipeline
-        from continum.experimentation.narrative import (
+        from continum.ExpSuite.analysis.analysis_dag import run_experiment_analysis_pipeline
+        from continum.ExpSuite.analysis.narrative import (
             generate_decision_memo,
             generate_executive_narrative,
         )
@@ -888,7 +890,7 @@ class TestNarrative:
     def test_causal_narrative_no_llm(self):
         from dataclasses import dataclass
 
-        from continum.experimentation.narrative import generate_causal_narrative
+        from continum.ExpSuite.analysis.narrative import generate_causal_narrative
 
         @dataclass
         class FakeEst:

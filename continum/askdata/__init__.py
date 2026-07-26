@@ -1,33 +1,35 @@
+"""AskData — the AI-powered NL→SQL / Visualization / Insight layer.
+
+Three generators, each exposing LangGraph node bodies that the
+:mod:`continum.orchestration` graph wires together:
+
+* :mod:`.SQLGenerator`   — refine/breakdown + NL→SQL on the dataset's DuckDB schema
+* :mod:`.VisualGenerator`— a Plotly chart spec from the SQL result
+* :mod:`.InsightGenerator` — short insights from the data or ContextGraph context
+
+The graph topology + engine live in :mod:`continum.orchestration`, not here.
 """
-AskData — the multi-agent LangGraph data assistant, integrated into Continum.
 
-Ported from the standalone AskData project (Streamlit + LangGraph + Azure
-OpenAI).  Inside Continum it runs behind the Copilot pane and works on Azure
-OpenAI, standard OpenAI, or a local fallback model depending on configured
-credentials.
-
-Public surface:
-    get_askdata_engine(app=None) -> AskDataGraphEngine
-    AskDataGraphEngine.ask(question, ui_context=None) -> dict
-"""
-
-from .engine import AskDataGraphEngine, get_askdata_engine
-from .llm import active_provider, get_chat_llm, is_cloud
-from .metadata import get_active_dataset_name, get_metadata, list_datasets
+from .InsightGenerator import (
+    about,
+    describe_result,
+    get_readme_context,
+    grounded_insight,
+    insight_node,
+    run_ask,
+)
+from .SQLGenerator import clarification_node, refine_node, sql_node
+from .VisualGenerator import visualization_node
 
 __all__ = [
-    "AskDataGraphEngine",
-    "get_askdata_engine",
-    "active_provider",
-    "is_cloud",
-    "get_chat_llm",
-    "get_metadata",
-    "get_active_dataset_name",
-    "list_datasets",
-    "AnalyticsGroundedAskEngine",
-    "get_ask_engine",
+    "refine_node",
+    "sql_node",
+    "clarification_node",
+    "visualization_node",
+    "insight_node",
+    "describe_result",
+    "grounded_insight",
+    "about",
+    "get_readme_context",
     "run_ask",
-    "AskIntent",
 ]
-
-from .ask_engine import AnalyticsGroundedAskEngine, AskIntent, get_ask_engine, run_ask

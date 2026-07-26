@@ -12,7 +12,7 @@ from __future__ import annotations
 
 # ── A9: the confirmation prompt describes what the tool will do ───────────────
 def test_confirmation_message_includes_tool_description():
-    from continum.orchestrator import confirmation_message, get_tool
+    from continum.orchestration import confirmation_message, get_tool
 
     tool = get_tool("email_analytics")
     msg = confirmation_message(tool)
@@ -23,7 +23,7 @@ def test_confirmation_message_includes_tool_description():
 
 # ── A7: experiment-scoped tools call out a missing experiment ─────────────────
 def test_needs_experiment_callout():
-    from continum.orchestrator import get_tool
+    from continum.orchestration import get_tool
     from continum.userui.routes import api
 
     class _Ses:  # no active experiment
@@ -48,6 +48,42 @@ def test_module_config_falls_back_to_registry_description():
 
     cfg = _get_module_config("anomaly_synthesis", None)
     assert cfg["description"] and cfg["description"] != "Run this module."
+
+
+# ── module identity: registry.display_name is the single source of truth ──────
+# Guards against the naming-drift bug where the AskAI chatbot, the guided-flow
+# prose, and the dashboard card each grew their own separate hardcoded label
+# for the same module (e.g. "experiment_analysis" shown as "Experiment
+# Analysis" on one surface and "A/B Readout" on another). See
+# .claude/skills/module-registry.
+def test_matchview_tool_names_match_registry_display_name():
+    from continum.ExpSuite.registry import get_module
+    from continum.orchestration import MATCHVIEW_TOOLS
+
+    for tool in MATCHVIEW_TOOLS:
+        spec = get_module(tool.target)
+        if spec is None:  # e.g. target="askdata" has no registry module/card
+            continue
+        assert tool.module_name == spec.display_name, (
+            f"MatchView tool {tool.key!r} says {tool.module_name!r} but the "
+            f"registry/dashboard card for {tool.target!r} says {spec.display_name!r}"
+        )
+
+
+def test_flow_module_label_matches_registry_display_name():
+    from continum.ExpSuite.registry import list_modules
+    from continum.orchestration.flow import module_label
+
+    for m in list_modules():
+        assert module_label(m["name"]) == m["display_name"]
+
+
+def test_module_redirect_uses_registry_display_name():
+    from continum.userui.routes.api import _module_redirect_msg
+
+    msg = _module_redirect_msg(app=None, module_name="experiment_analysis")
+    assert "A/B Readout" in msg
+    assert "Experiment Analysis" not in msg
 
 
 # ── A1: the Ask-AI pane only renders on its own tab (no inline display leak) ──

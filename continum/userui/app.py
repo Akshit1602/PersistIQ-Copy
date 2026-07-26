@@ -47,10 +47,10 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
     app._boot_error: Optional[str] = None
 
     # ── Singletons (canonical names) ─────────────────────────────────────────
-    from continum.datastore.memory import get_memory
-    from continum.experimentation.enterprise import get_audit, get_governance, get_snapshots
-    from continum.insights.insight_bus import get_bus
-    from continum.insights.session import get_session
+    from continum.ContextGraph.insight_bus import get_bus
+    from continum.ContextGraph.memory import get_memory
+    from continum.ContextGraph.session import get_session
+    from continum.ExpSuite.enterprise import get_audit, get_governance, get_snapshots
 
     app.ses = get_session()
     app.bus = get_bus()
@@ -74,12 +74,13 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
         try:
             import duckdb
 
-            from continum.contextmate.bootstrap import bootstrap_from_connection
-            from continum.datastore.loader import (
+            from continum.mapMeta.bootstrap import bootstrap_from_connection
+            from continum.mapMeta.loader import (
                 build_gold_layer,
                 build_silver_layer,
                 load_csvs,
                 register_bronze,
+                register_file_datasets,
             )
 
             db = duckdb.connect(":memory:")
@@ -92,6 +93,7 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
             register_bronze(db, ds)
             build_silver_layer(db)
             build_gold_layer(db)
+            register_file_datasets(db, data_dir)  # Shell + Walmart tables (DuckDB-native AskData)
 
             # ── Startup validation ────────────────────────────────────────────
             failures = _validate_startup(db)
@@ -111,7 +113,7 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
 
             # Narrative opening
             try:
-                from continum.askdata.narrative_runtime import get_narrative
+                from continum.ContextGraph import get_narrative
 
                 get_narrative(bus=app.bus, session=app.ses, memory=app.mem).open_session()
             except Exception:
@@ -119,7 +121,7 @@ def create_app(data_dir: str = "./sample_data", debug: bool = False):
 
             # LLM — background, non-blocking
             try:
-                from continum.crosscutting.llm import load_llm, require_llm
+                from continum import load_llm, require_llm
 
                 app.llm = require_llm()
 
