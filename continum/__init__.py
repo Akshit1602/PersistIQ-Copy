@@ -10,18 +10,6 @@ Public surface used across the codebase::
     get_chat_llm()                # LangChain chat model for LangGraph nodes
     LLMClient                     # historical .ask/.narrate/.ask_grounded client
     get_llm / require_llm / load_llm / unload_llm / llm_status   # lifecycle manager
-
-Kept intentionally dependency-light: ``langchain_openai``/``langchain_google_genai``
-are imported lazily and no ``continum`` submodule is imported here, so ``import
-continum`` never triggers an import cycle with :mod:`continum.orchestration` /
-:mod:`continum.AskData`.
-
-Provider selection tries, in order, whichever credentials are present — Gemini
-(``GEMINI_API_KEY``/``GOOGLE_API_KEY``) -> Azure -> OpenAI (``LLM_PROVIDER``
-forces one). If the chosen provider's key is present but rejected at call time
-(e.g. an IP-restricted or invalid key), the chat model transparently falls back
-to the next configured provider instead of failing the request — see
-``provider_chain()`` / ``_FallbackChat``.
 """
 
 from __future__ import annotations
@@ -94,63 +82,24 @@ def _has_azure() -> bool:
     )
 
 
-# Providers that failed with an auth/permission error this process (e.g. an
-# IP-restricted, revoked, or invalid key). Excluded from selection so we don't
-# keep retrying a key we already know is rejected. Cleared only by a restart.
-_DEAD_PROVIDERS: set = set()
-_DEAD_LOCK = threading.Lock()
-
-
-def _mark_provider_dead(provider: str) -> None:
-    with _DEAD_LOCK:
-        _DEAD_PROVIDERS.add(provider)
-
-
-def _available_providers() -> list:
-    """Providers whose credentials are present, in priority order (Gemini->Azure->OpenAI).
-
-    Azure and plain OpenAI share ``OPENAI_API_KEY``; when the Azure quadruple is
-    set we treat it as Azure only (an Azure key won't authenticate against
-    api.openai.com, so listing 'openai' as a fallback would be pointless).
-    """
+def active_provider() -> str:
+    """The provider that will actually be used: 'gemini'|'azure'|'unconfigured'."""
     load_credentials()
-    avail = []
     if _gemini_api_key():
-        avail.append("gemini")
+        return "gemini"
     if _has_azure():
-        avail.append("azure")
-    elif _openai_api_key():
-        avail.append("openai")
-    return avail
+        return "azure"
+    return "unconfigured"
 
 
 def provider_chain() -> list:
-    """Ordered list of providers to try, best first.
-
-    Honours ``LLM_PROVIDER`` (when that provider's creds exist), drops providers
-    already known-dead this process, and otherwise falls back through the
-    priority order. The auto-fallback client (:class:`_FallbackChat`) walks this
-    list on auth failure.
-    """
-    avail = [p for p in _available_providers() if p not in _DEAD_PROVIDERS]
-    forced = os.getenv("LLM_PROVIDER", "").strip().lower()
-    if forced in avail:
-        return [forced] + [p for p in avail if p != forced]
-    return avail
-
-
-def active_provider() -> str:
-    """The provider that will actually be used first: 'gemini'|'azure'|'openai'|'unconfigured'.
-
-    This is the head of :func:`provider_chain`, so it honours ``LLM_PROVIDER`` and
-    skips any provider already known-dead this process (see :class:`_FallbackChat`).
-    """
-    chain = provider_chain()
-    return chain[0] if chain else "unconfigured"
+    """Ordered list of providers to try."""
+    p = active_provider()
+    return [p] if p != "unconfigured" else []
 
 
 def is_configured() -> bool:
-    return bool(provider_chain())
+    return active_provider() != "unconfigured"
 
 
 def gemini_model() -> str:
@@ -163,10 +112,6 @@ def openai_model() -> str:
     return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
-# Hard per-call request timeout (seconds) and retry cap. Without these the
-# LangChain clients retry 429/5xx with exponential backoff and NO ceiling, so a
-# single rate-limited call can stall the whole request into a frontend timeout
-# with no answer. Override via .env if needed.
 def llm_timeout() -> int:
     load_credentials()
     try:
@@ -183,32 +128,12 @@ def llm_max_retries() -> int:
         return 2
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# LANGCHAIN CHAT MODEL  (for the AskData / orchestrator LangGraph nodes)
-# ─────────────────────────────────────────────────────────────────────────────
-
-_NOT_CONFIGURED = "[LLM not configured — set GEMINI_API_KEY or OPENAI_API_KEY in .env]"
-
-
 def is_cloud() -> bool:
-    return active_provider() in ("gemini", "azure", "openai")
-
-
-class _Unconfigured:
-    """Stand-in chat model used when no credentials are present.
-
-    ``.invoke()`` raises so callers can fall back (e.g. README answers) or surface
-    a clear 'configure a key' message rather than producing garbage.
-    """
-
-    provider = "unconfigured"
-
-    def invoke(self, *args, **kwargs):
-        raise RuntimeError("No LLM configured — set GEMINI_API_KEY or OPENAI_API_KEY in .env.")
+    return active_provider() in ("gemini", "azure")
 
 
 def build_chat_model(provider: str, temperature: float, max_tokens: Optional[int] = None):
-    """Construct the LangChain chat model for a specific provider (no fallback)."""
+    """Construct the LangChain chat model for a specific provider."""
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -237,133 +162,15 @@ def build_chat_model(provider: str, temperature: float, max_tokens: Optional[int
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
         return AzureChatOpenAI(**kwargs)
-    if provider == "openai":
-        from langchain_openai import ChatOpenAI
-
-        kwargs = dict(
-            model=openai_model(),
-            openai_api_key=_openai_api_key(),
-            temperature=temperature,
-            timeout=llm_timeout(),
-            max_retries=llm_max_retries(),
-        )
-        if max_tokens is not None:
-            kwargs["max_tokens"] = max_tokens
-        return ChatOpenAI(**kwargs)
     return None
 
 
-# Substrings that mark a *credential* failure (key rejected / lacks access) as
-# opposed to a transient error (429 rate-limit, 5xx, timeout). Only these trigger
-# fallback to the next provider — we never fall back on transient failures.
-_AUTH_ERROR_MARKERS = (
-    "permission_denied",
-    "permissiondenied",
-    "api_key_invalid",
-    "api key not valid",
-    "invalid_api_key",
-    "invalid api key",
-    "incorrect api key",
-    "unauthorized",
-    "authenticationerror",
-    "invalid authentication",
-    "access denied",
-    "ip address",
-    "ip_address",
-    " 401",
-    " 403",
-    "code': 401",
-    "code': 403",
-)
-
-
-def _is_auth_error(exc: Exception) -> bool:
-    name = type(exc).__name__.lower()
-    if "authentication" in name or "permission" in name:
-        return True
-    msg = str(exc).lower()
-    return any(marker in msg for marker in _AUTH_ERROR_MARKERS)
-
-
-class _FallbackChat:
-    """Chat model that tries providers in order, falling back on auth failure.
-
-    Presents the ``.invoke(...)`` surface the app uses and transparently proxies
-    any other attribute to the current underlying model. When a provider's call
-    fails with a credential/permission error (not a transient one), that provider
-    is marked dead for the rest of the process and the next provider is tried.
-    """
-
-    def __init__(self, providers, temperature: float, max_tokens: Optional[int] = None):
-        self._providers = list(providers)
-        self._temperature = temperature
-        self._max_tokens = max_tokens
-        self._idx = 0
-        self._model = None
-        self._lock = threading.Lock()
-
-    @property
-    def current_provider(self) -> str:
-        return self._providers[self._idx] if self._idx < len(self._providers) else "unconfigured"
-
-    def _ensure_model(self):
-        if self._model is None:
-            with self._lock:
-                if self._model is None:
-                    self._model = build_chat_model(
-                        self._providers[self._idx], self._temperature, self._max_tokens
-                    )
-        return self._model
-
-    def invoke(self, *args, **kwargs):
-        last_exc: Optional[Exception] = None
-        while self._idx < len(self._providers):
-            prov = self._providers[self._idx]
-            try:
-                return self._ensure_model().invoke(*args, **kwargs)
-            except Exception as e:  # noqa: BLE001 — inspected by _is_auth_error
-                last_exc = e
-                has_next = self._idx + 1 < len(self._providers)
-                if _is_auth_error(e):
-                    _mark_provider_dead(prov)
-                    if has_next:
-                        nxt = self._providers[self._idx + 1]
-                        logger.warning(
-                            "LLM provider '%s' rejected credentials (%s); falling back to '%s'",
-                            prov,
-                            e,
-                            nxt,
-                        )
-                        self._idx += 1
-                        self._model = None
-                        continue
-                raise
-        if last_exc is not None:
-            raise last_exc
-        raise RuntimeError("No LLM providers available")
-
-    def __getattr__(self, name):
-        # Only reached for attributes not defined on the wrapper itself. Proxy them
-        # to the current underlying model. Guard dunders/underscores to avoid
-        # recursion during construction/copy/pickle.
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return getattr(self._ensure_model(), name)
-
-
-def build_fallback_chat(temperature: float, max_tokens: Optional[int] = None):
-    """A :class:`_FallbackChat` over the current provider chain, or None if empty."""
-    chain = provider_chain()
-    if not chain:
-        return None
-    return _FallbackChat(chain, temperature, max_tokens)
-
-
 def get_chat_llm():
-    """Return a LangChain chat model: tries configured providers in priority order
-    (gemini -> azure -> openai) and auto-falls-back to the next one on an auth
-    error, or a raising stub when nothing is configured."""
-    return build_fallback_chat(temperature=0) or _Unconfigured()
+    """Return a LangChain chat model or raise a RuntimeError if unconfigured."""
+    prov = active_provider()
+    if prov == "unconfigured":
+        raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
+    return build_chat_model(prov, temperature=0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -371,7 +178,7 @@ def get_chat_llm():
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_CONFIG: Dict[str, Any] = {
-    "model_id": "gpt-4o-mini",  # default; overridden by OPENAI_MODEL env
+    "model_id": "gpt-4o-mini",
     "max_new_tokens": 2048,
     "temperature": 0.3,
 }
@@ -389,28 +196,27 @@ GROUNDING_SYSTEM = (
 
 
 class LLMClient:
-    """OpenAI / Azure OpenAI chat client with Continum's historical method surface."""
+    """Gemini / Azure OpenAI chat client with Continum's historical method surface."""
 
     def __init__(self, config: Optional[Dict] = None):
         load_credentials()
+        self.provider = active_provider()
+        if self.provider == "unconfigured":
+            raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
+
         cfg = config or AGENT_CONFIG
         self.max_new_tokens = cfg.get("max_new_tokens", 2048)
         self.temperature = cfg.get("temperature", 0.3)
-        self.provider = active_provider()
         if self.provider == "gemini":
             self.model_id = gemini_model()
         elif self.provider == "azure":
             self.model_id = _azure_deployment() or "gpt-4o"
-        else:
-            self.model_id = openai_model()
         self._chat = None
         self._load_lock = threading.Lock()
         logger.info("LLMClient configured: provider=%s model=%s", self.provider, self.model_id)
 
     def _build_chat(self):
-        # Auto-falls-back across providers (gemini -> azure -> openai) on auth
-        # failure; None when nothing is configured.
-        return build_fallback_chat(self.temperature, self.max_new_tokens)
+        return build_chat_model(self.provider, self.temperature, self.max_new_tokens)
 
     def _load(self) -> None:
         """Build the chat model. Cheap — no network call until first ask()."""
@@ -423,7 +229,7 @@ class LLMClient:
     def ask(self, prompt: str, system: str = "") -> str:
         self._load()
         if self._chat is None:
-            return _NOT_CONFIGURED
+            raise RuntimeError("LLM not configured. Please add GEMINI_API_KEY or Azure credentials to .env.")
         try:
             messages = [("system", system or GROUNDING_SYSTEM), ("human", prompt)]
             resp = self._chat.invoke(messages)
@@ -474,24 +280,18 @@ class LLMClient:
 
     @property
     def is_loaded(self) -> bool:
-        return is_configured()
+        return self.provider != "unconfigured"
 
     def status(self) -> Dict:
-        # Report the provider actually in use — after an auto-fallback the live
-        # provider can differ from the one chosen at construction time.
-        prov = self.provider
-        if self._chat is not None and hasattr(self._chat, "current_provider"):
-            prov = self._chat.current_provider
         return {
             "model_id": self.model_id,
             "is_loaded": self.is_loaded,
-            "device": prov,  # 'gemini' | 'azure' | 'openai' | 'unconfigured'
-            "provider": prov,
+            "device": self.provider,
+            "provider": self.provider,
             "max_new_tokens": self.max_new_tokens,
         }
 
 
-# Back-compatible alias — historical imports of ``TransformersClient`` (now OpenAI-backed).
 TransformersClient = LLMClient
 
 
@@ -524,6 +324,7 @@ def load_llm(config=None):
 
 
 def unload_llm():
+    global _INSTANCE
     if _INSTANCE is not None:
         _INSTANCE.unload()
 
@@ -560,7 +361,6 @@ __all__ = [
     "llm_max_retries",
     "is_cloud",
     "build_chat_model",
-    "build_fallback_chat",
     "get_chat_llm",
     "LLMClient",
     "TransformersClient",

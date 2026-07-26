@@ -609,3 +609,57 @@ class TestCopilotSelectionGate:
             assert data["mode"] not in ("needs_dataset", "needs_experiment")
         finally:
             restore()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STREAMLINED CREDENTIALS TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestStreamlinedCredentials:
+    def test_gemini_detection(self, monkeypatch):
+        import os
+        import continum
+
+        # Mock GEMINI_API_KEY
+        monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_TYPE", raising=False)
+
+        assert continum.active_provider() == "gemini"
+        assert continum.is_configured() is True
+        assert continum.provider_chain() == ["gemini"]
+
+    def test_azure_detection(self, monkeypatch):
+        import os
+        import continum
+
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.setenv("OPENAI_API_TYPE", "azure")
+        monkeypatch.setenv("OPENAI_API_KEY", "mock-azure-key")
+        monkeypatch.setenv("OPENAI_API_BASE", "https://mock-endpoint.openai.azure.com/")
+        monkeypatch.setenv("OPENAI_DEPLOYMENT_NAME", "mock-deployment")
+
+        assert continum.active_provider() == "azure"
+        assert continum.is_configured() is True
+        assert continum.provider_chain() == ["azure"]
+
+    def test_unconfigured_detection(self, monkeypatch):
+        import os
+        import continum
+
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_TYPE", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        assert continum.active_provider() == "unconfigured"
+        assert continum.is_configured() is False
+        assert continum.provider_chain() == []
+
+        with pytest.raises(RuntimeError, match="LLM not configured"):
+            continum.get_chat_llm()
+
+        with pytest.raises(RuntimeError, match="LLM not configured"):
+            continum.LLMClient()
