@@ -8,7 +8,7 @@ from continum.config import settings
 from continum.state import AgentState
 from continum.orchestration.tools.registry import all_experimentation_tools
 
-# Instantiate LLM dynamically (Gemini if GEMINI_API_KEY is in .env, otherwise OpenAI)
+# Instantiate LLM dynamically (Gemini if GEMINI_API_KEY is present, else OpenAI)
 llm = settings.get_llm()
 llm_with_tools = llm.bind_tools(all_experimentation_tools)
 
@@ -16,10 +16,14 @@ llm_with_tools = llm.bind_tools(all_experimentation_tools)
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
     """
     ReAct Supervisor Agent node that determines user intent, calls tools,
-    and synthesizes results for the user.
+    and synthesizes results for the user with active experiment context.
     """
+    active_exp = state.get("active_experiment_id") or "None Selected"
+    active_proj = state.get("active_project_id") or "None Selected"
+
     system_prompt = (
-        "You are Continum's A/B Testing & Retail Experimentation Copilot. "
+        "You are Continum's A/B Testing & Retail Experimentation Copilot.\n"
+        f"CURRENT CONTEXT -> Active Project: '{active_proj}', Active Experiment ID: '{active_exp}'.\n"
         "Always use deterministic ExpSuite tools for all statistical calculations, "
         "CUPED variance reduction, SRM checks, and power sizing. "
         "Never fabricate or hallucinate statistical numbers, p-values, or confidence intervals."

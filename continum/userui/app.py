@@ -1,33 +1,40 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from continum.config import settings
 from continum.userui.routes import chat_router, experiments_router, approval_router
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="0.2.0",
-    description="Backend serving layer for MatchView Copilot & Retail Experimentation Assistant."
+    version="1.0.0",
+    description="Continum AI Retail Experimentation Engine & MatchView Backend"
 )
 
-# Enable CORS for MatchView App UI
+# Enable CORS for local Vite development server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust origin URL in production
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API Routers
+# Mount API Routers
 app.include_router(chat_router)
 app.include_router(experiments_router)
 app.include_router(approval_router)
 
 
-@app.get("/health")
+@app.get("/health", tags=["Health Check"])
 async def health_check():
-    return {"status": "online", "app": settings.APP_NAME, "version": "0.2.0"}
+    return {
+        "status": "healthy",
+        "app_name": settings.APP_NAME,
+        "environment": settings.ENVIRONMENT
+    }
 
 
 if __name__ == "__main__":
