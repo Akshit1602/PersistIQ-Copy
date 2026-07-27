@@ -1,0 +1,2 @@
+export const ANALYTICS_LAB_WIDTH = 340
+export const ANALYTICS_LAB_COLLAPSED_WIDTH = 44
