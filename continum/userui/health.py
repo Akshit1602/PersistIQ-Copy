@@ -157,12 +157,10 @@ def make_db_checker(db) -> HealthChecker:
         # yet converted), so checking silver would raise false alarms — or, in the
         # case of `converted_to_order`, a binder error (it is synthesized only at
         # the gold tier; see loader.py).
-        n = db.execute(
-            """
+        n = db.execute("""
             SELECT COUNT(*) FROM gold_experiment_analysis
             WHERE variant IS NULL OR converted_to_order IS NULL
-        """
-        ).fetchone()[0]
+        """).fetchone()[0]
         ok = n == 0
         return CheckResult("null_critical_cols", ok, f"{n} nulls in variant/converted_to_order")
 

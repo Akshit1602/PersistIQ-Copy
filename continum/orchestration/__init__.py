@@ -226,8 +226,7 @@ class ContinumEngine:
 
         if active_provider() == "unconfigured":
             return {
-                "response": "I need an OpenAI API key to query the data. Add "
-                "OPENAI_API_KEY to .env and ask again.",
+                "response": "LLM not configured — please set GEMINI_API_KEY or Azure credentials in .env.",
                 "sql": None,
                 "table": [],
                 "columns": [],

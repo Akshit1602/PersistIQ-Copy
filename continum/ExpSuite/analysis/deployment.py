@@ -146,8 +146,7 @@ def run_uplift_modeller(llm=None, db=None, **kwargs) -> Optional[Dict]:
 
     # Load experiment list
     try:
-        exps = db.execute(
-            """
+        exps = db.execute("""
             SELECT DISTINCT experiment_name,
                    COUNT(*) AS n,
                    MIN(created_at)::DATE AS start_date
@@ -155,8 +154,7 @@ def run_uplift_modeller(llm=None, db=None, **kwargs) -> Optional[Dict]:
             WHERE experiment_name IS NOT NULL
             GROUP BY experiment_name
             ORDER BY start_date DESC
-        """
-        ).df()
+        """).df()
     except Exception as e:
         print(f"  ❌ {e}")
         return None
@@ -175,12 +173,10 @@ def run_uplift_modeller(llm=None, db=None, **kwargs) -> Optional[Dict]:
             except (ValueError, IndexError):
                 print("     ⚠️  Invalid choice")
 
-    df = db.execute(
-        f"""
+    df = db.execute(f"""
         SELECT * FROM gold_experiment_analysis
         WHERE experiment_name = '{exp_name}'
-    """
-    ).df()
+    """).df()
 
     if len(df) < 100:
         print(f"  ⚠️  Only {len(df)} rows — uplift model may be unreliable.")
@@ -333,15 +329,10 @@ def run_decision_engine(llm=None, db=None, **kwargs) -> Optional[Dict]:
     # AOV
     avg_aov = float(kwargs.get("avg_aov", 4000.0))
     try:
-        avg_aov = float(
-            db.execute(
-                """
+        avg_aov = float(db.execute("""
             SELECT AVG(order_value) FROM gold_experiment_analysis
             WHERE order_value > 0 AND converted_to_order = TRUE
-        """
-            ).fetchone()[0]
-            or avg_aov
-        )
+        """).fetchone()[0] or avg_aov)
     except Exception:
         pass
 

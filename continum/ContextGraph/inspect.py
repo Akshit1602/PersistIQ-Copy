@@ -214,15 +214,13 @@ def inspect_metrics(session=None, db=None, bus=None, memory=None) -> Dict:
     baselines = {}
     if db is not None:
         try:
-            row = db.execute(
-                """
+            row = db.execute("""
                 SELECT
                   COUNT(*) AS n_total,
                   COUNT(CASE WHEN converted_to_order = '1' OR converted_to_order = 1 THEN 1 END) * 1.0
                     / NULLIF(COUNT(*), 0) AS ior_baseline
                 FROM gold_experiment_analysis
-            """
-            ).fetchone()
+            """).fetchone()
             if row:
                 baselines["n_total"] = int(row[0] or 0)
                 baselines["ior_baseline"] = round(float(row[1] or 0), 4)

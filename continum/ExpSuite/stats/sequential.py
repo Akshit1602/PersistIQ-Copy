@@ -255,8 +255,7 @@ class SequentialTester:
         if db is None:
             return {"error": "No database connection"}
         try:
-            df = db.execute(
-                f"""
+            df = db.execute(f"""
                 SELECT variant,
                        COUNT(*)                               AS n_obs,
                        SUM(CAST(converted_to_order AS INT))  AS n_conv
@@ -264,8 +263,7 @@ class SequentialTester:
                 WHERE experiment_name = '{experiment_name}'
                   AND variant IS NOT NULL
                 GROUP BY variant
-            """
-            ).df()
+            """).df()
         except Exception as e:
             return {"error": str(e)}
 

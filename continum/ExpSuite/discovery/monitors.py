@@ -195,12 +195,10 @@ class WatchtowerMonitor:
         if self.db is None:
             return []
         try:
-            df = self.db.execute(
-                """
+            df = self.db.execute("""
                 SELECT created_at, converted_to_order, order_value, account_segment, platform
                 FROM gold_experiment_analysis WHERE created_at IS NOT NULL LIMIT 200000
-            """
-            ).df()
+            """).df()
         except Exception as e:
             logger.warning("WatchtowerMonitor: %s", e)
             return []

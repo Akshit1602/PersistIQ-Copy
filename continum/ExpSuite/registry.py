@@ -633,14 +633,12 @@ def _build_registry() -> None:
             if db is None:
                 return {"error": "no_db"}
             try:
-                df = db.execute(
-                    """
+                df = db.execute("""
                     SELECT DATE_TRUNC('day', created_at) AS date,
                            AVG(CAST(converted_to_order AS DOUBLE)) AS ior
                     FROM silver_inquiries
                     GROUP BY 1 ORDER BY 1
-                """
-                ).df()
+                """).df()
                 if len(df) < 10:
                     return {"error": "insufficient_data"}
                 import pandas as pd
@@ -673,12 +671,10 @@ def _build_registry() -> None:
             if db is None:
                 return {"error": "no_db"}
             try:
-                df = db.execute(
-                    """
+                df = db.execute("""
                     SELECT created_at, converted_to_order, COALESCE(order_value, 0) AS order_value
                     FROM silver_inquiries
-                """
-                ).df()
+                """).df()
                 if not ship_date:
                     import pandas as pd
 

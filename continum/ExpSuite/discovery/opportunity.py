@@ -340,8 +340,7 @@ def pull_baselines(db=None) -> Dict[str, Any]:
         return defaults
 
     try:
-        row = db.execute(
-            """
+        row = db.execute("""
             SELECT
                 COUNT(DISTINCT inquiry_id) / NULLIF(DATEDIFF('day',MIN(created_at),MAX(created_at))+1,0) * 30.4 AS monthly_inq,
                 AVG(CAST(converted_to_order AS DOUBLE))          AS ior,
@@ -350,8 +349,7 @@ def pull_baselines(db=None) -> Dict[str, Any]:
                 COUNT(CASE WHEN converted_to_order THEN 1 END)
                     / NULLIF(DATEDIFF('month',MIN(created_at),MAX(created_at))+1,0) AS monthly_ord
             FROM silver_inquiries WHERE converted_to_order IS NOT NULL
-        """
-        ).fetchone()
+        """).fetchone()
         if row and row[0] is not None:
             defaults["monthly_inquiries"] = float(row[0] or defaults["monthly_inquiries"])
             defaults["ior"] = float(row[1] or defaults["ior"])
@@ -362,15 +360,13 @@ def pull_baselines(db=None) -> Dict[str, Any]:
         logger.debug("Baseline query failed: %s", e)
 
     try:
-        seg_rows = db.execute(
-            """
+        seg_rows = db.execute("""
             SELECT account_segment, AVG(CAST(converted_to_order AS DOUBLE)) AS ior,
                    COUNT(*) AS n,
                    AVG(CASE WHEN converted_to_order THEN order_value END) AS aov
             FROM silver_inquiries WHERE account_segment IS NOT NULL
             GROUP BY account_segment HAVING COUNT(*) >= 30
-        """
-        ).fetchall()
+        """).fetchall()
         for row in seg_rows:
             defaults["segment_baselines"][str(row[0])] = {
                 "ior": float(row[1] or defaults["ior"]),
@@ -381,16 +377,14 @@ def pull_baselines(db=None) -> Dict[str, Any]:
         logger.debug("Segment baseline query failed: %s", e)
 
     try:
-        row = db.execute(
-            """
+        row = db.execute("""
             SELECT
                 SUM(total_sessions)/NULLIF(COUNT(DISTINCT date),0)*30.4 AS monthly_vis,
                 SUM(new_signups)/NULLIF(COUNT(DISTINCT date),0)*30.4    AS monthly_su,
                 SUM(signed_in)/NULLIF(COUNT(DISTINCT date),0)*30.4      AS monthly_si
             FROM silver_traffic
             WHERE date >= (SELECT MAX(date) - INTERVAL 3 MONTH FROM silver_traffic)
-        """
-        ).fetchone()
+        """).fetchone()
         if row and row[0]:
             defaults["monthly_visitors"] = float(row[0])
             defaults["monthly_signups"] = float(row[1] or defaults["monthly_signups"])
