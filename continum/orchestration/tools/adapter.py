@@ -12,8 +12,8 @@ def create_expsuite_tool(
     artifact_type: str = "stat_results_card"
 ):
     """
-    Factory turning pure ExpSuite math functions into LangGraph tools
-    with auto-generated UI artifacts.
+    Factory adapter converting pure ExpSuite functions into LangGraph tools
+    with auto-generated UIArtifact payloads for MatchView cards.
     """
     @tool(name, description=description, args_schema=schema, return_direct=False)
     def wrapped_tool(**kwargs) -> Dict[str, Any]:
@@ -21,6 +21,7 @@ def create_expsuite_tool(
             input_obj = schema(**kwargs)
             result: BaseModel = func(input_obj)
 
+            # Build UI Card Artifact
             artifact = UIArtifact(
                 artifact_id=f"art_{name}",
                 type=artifact_type,
@@ -30,7 +31,7 @@ def create_expsuite_tool(
 
             return {
                 "result": result.model_dump(),
-                "ui_artifacts": [artifact],
+                "ui_artifacts": [artifact.model_dump()],
                 "status": "success"
             }
         except Exception as e:
@@ -39,5 +40,6 @@ def create_expsuite_tool(
                 "status": "failed"
             }
 
+    # Assign docstring explicitly for LangChain core compatibility
     wrapped_tool.__doc__ = description
     return wrapped_tool

@@ -1,171 +1,224 @@
-# Continum MatchView
-
-**Continum MatchView** is a platform for experimentation intelligence, causal inference, and automated product analytics. It pairs rigorous statistics with LLM-powered narrative intelligence, driven through **Continum Copilot** — the conversational layer over every module.
-
-The whole architecture runs on **LangChain + LangGraph** (OpenAI / Azure OpenAI). All secrets live in a single repo-root **`.env`** — there is no `.streamlit/secrets.toml`.
+Here are the complete `requirements.txt`, `.env.example`, and `README.md` files for the repository. Place `requirements.txt` and `.env.example` in the project root alongside `continum/` and `frontend/`.
 
 ---
 
-## 🧭 Architecture
-
-```
-User UI ─▶ orchestration/ ─┬─▶ AskData/  ─▶ SQLGenerator → VisualGenerator → InsightGenerator
-(userui/)  (intent (chatbot│            (NL→SQL / chart / insight — a LangGraph)
- path only) + route        └─▶ ExpSuite/ (tool-call: discovery/planning/monitoring/analysis/learnings)
- decider + LangGraph)            │
-                    ContextGraph/  ◀────┘   (tracks queries + module outputs; dataset-level knowledge graph)
-                    mapMeta/  ─────────▶ DuckDB + per-dataset metadata (feeds AskData + ContextGraph)
-```
-
-- **Manual experiment usage** routes straight to the relevant **ExpSuite** module (skips intent analysis).
-- **Chatbot usage** goes through `orchestration`'s intent analysis → routing, which picks AskData (SQL/Viz/Insight) or an ExpSuite tool-call. ExpSuite modules that need input from the user are driven as a **tool-call interaction** (guided flow).
-- **AskData** is AI-powered (LangGraph NL→SQL on the dataset's DuckDB schema). **ContextGraph** is AI-powered (knowledge graph + memory). **ExpSuite** is mostly algorithmic (stats / causal / sklearn) with optional LLM narration.
-
-### Package layout
+### 1. `requirements.txt`
 
 ```text
-PersistIQ/
-├── .env / .env.example              # ALL secrets (single source; .env is gitignored)
-├── continum/
-│   ├── __init__.py                  # project-wide LLM init (client + creds + get_chat_llm)
-│   ├── orchestration/               # intent analysis + path decider + AskData LangGraph + tool-calling
-│   │   ├── __init__.py              #   ContinumEngine + get_askdata_engine; flattens every function below
-│   │   ├── intent.py                #   LLM intent breakdown + entities (chatbot path only)
-│   │   ├── graph.py                 #   the AskData LangGraph (refine→sql→viz→insight→summarize)
-│   │   ├── matchview.py             #   MatchView tools: detect / confirm / execute
-│   │   ├── router.py                #   LLM-first route classifier (tool|module|data|guide|meta)
-│   │   ├── flow.py                  #   guided flow (locate→suggest→fill→run)
-│   │   └── readout.py               #   Q&A over uploaded / generated documents
-│   ├── AskData/                     # AI-powered NL→SQL / Viz / Insight (exactly 3 generators)
-│   │   ├── SQLGenerator.py          #   refine/breakdown + NL→SQL on the DuckDB schema
-│   │   ├── VisualGenerator.py       #   Plotly chart spec (with deterministic fallback)
-│   │   └── InsightGenerator.py      #   short insight from data or ContextGraph context
-│   ├── ExpSuite/                    # experimentation framework (5 phases + shared kernel)
-│   │   ├── registry.py              #   module registry + run_module / list_modules
-│   │   ├── artifacts.py · stats/    #   shared pydantic contracts + stats kernel
-│   │   ├── discovery/ · planning/ · monitoring/ · analysis/ · learnings_repository/
-│   │   └── modules.py               #   additional analytics modules
-│   ├── ContextGraph/                # AI-powered knowledge graph + memory + session + insight bus
-│   ├── mapMeta/                     # scan sample_data/ → DuckDB (medallion) + per-dataset metadata
-│   ├── paths.py                     # runtime state + output paths; new_run_dir() segregates per run
-│   └── userui/                      # Flask web console (unchanged UI); also holds pdf.py (report rendering)
-├── sample_data/
-│   ├── Shell/     Shell__dim_station__preview_.csv, Shell__fact_station_day_product__preview_.csv
-│   ├── Xometry/   accounts.csv, experiments.csv, orders.csv, quotes.csv, users.csv
-│   └── Walmart/   Sample Dataset.xlsx
-├── requirements.txt
-└── README.md
+# Web Framework & Async Server
+fastapi>=0.111.0
+starlette>=0.37.2
+uvicorn[standard]>=0.30.0
+
+# Configuration & Data Validation
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+
+# Agent Orchestration & LLM
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-openai>=0.1.7
+langgraph>=0.1.0
+
+# Math, Statistics & Causal Engine
+numpy>=1.26.0
+scipy>=1.13.0
+
+# Database & Visuals
+sqlalchemy>=2.0.0
+plotly>=5.20.0
+
+# External Telemetry & MCP
+requests>=2.31.0
+mcp>=1.0.0
+
 ```
 
 ---
 
-## 🤖 Continum Copilot
+### 2. `.env.example`
 
-Reachable as the full-page **AI Copilot** and the **Ask AI** right-panel tab. Each message resolves server-side to one of:
+Create a file named `.env.example` (and copy it to `.env` for local execution):
 
-| Mode | What it does | Backed by |
-|---|---|---|
-| **✨ Auto** | Picks the best engine + intercepts MatchView module intents (tool calling). | `orchestration` (`router` + `matchview`) |
-| **📖 Guide** | "How do I…?" / "What is…?" help, grounded in the README. | `AskData.InsightGenerator.about` |
-| **📊 Data** | NL → SQL over the dataset, returned as insight + table + chart. | `AskData` LangGraph via `orchestration` |
+```env
+# Application Settings
+APP_NAME="Continum Retail Experimentation Engine"
+ENVIRONMENT="development"
 
-**Data answers** flow through the AskData LangGraph:
+# LLM Configuration
+OPENAI_API_KEY="sk-proj-your-openai-api-key-here"
+LLM_MODEL="gpt-4o"
+LLM_TEMPERATURE=0.0
+
+# Database Connection
+DATABASE_URL="sqlite:///./continum_warehouse.db"
+
+# StatSig Telemetry Integration (Optional for live pulse data)
+STATSIG_API_KEY=""
+STATSIG_BASE_URL="https://statsigapi.net/v1"
 
 ```
-question → orchestration(plan) → refine → sql (generate + execute on DuckDB) → visualization → insight → summarize
-```
-
-returning `{response, sql, table, columns, visualizations}`. The chat renders the **insight** text plus collapsible **table**, **Plotly chart** (only when chartable), and **SQL**.
-
-### Tool calling (detect → confirm → execute)
-
-When a request maps to a MatchView module, `orchestration.detect_tool` matches it, the Copilot returns a `pending_tool` with a one-line description and **Yes/No** chips, and on confirm `orchestration.execute_tool` runs the real module from `ExpSuite.registry` (or the AskData engine for data look-ups). Deploy / go-live actions carry a prominent warning.
-
-### Datasets
-
-`mapMeta` builds one DuckDB from `sample_data/<Dataset>/` and emits per-dataset metadata:
-
-| Dataset (`ACTIVE_DATASET`) | Folder | Tables |
-|---|---|---|
-| `experiments` (default) | `Xometry/` | `experiment_results` (medallion `gold_experiment_analysis`) |
-| `shell` | `Shell/` | `dim_station`, `fact_station` |
-| `sample` | `Walmart/` | `campaign_data` |
 
 ---
 
-## ⚙️ Installation
+### 3. `README.md`
 
+```markdown
+# Continum: AI Retail Experimentation Co-Pilot & MatchView Hub
+
+Continum is an enterprise-grade A/B testing co-pilot and statistical experimentation platform designed specifically for retail environments. It pairs a **deterministic statistical computing engine** with a **LangGraph agentic orchestrator** and streams real-time insights to the **MatchView** interactive frontend dashboard.
+
+---
+
+## 🏗️ Architecture Overview
+
+The system is built on a clean, layered architecture that strictly separates pure mathematical calculations from LLM synthesis to eliminate statistical hallucinations:
+
+```text
+  [ MatchView React Frontend ]
+              │ (SSE / REST)
+              ▼
+    [ continum.userui ] ──▶ FastAPI SSE Chat Stream & Experiment Hub Endpoints
+              │
+              ▼
+  [ continum.orchestration ] ──▶ LangGraph ReAct Supervisor + Domain Subgraphs
+              │
+       ┌──────┴────────────────────────┬────────────────────────┐
+       ▼                               ▼                        ▼
+[ continum.ExpSuite ]       [ continum.mapMeta ]      [ continum.askdata ]
+ ├── stats_inference/        ├── scanner.py            ├── sql_engine.py
+ ├── planning/               ├── metadata_store.py     ├── visual_generator.py
+ └── causal/                 └── statsig_connector.py  └── growth_simulator.py
+       │
+       ▼
+ [ continum.mcp ] ──▶ Model Context Protocol (MCP) Tool Server
+
+```
+
+### Core Layers
+
+1. **`continum/ExpSuite/` (Pure Statistical Core)**: Pure, zero-LLM Python modules for Sample Ratio Mismatch (SRM) detection, CUPED variance reduction, Welch/Z-test hypothesis testing, Sequential Probability Ratio Tests (SPRT), Bayesian Beta-Binomial testing, Difference-in-Differences (DiD), and Monte Carlo growth forecasting.
+2. **`continum/mapMeta/`**: Database schema introspector and live StatSig REST API telemetry connector.
+3. **`continum/askdata/`**: Read-only Text-to-SQL execution engine and Plotly visual generator for metric lift, traffic split, and growth projection cards.
+4. **`continum/orchestration/`**: LangGraph agent supervisor with subgraphs for Ingestion, Planning, Health Monitoring, Analysis, and Data Querying.
+5. **`continum/userui/`**: FastAPI serving layer streaming text token chunks, tool-execution status indicators, and pre-formatted UI cards over Server-Sent Events (SSE).
+6. **`continum/mcp/`**: FastMCP server exposing all A/B testing tools to external agentic clients (Cursor, Claude Desktop, etc.).
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+* **Python**: 3.11 or higher
+* **Node.js**: v18 or higher (for MatchView UI)
+* **OpenAI API Key**: Required for conversational copilot functions
+
+---
+
+### Backend Setup (`continum`)
+
+1. **Clone the repository and navigate to root**:
 ```bash
-git clone https://github.com/LatentView-Analytics-Ltd/PersistIQ.git
-cd PersistIQ
-python -m venv .venv && . .venv/Scripts/activate     # Windows; use .venv/bin/activate on macOS/Linux
-pip install -r requirements.txt                       # Python 3.10+, optimized for 3.12
+git clone [https://github.com/your-org/continum.git](https://github.com/your-org/continum.git)
+cd continum
+
 ```
 
-**LLM setup (optional but recommended).** Copy `.env.example` to `.env` and fill in **OpenAI** *or* **Azure OpenAI**:
 
+2. **Create and activate a Python virtual environment**:
 ```bash
-# OpenAI
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+python -m venv .venv
+# On Windows:
+.venv\Scripts\activate
+# On macOS/Linux:
+source .venv/bin/activate
 
-# …or Azure OpenAI
-OPENAI_API_TYPE=azure
-OPENAI_API_KEY=your-azure-key
-OPENAI_API_BASE=https://your-resource.openai.azure.com/
-OPENAI_API_VERSION=2024-05-01-preview
-OPENAI_DEPLOYMENT_NAME=gpt-4o
 ```
 
-With no key set, guide-mode answers and all non-LLM features still work; data questions require a key. **Credentials are read only from `.env` (or real environment variables) — nothing else.**
 
----
-
-## 📖 Usage
-
+3. **Install dependencies**:
 ```bash
-python -m continum.userui --port 5050 --data ./sample_data     # open http://localhost:5050
+pip install -r requirements.txt
+
 ```
 
-> On Windows set `PYTHONIOENCODING=utf-8` first so console/emoji output doesn't error.
 
-**Try the Copilot:**
-- *"conversion rate by variant for mobile_nav_redesign"* → insight + table + collapsible chart & SQL
-- *"is the experiment healthy?"* → confirm → **Health Monitor** runs → result in chat
-- *"what's next?"* → guided flow suggests the next module and collects its inputs
-
----
-
-## 🔧 Configuration
-
-All configuration is via environment variables (or `.env`). None are required for the default DuckDB demo — they only matter for a real LLM or a Snowflake source.
-
-| Variable | Used by | Default | Purpose |
-|---|---|---|---|
-| `OPENAI_API_KEY` | `continum` (LLM init), AskData | _(unset)_ | Enables OpenAI/Azure. Without it, data questions are disabled; guide-mode works. |
-| `OPENAI_API_TYPE` | LLM init | _(unset)_ | Set to `azure` for Azure OpenAI. |
-| `OPENAI_API_BASE` / `OPENAI_API_VERSION` / `OPENAI_DEPLOYMENT_NAME` | LLM init | _(unset)_ | Azure endpoint / API version / deployment. |
-| `OPENAI_MODEL` | LLM init | `gpt-4o-mini` | OpenAI model name. |
-| `ACTIVE_DATASET` | `mapMeta` | `experiments` | Active dataset (`experiments` \| `shell` \| `sample`). |
-| `CONTINUM_OUTPUT_DIR` | `paths.py` | `runtime_data/outputs` | Where module output files are collected (segregated per run — `outputs/<module_key>/<run_id>/`). |
-| `CONTINUM_SECRET` | `userui/app` | `continum-dev-key` | Flask session secret — **set this in any shared deployment.** |
-| `SNOWFLAKE_*` | `mapMeta` | _(unset)_ | Optional Snowflake credentials (production bootstrap). |
-
-Runtime artifacts (session JSON, memory DB, `outputs/`) are written under `runtime_data/` and are gitignored.
-
----
-
-## 🧰 Development & Testing
-
+4. **Configure environment variables**:
 ```bash
-python -m pytest continum/tests/ -m "not slow" -q       # full suite (fast)
-python -m pytest continum/tests/test_statistics.py -v   # inference primitives
-python -m pytest continum/tests/test_routes.py -v        # Flask + Copilot routes
+cp .env.example .env
+
 ```
 
-CI (`.github/workflows/`) runs the unit + calibration tests, a `py_compile` syntax check, and an import smoke test across Python 3.10–3.12.
+
+Open `.env` and set your `OPENAI_API_KEY`.
+5. **Start the FastAPI serving server**:
+```bash
+python -m continum.userui.app
+
+```
+
+
+The API will be available at `http://localhost:8000`. You can inspect endpoints at `http://localhost:8000/docs`.
+6. **(Optional) Run the FastMCP server for IDE / Claude Desktop integration**:
+```bash
+python -m continum.mcp.server
+
+```
+
+
 
 ---
 
-## 📝 License
-Proprietary / Internal Use Only.
+### Frontend Setup (`MatchView App`)
+
+1. **Navigate to the MatchView frontend folder**:
+```bash
+cd "MatchView App"
+
+```
+
+
+2. **Install Node dependencies**:
+```bash
+npm install
+
+```
+
+
+3. **Launch the Vite development server**:
+```bash
+npm run dev
+
+```
+
+
+Open your browser to `http://localhost:5173` to access the MatchView Copilot Workspace.
+
+---
+
+## 📡 Key API Routes
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/chat/stream` | Server-Sent Events stream for real-time Copilot responses, tool status, and UI cards |
+| `GET` | `/api/experiments` | Retrieves cataloged running and historical experiments for the top dropdown and hub |
+| `GET` | `/api/experiments/{id}/health` | Fetches live StatSig exposure counts and pulse metrics |
+| `POST` | `/api/approval/resume` | Resumes an interrupted LangGraph workflow after Human-in-the-Loop (HITL) confirmation |
+| `GET` | `/health` | Server health check endpoint |
+
+---
+
+## 🧪 Statistical Tooling Summary
+
+| Category | Available Tools |
+| --- | --- |
+| **Inference & Health** | `check_srm`, `apply_cuped_variance_reduction`, `run_hypothesis_test`, `run_sprt_sequential_test`, `run_bayesian_ab_test`, `check_guardrail_degradation` |
+| **Planning & Sizing** | `calculate_power_and_sample_size`, `calculate_opportunity_size`, `plan_experiment_metrics`, `balance_traffic_allocation` |
+| **Causal & Growth** | `calculate_diff_in_diff`, `run_monte_carlo_growth_forecast`, `run_causal_engine` |
+| **Data & Visuals** | `execute_sql_query`, `generate_plotly_visualization`, `simulate_and_visualize_growth` |
+
+```
+
+```

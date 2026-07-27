@@ -1,60 +1,48 @@
+from typing import Dict, Any
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import ToolNode
+from langgraph.graph import StateGraph, END, START
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.checkpoint.memory import MemorySaver
 
-from continum.state import AgentState
 from continum.config import settings
+from continum.state import AgentState
 from continum.orchestration.tools.registry import all_experimentation_tools
-from continum.orchestration.tools.subgraph_tools import subgraph_tools
 
-# Combine individual tools and subgraph tools
-combined_tools = all_experimentation_tools + subgraph_tools
+# Instantiate LLM dynamically (Gemini if GEMINI_API_KEY is in .env, otherwise OpenAI)
+llm = settings.get_llm()
+llm_with_tools = llm.bind_tools(all_experimentation_tools)
 
-SUPERVISOR_PROMPT = """
-You are Continum, an AI Retail Experimentation Assistant.
-Your goal is to help users plan, monitor, analyze, and predict outcomes for retail A/B tests.
 
-GUIDELINES:
-1. Answer general questions or definitions directly in concise Markdown prose.
-2. For multi-step workflows (planning a test, running full analysis, checking SRM, querying database):
-   ALWAYS invoke the corresponding tool or subgraph tool.
-3. NEVER calculate sample sizes, p-values, or revenue lifts yourself—always rely on tool output.
-"""
-
-def supervisor_agent_node(state: AgentState) -> dict:
-    """Conversational ReAct Supervisor Agent."""
-    llm = ChatOpenAI(
-        model=settings.LLM_MODEL,
-        temperature=settings.LLM_TEMPERATURE
+def supervisor_node(state: AgentState) -> Dict[str, Any]:
+    """
+    ReAct Supervisor Agent node that determines user intent, calls tools,
+    and synthesizes results for the user.
+    """
+    system_prompt = (
+        "You are Continum's A/B Testing & Retail Experimentation Copilot. "
+        "Always use deterministic ExpSuite tools for all statistical calculations, "
+        "CUPED variance reduction, SRM checks, and power sizing. "
+        "Never fabricate or hallucinate statistical numbers, p-values, or confidence intervals."
     )
     
-    if combined_tools:
-        llm = llm.bind_tools(combined_tools)
-
-    messages = [SystemMessage(content=SUPERVISOR_PROMPT)] + state["messages"]
-    response = llm.invoke(messages)
-
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    response = llm_with_tools.invoke(messages)
+    
     return {"messages": [response]}
 
-def should_continue(state: AgentState):
-    """Checks if tool execution is required."""
-    last_message = state["messages"][-1]
-    if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        return "tools_node"
-    return END
 
-# Build Graph
-supervisor_builder = StateGraph(AgentState)
-supervisor_builder.add_node("supervisor", supervisor_agent_node)
+# Construct LangGraph Workflow with ReAct Tool Loop
+workflow = StateGraph(AgentState)
 
-if combined_tools:
-    supervisor_builder.add_node("tools_node", ToolNode(combined_tools))
-    supervisor_builder.add_conditional_edges("supervisor", should_continue, ["tools_node", END])
-    supervisor_builder.add_edge("tools_node", "supervisor")
-else:
-    supervisor_builder.add_edge("supervisor", END)
+# Add Nodes
+workflow.add_node("supervisor", supervisor_node)
+workflow.add_node("tools", ToolNode(all_experimentation_tools))
 
-supervisor_builder.add_edge(START, "supervisor")
+# Add Edges
+workflow.add_edge(START, "supervisor")
+workflow.add_conditional_edges("supervisor", tools_condition)
+workflow.add_edge("tools", "supervisor")
 
-app_graph = supervisor_builder.compile()
+# Compile graph with thread checkpointer
+memory = MemorySaver()
+app_graph = workflow.compile(checkpointer=memory)
