@@ -34,7 +34,7 @@ export const ArtifactCardRenderer: React.FC<{ card: UIArtifactCard }> = ({ card 
 
 export const ChatView: React.FC = () => {
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-[#f4f1ea] overflow-hidden">
       <ChatStream />
       <MessagingBar />
     </div>
