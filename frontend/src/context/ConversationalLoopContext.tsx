@@ -1,5 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { streamChatResponse, fetchExperiments, type Experiment } from '../services/api';
+import { useMatchView } from './MatchViewContext';
+import type { ModuleId } from './types';
+import type {
+  ActiveModuleContext,
+  InterviewPhase,
+  InterviewPill,
+  ConversationalLoopContextValue,
+} from './conversationalLoopTypes';
+
+import {
+  bootstrapModuleParams,
+  buildAutoFillSummary,
+  buildReadyMessage,
+  getNextInterviewStep,
+  getSmartPillsForPhase,
+} from '../data/moduleInterviewEngine';
+import { MODULE_BY_ID } from '../data/moduleRegistry';
 
 export type PhaseType = 'DISCOVERY' | 'PLANNING' | 'EXECUTION' | 'EVALUATION' | 'INSIGHTS';
 
@@ -20,7 +37,7 @@ export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
   content: string;
-  text?: string; // Provided for backwards compatibility with legacy text references
+  text?: string;
   timestamp: string;
   phase?: PhaseType;
   executionStatus?: string | null;
@@ -33,7 +50,7 @@ export interface ConversationalLoopContextType {
   messages: ChatMessage[];
   isGenerating: boolean;
   activeToolStatus: string | null;
-  executionStatus: string | null; // Alias for activeToolStatus
+  executionStatus: string | null;
 
   // Artifacts & Cards
   artifacts: UIArtifactCard[];
@@ -53,9 +70,14 @@ export interface ConversationalLoopContextType {
   clearHistory: () => void;
 }
 
-const ConversationalLoopContext = createContext<ConversationalLoopContextType | undefined>(undefined);
+export type CombinedConversationalLoopContextType = ConversationalLoopContextType & ConversationalLoopContextValue;
+
+const ConversationalLoopContext = createContext<CombinedConversationalLoopContextType | undefined>(undefined);
 
 export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const matchView = useMatchView();
+
+  // Custom Streaming Chat states
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'msg_welcome',
@@ -75,6 +97,13 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
   const [activePhase, setActivePhase] = useState<PhaseType>('DISCOVERY');
+
+  // Interview state machine states
+  const [activeModuleContext, setActiveModuleContext] = useState<ActiveModuleContext | null>(null);
+  const [interviewPhase, setInterviewPhase] = useState<InterviewPhase>('idle');
+  const [pendingFieldKey, setPendingFieldKey] = useState<string | null>(null);
+  const [confirmedFieldKeys, setConfirmedFieldKeys] = useState<string[]>([]);
+  const [smartPills, setSmartPills] = useState<InterviewPill[]>([]);
 
   // Fetch experiments catalog on initial load
   useEffect(() => {
@@ -161,7 +190,6 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
 
         addArtifact(card);
 
-        // Attach artifact directly to the assistant message
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id === assistantMsgId) {
@@ -204,6 +232,165 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
     setActiveArtifact(null);
   };
 
+  // Interview state machine actions
+  const activateModuleContext = (moduleId: ModuleId) => {
+    const existingParams = matchView.getLockedModuleSnapshot(moduleId);
+    const { params, autoFilledFields } = bootstrapModuleParams(
+      moduleId,
+      matchView.selectedExperiment,
+      existingParams
+    );
+
+    const context: ActiveModuleContext = {
+      moduleId,
+      label: MODULE_BY_ID[moduleId]?.label ?? moduleId,
+      startedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setActiveModuleContext(context);
+    setConfirmedFieldKeys(autoFilledFields);
+
+    // Save defaults back
+    Object.entries(params).forEach(([k, v]) => {
+      matchView.updateModuleFormField(moduleId, k, v);
+    });
+
+    const nextStep = getNextInterviewStep(moduleId, autoFilledFields);
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (nextStep) {
+      setInterviewPhase('interviewing');
+      setPendingFieldKey(nextStep.fieldKey);
+      setSmartPills(getSmartPillsForPhase(moduleId, autoFilledFields, 'interviewing'));
+
+      const greeting = buildAutoFillSummary(moduleId, matchView.selectedExperiment, autoFilledFields, params);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `system_${Date.now()}`,
+          sender: 'system',
+          content: greeting,
+          timestamp: timeStr,
+        },
+        {
+          id: `asst_q_${Date.now()}`,
+          sender: 'assistant',
+          content: nextStep.question,
+          timestamp: timeStr,
+        },
+      ]);
+    } else {
+      setInterviewPhase('ready');
+      setPendingFieldKey(null);
+      setSmartPills(getSmartPillsForPhase(moduleId, autoFilledFields, 'ready'));
+
+      const readyMsg = buildReadyMessage(moduleId);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `asst_r_${Date.now()}`,
+          sender: 'assistant',
+          content: readyMsg,
+          timestamp: timeStr,
+        },
+      ]);
+    }
+
+    matchView.selectLabModule(moduleId);
+    matchView.setLabPanelView('form');
+  };
+
+  const submitInterviewAnswer = (fieldKey: string, value: unknown, label?: string) => {
+    if (!activeModuleContext) return;
+
+    const moduleId = activeModuleContext.moduleId;
+    const updatedConfirmed = [...confirmedFieldKeys, fieldKey];
+    setConfirmedFieldKeys(updatedConfirmed);
+
+    matchView.updateModuleFormField(moduleId, fieldKey, value);
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userDisplay = label || String(value);
+
+    // Add user's answer message
+    const userMsg: ChatMessage = {
+      id: `user_ans_${Date.now()}`,
+      sender: 'user',
+      content: userDisplay,
+      timestamp: timeStr,
+    };
+
+    const nextStep = getNextInterviewStep(moduleId, updatedConfirmed);
+
+    if (nextStep) {
+      setPendingFieldKey(nextStep.fieldKey);
+      setSmartPills(getSmartPillsForPhase(moduleId, updatedConfirmed, 'interviewing'));
+
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: `asst_q_${Date.now()}`,
+          sender: 'assistant',
+          content: nextStep.question,
+          timestamp: timeStr,
+        },
+      ]);
+    } else {
+      setInterviewPhase('ready');
+      setPendingFieldKey(null);
+      setSmartPills(getSmartPillsForPhase(moduleId, updatedConfirmed, 'ready'));
+
+      const readyMsg = buildReadyMessage(moduleId);
+
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: `asst_r_${Date.now()}`,
+          sender: 'assistant',
+          content: readyMsg,
+          timestamp: timeStr,
+        },
+      ]);
+    }
+  };
+
+  const executeSimulation = () => {
+    if (!activeModuleContext) return;
+
+    setInterviewPhase('running');
+    setSmartPills([]);
+
+    const moduleId = activeModuleContext.moduleId;
+    matchView.runModule(moduleId, { skipUserMessage: true });
+
+    // Wait and complete the interview
+    setTimeout(() => {
+      setInterviewPhase('complete');
+      setSmartPills(getSmartPillsForPhase(moduleId, confirmedFieldKeys, 'complete'));
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `asst_done_${Date.now()}`,
+          sender: 'assistant',
+          content: `✅ Simulation for ${MODULE_BY_ID[moduleId]?.label || moduleId} run successfully. Results are compiled and visible in the Reports tab.`,
+          timestamp: timeStr,
+        },
+      ]);
+    }, 1800);
+  };
+
+  const pushResultsToInsights = () => {
+    matchView.setTab('insights');
+  };
+
   return (
     <ConversationalLoopContext.Provider
       value={{
@@ -222,6 +409,17 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
         setActivePhase,
         sendMessage,
         clearHistory,
+
+        // Interview machine
+        activeModuleContext,
+        interviewPhase,
+        pendingFieldKey,
+        confirmedFieldKeys,
+        smartPills,
+        activateModuleContext,
+        submitInterviewAnswer,
+        executeSimulation,
+        pushResultsToInsights,
       }}
     >
       {children}
