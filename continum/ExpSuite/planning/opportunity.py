@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 
 class OpportunitySizingInput(BaseModel):
     annual_traffic: int = Field(..., description="Annual exposed user volume")
-    baseline_conversion_rate: float = Field(..., description="Current baseline conversion rate (0.0 to 1.0)")
+    baseline_conversion_rate: float = Field(
+        ..., description="Current baseline conversion rate (0.0 to 1.0)"
+    )
     average_order_value: float = Field(..., description="Average Order Value (AOV) in dollars")
     assumed_relative_lift: float = Field(0.02, description="Target assumed lift e.g. 0.02 for +2%")
 
@@ -43,5 +45,5 @@ def calculate_opportunity_size(input_data: OpportunitySizingInput) -> Opportunit
         incremental_conversions=incremental_convs,
         incremental_annual_revenue=float(incremental_annual_rev),
         incremental_quarterly_revenue=float(incremental_quarterly_rev),
-        summary=summary
+        summary=summary,
     )

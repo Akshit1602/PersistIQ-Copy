@@ -27,11 +27,11 @@ def apply_cuped(input_data: CUPEDInput) -> CUPEDResult:
     """
     y = np.array(input_data.y_control + input_data.y_treatment)
     x = np.array(input_data.x_control + input_data.x_treatment)
-    
+
     cov_matrix = np.cov(y, x)
     cov_yx = cov_matrix[0, 1]
     var_x = cov_matrix[1, 1]
-    
+
     theta = cov_yx / var_x if var_x > 0 else 0.0
     mean_x = np.mean(x)
 
@@ -47,7 +47,7 @@ def apply_cuped(input_data: CUPEDInput) -> CUPEDResult:
 
     var_raw = float(np.var(y, ddof=1))
     var_cuped = float(np.var(np.concatenate([y_ctrl_cuped, y_trt_cuped]), ddof=1))
-    
+
     var_red_pct = ((var_raw - var_cuped) / var_raw) * 100.0 if var_raw > 0 else 0.0
 
     summary = (
@@ -62,5 +62,5 @@ def apply_cuped(input_data: CUPEDInput) -> CUPEDResult:
         variance_reduction_pct=float(var_red_pct),
         control_cuped_mean=float(np.mean(y_ctrl_cuped)),
         treatment_cuped_mean=float(np.mean(y_trt_cuped)),
-        summary=summary
+        summary=summary,
     )

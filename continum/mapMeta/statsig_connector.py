@@ -1,6 +1,8 @@
-from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict
+
 import requests
+from pydantic import BaseModel, Field
+
 from continum.config import settings
 
 
@@ -30,15 +32,14 @@ def fetch_statsig_experiment_health(input_data: StatSigFetchInput) -> StatSigFet
             status="ACTIVE",
             control_exposures=12500,
             treatment_exposures=12480,
-            pulse_metrics={"conversion_rate": {"control": 0.102, "treatment": 0.108, "p_value": 0.034}},
+            pulse_metrics={
+                "conversion_rate": {"control": 0.102, "treatment": 0.108, "p_value": 0.034}
+            },
             is_live=True,
-            summary=f"[MOCK STATSIG] Experiment '{input_data.experiment_id}' is ACTIVE. Control: 12,500, Treatment: 12,480."
+            summary=f"[MOCK STATSIG] Experiment '{input_data.experiment_id}' is ACTIVE. Control: 12,500, Treatment: 12,480.",
         )
 
-    headers = {
-        "STATSIG-API-KEY": settings.STATSIG_API_KEY,
-        "Content-Type": "application/json"
-    }
+    headers = {"STATSIG-API-KEY": settings.STATSIG_API_KEY, "Content-Type": "application/json"}
 
     url = f"{settings.STATSIG_BASE_URL}/experiments/{input_data.experiment_id}"
 
@@ -53,7 +54,7 @@ def fetch_statsig_experiment_health(input_data: StatSigFetchInput) -> StatSigFet
                 treatment_exposures=payload.get("target_group_exposures", {}).get("treatment", 0),
                 pulse_metrics=payload.get("pulse_results", {}),
                 is_live=True,
-                summary=f"StatSig live payload retrieved for '{input_data.experiment_id}'."
+                summary=f"StatSig live payload retrieved for '{input_data.experiment_id}'.",
             )
         else:
             return StatSigFetchResult(
@@ -63,7 +64,7 @@ def fetch_statsig_experiment_health(input_data: StatSigFetchInput) -> StatSigFet
                 treatment_exposures=0,
                 pulse_metrics={},
                 is_live=False,
-                summary=f"StatSig API Error {response.status_code}: {response.text}"
+                summary=f"StatSig API Error {response.status_code}: {response.text}",
             )
     except Exception as e:
         return StatSigFetchResult(
@@ -73,5 +74,5 @@ def fetch_statsig_experiment_health(input_data: StatSigFetchInput) -> StatSigFet
             treatment_exposures=0,
             pulse_metrics={},
             is_live=False,
-            summary=f"Failed to connect to StatSig API: {str(e)}"
+            summary=f"Failed to connect to StatSig API: {str(e)}",
         )

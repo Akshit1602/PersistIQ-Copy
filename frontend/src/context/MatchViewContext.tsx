@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { fetchExperiments, type Experiment } from '../services/api';
+import { fetchExperiments, streamChatResponse, type Experiment } from '../services/api';
 import type {
   AuthUser,
   Persona,
@@ -34,7 +34,6 @@ import {
 import {
   EXPERIMENTS,
   buildWelcomeMessage,
-  buildAssistantReply,
   formatMessageTime,
   MOCK_MESSAGES,
 } from '../data/mock';
@@ -46,6 +45,7 @@ import { MODULE_BY_ID } from '../data/moduleRegistry';
 import { buildModuleEvaluation } from '../data/moduleEvaluation';
 import { isWorkflowStepId } from '../data/hypothesisWorkflow';
 import { buildBriefBody } from '../data/briefBuilder';
+import { extractNlpParameters } from '../data/nlpParameterExtractor';
 
 const INITIAL_EXPERIMENT_SPECS: Record<string, ExperimentSpec> = {
   'Walmart Banner Redesign': {
@@ -87,6 +87,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Layout states
   const [chartDrawerOpen, setChartDrawerOpen] = useState<boolean>(false);
   const [chartDrawerTargetId, setChartDrawerTargetId] = useState<string | null>(null);
+  const [activeGlobalPage, setActiveGlobalPage] = useState<'workspace' | 'archive' | 'settings'>('workspace');
+  const [backendExperiments, setBackendExperiments] = useState<Experiment[]>([]);
+  const [chatIsGenerating, setChatIsGenerating] = useState<boolean>(false);
+  const [chatActiveToolStatus, setChatActiveToolStatus] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [hypothesisValidatorOpen, setHypothesisValidatorOpen] = useState<boolean>(false);
   const [audienceWizardOpen, setAudienceWizardOpen] = useState<boolean>(false);
@@ -137,9 +141,53 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const loadBackendData = async () => {
     try {
       const data: Experiment[] = await fetchExperiments();
+      setBackendExperiments(data);
       if (data && data.length > 0) {
         const names = data.map((exp) => exp.name);
-        setExperiments((prev) => [...new Set([...prev, ...names])]);
+        setExperiments(names);
+
+        const nextProjectIds: Record<string, string> = {};
+        const nextThreadGroups: ThreadGroup[] = [];
+        const nextMessagesByThread: Record<string, ChatMessage[]> = {};
+
+        data.forEach((exp, idx) => {
+          const projId = idx % 2 === 0 ? 'proj-walmart-digital' : 'proj-cart-reliability';
+          nextProjectIds[exp.name] = projId;
+
+          const threadId = `t_backend_${exp.experiment_id}`;
+          nextThreadGroups.push({
+            projectId: projId,
+            experiment: exp.name,
+            threads: [
+              {
+                id: threadId,
+                title: `${exp.name} Discussion`,
+                timestamp: 'Just now',
+              },
+            ],
+          });
+
+          nextMessagesByThread[threadId] = [
+            {
+              id: `system_${exp.experiment_id}_init`,
+              role: 'assistant',
+              content: `This is the discussion thread for **${exp.name}**. Ask me questions about its primary metric (${exp.primary_metric}), sample sizes, or run statistical tests like SRM checks.`,
+              timestamp: formatMessageTime(),
+              kind: 'text',
+              artifacts: [],
+            },
+          ];
+        });
+
+        setExperimentProjectIds(nextProjectIds);
+        setThreadGroupState(nextThreadGroups);
+        setMessagesByThread(nextMessagesByThread);
+
+        setSelectedExperiment(names[0]);
+        const firstThread = nextThreadGroups[0]?.threads[0]?.id;
+        if (firstThread) {
+          setActiveThreadId(firstThread);
+        }
 
         // Dynamically add to specs
         setExperimentSpecsByName((prev) => {
@@ -157,6 +205,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
           });
           return next;
         });
+      } else {
+        setExperiments([]);
       }
     } catch (err) {
       console.warn('Backend fetch failed, relying on mock data:', err);
@@ -417,6 +467,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const selectThread = (threadId: string, experiment: string) => {
     setActiveThreadId(threadId);
     setSelectedExperiment(experiment);
+    const projId = experimentProjectIds[experiment];
+    if (projId) {
+      setSelectedProjectId(projId);
+    }
   };
 
   const deleteThread = (threadId: string, _experiment: string) => {
@@ -491,39 +545,196 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const clearActiveModule = () => setActiveModuleId(null);
 
   const sendMessage = (content: string) => {
+    if (!content.trim() || chatIsGenerating) return;
+
+    // Immediately extract NLP parameters if analyst
+    if (currentPersona === 'analyst') {
+      const nlp = extractNlpParameters(content, selectedExperiment, null);
+      if (nlp && nlp.moduleId) {
+        setLabModuleId(nlp.moduleId);
+        setLabPanelView('form');
+        setAnalyticsLabCollapsed(false);
+        setModuleFormValuesByExperiment((prev) => {
+          const expValues = prev[selectedExperiment] || {};
+          const modValues = expValues[nlp.moduleId] || {};
+          return {
+            ...prev,
+            [selectedExperiment]: {
+              ...expValues,
+              [nlp.moduleId]: {
+                ...modValues,
+                ...nlp.params,
+              },
+            },
+          };
+        });
+        setHighlightedFieldKeys(nlp.touchedFields);
+      }
+    }
+
     const timestamp = formatMessageTime();
     const userMsg: ChatMessage = {
       id: 'msg_user_' + Date.now(),
       role: 'user',
       content,
       timestamp,
+      kind: 'text',
     };
 
+    const threadId = activeThreadId || 'matchview_session';
+
     setMessagesByThread((prev) => {
-      const list = prev[activeThreadId] || [];
+      const list = prev[threadId] || [];
       return {
         ...prev,
-        [activeThreadId]: [...list, userMsg],
+        [threadId]: [...list, userMsg],
       };
     });
 
-    // Simulate assistant reply
-    setTimeout(() => {
-      const replyText = buildAssistantReply(currentPersona, content);
-      const assistantMsg: ChatMessage = {
-        id: 'msg_asst_' + Date.now(),
-        role: 'assistant',
-        content: replyText,
-        timestamp: formatMessageTime(),
+    const assistantMsgId = 'msg_asst_' + Date.now();
+    const assistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: formatMessageTime(),
+      kind: 'text',
+      artifacts: [],
+    };
+
+    setMessagesByThread((prev) => {
+      const list = prev[threadId] || [];
+      return {
+        ...prev,
+        [threadId]: [...list, assistantMsg],
       };
-      setMessagesByThread((prev) => {
-        const list = prev[activeThreadId] || [];
-        return {
-          ...prev,
-          [activeThreadId]: [...list, assistantMsg],
+    });
+
+    setChatIsGenerating(true);
+    setChatActiveToolStatus('Analyzing request...');
+
+    const activeBackendExp = backendExperiments.find((e) => e.name === selectedExperiment);
+    const activeExperimentId = activeBackendExp ? activeBackendExp.experiment_id : null;
+
+    streamChatResponse({
+      message: content,
+      threadId,
+      activeExperimentId,
+      onToken: (chunk) => {
+        setChatActiveToolStatus(null);
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                return {
+                  ...msg,
+                  content: msg.content + chunk,
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+      onToolStart: (tool, statusMsg) => {
+        setChatActiveToolStatus(statusMsg);
+
+        if (currentPersona === 'analyst') {
+          const TOOL_TO_MODULE_MAP: Record<string, ModuleId> = {
+            'check_srm': 'data-validation',
+            'apply_cuped_variance_reduction': 'experiment-analysis',
+            'run_hypothesis_test': 'experiment-analysis',
+            'run_sprt_sequential_test': 'sequential-testing',
+            'run_bayesian_ab_test': 'experiment-analysis',
+            'check_guardrail_degradation': 'health-monitor',
+            'calculate_power_and_sample_size': 'power-calculator',
+            'calculate_opportunity_size': 'opportunity-sizing',
+            'plan_experiment_metrics': 'metrics-tracking',
+            'balance_traffic_allocation': 'balance-diagnostics',
+            'calculate_diff_in_diff': 'causal-did',
+            'run_monte_carlo_growth_forecast': 'forecasting',
+            'run_causal_engine': 'causal-did',
+          };
+
+          const mappedModuleId = TOOL_TO_MODULE_MAP[tool];
+          if (mappedModuleId) {
+            setLabModuleId(mappedModuleId);
+            setLabPanelView('form');
+            setAnalyticsLabCollapsed(false);
+
+            // Dynamically extract values from the user content and inject
+            const nlp = extractNlpParameters(content, selectedExperiment, mappedModuleId);
+            if (nlp) {
+              setModuleFormValuesByExperiment((prev) => {
+                const expValues = prev[selectedExperiment] || {};
+                const modValues = expValues[nlp.moduleId] || {};
+                return {
+                  ...prev,
+                  [selectedExperiment]: {
+                    ...expValues,
+                    [nlp.moduleId]: {
+                      ...modValues,
+                      ...nlp.params,
+                    },
+                  },
+                };
+              });
+              setHighlightedFieldKeys(nlp.touchedFields);
+            }
+          }
+        }
+      },
+      onArtifact: (artifactPayload) => {
+        const card = {
+          artifact_id: artifactPayload.artifact_id || `art_${Date.now()}`,
+          type: artifactPayload.type || 'stat_results_card',
+          title: artifactPayload.title || 'Analysis Card',
+          payload: artifactPayload.payload || artifactPayload,
         };
-      });
-    }, 700);
+
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                const existingArtifacts = msg.artifacts || [];
+                return {
+                  ...msg,
+                  artifacts: [...existingArtifacts, card],
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+      onDone: () => {
+        setChatIsGenerating(false);
+        setChatActiveToolStatus(null);
+      },
+      onError: (err) => {
+        console.error('Chat streaming error:', err);
+        setChatIsGenerating(false);
+        setChatActiveToolStatus(null);
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                return {
+                  ...msg,
+                  content: '⚠️ Unable to connect to backend AI assistant. Make sure the backend server is running.',
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+    });
   };
 
   const appendChatMessages = (messages: TextChatMessage[]) => {
@@ -770,6 +981,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCurrentTab('chat');
     setActivePhase('auto');
     setActiveModuleId(null);
+    setSelectedProjectId(null);
+    setActiveGlobalPage('workspace');
   };
 
   return (
@@ -809,6 +1022,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         experimentSpecsByName,
         workflowProgressByExperiment,
         pendingModuleActivation,
+        activeGlobalPage,
+        setActiveGlobalPage,
+        chatIsGenerating,
+        chatActiveToolStatus,
         login,
         logout,
         setPersona: setCurrentPersona,

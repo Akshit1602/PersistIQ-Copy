@@ -1,24 +1,30 @@
-from typing import List, Dict, Any, Optional
+from typing import Optional
+
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, inspect
+
 from continum.config import settings
-from continum.state import SchemaMetadata, MetricDefinition
+from continum.state import MetricDefinition, SchemaMetadata
 
 
 class ScannerInput(BaseModel):
-    database_url: Optional[str] = Field(None, description="Database connection URI. Defaults to settings.DATABASE_URL.")
+    database_url: Optional[str] = Field(
+        None, description="Database connection URI. Defaults to settings.DATABASE_URL."
+    )
 
 
 def scan_database_schema(input_data: Optional[ScannerInput] = None) -> SchemaMetadata:
     """
     Introspects target database tables and columns using SQLAlchemy.
     """
-    db_url = (input_data.database_url if input_data and input_data.database_url else settings.DATABASE_URL)
-    
+    db_url = (
+        input_data.database_url if input_data and input_data.database_url else settings.DATABASE_URL
+    )
+
     try:
         engine = create_engine(db_url)
         inspector = inspect(engine)
-        
+
         table_names = inspector.get_table_names()
         schema_summary_parts = []
         metrics_catalog = {}
@@ -34,11 +40,15 @@ def scan_database_schema(input_data: Optional[ScannerInput] = None) -> SchemaMet
                 if any(t in col_type for t in ["INT", "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC"]):
                     metric_key = f"{table}.{col['name']}"
                     metrics_catalog[metric_key] = MetricDefinition(
-                        name=col['name'],
+                        name=col["name"],
                         table=table,
-                        column=col['name'],
-                        aggregation="SUM" if "amount" in col['name'].lower() or "price" in col['name'].lower() else "AVG",
-                        description=f"Auto-discovered metric from {table}.{col['name']}"
+                        column=col["name"],
+                        aggregation=(
+                            "SUM"
+                            if "amount" in col["name"].lower() or "price" in col["name"].lower()
+                            else "AVG"
+                        ),
+                        description=f"Auto-discovered metric from {table}.{col['name']}",
                     )
 
         summary_text = f"Scanned {len(table_names)} tables. " + " | ".join(schema_summary_parts)
@@ -47,7 +57,7 @@ def scan_database_schema(input_data: Optional[ScannerInput] = None) -> SchemaMet
             tables=table_names,
             schema_summary=summary_text,
             metrics_catalog=metrics_catalog,
-            cataloged_experiments=[]
+            cataloged_experiments=[],
         )
 
     except Exception as e:
@@ -55,5 +65,5 @@ def scan_database_schema(input_data: Optional[ScannerInput] = None) -> SchemaMet
             tables=[],
             schema_summary=f"Schema Scanning Failed: {str(e)}",
             metrics_catalog={},
-            cataloged_experiments=[]
+            cataloged_experiments=[],
         )

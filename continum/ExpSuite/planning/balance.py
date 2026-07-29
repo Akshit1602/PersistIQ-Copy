@@ -1,11 +1,14 @@
 from typing import Dict, List
+
 from pydantic import BaseModel, Field
 
 
 class TrafficBalanceInput(BaseModel):
     num_variants: int = Field(2, description="Total number of variants (including Control)")
     variant_names: List[str] = Field(default_factory=lambda: ["Control", "Treatment"])
-    control_split: float = Field(0.50, description="Target allocation ratio for Control (e.g. 0.50)")
+    control_split: float = Field(
+        0.50, description="Target allocation ratio for Control (e.g. 0.50)"
+    )
 
 
 class TrafficBalanceResult(BaseModel):
@@ -41,7 +44,5 @@ def calculate_traffic_balance(input_data: TrafficBalanceInput) -> TrafficBalance
     summary = f"Traffic Allocation Split: {split_formatted}. Split Integrity: {'VALID' if is_valid else 'INVALID'}"
 
     return TrafficBalanceResult(
-        variant_allocations=allocations,
-        is_valid_split=is_valid,
-        summary=summary
+        variant_allocations=allocations, is_valid_split=is_valid, summary=summary
     )

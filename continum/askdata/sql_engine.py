@@ -1,12 +1,16 @@
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
+
 from continum.config import settings
 
 
 class SQLExecutionInput(BaseModel):
     query: str = Field(..., description="Natural language question or raw SQL statement")
-    schema_context: Optional[str] = Field(None, description="Schema definition string for Text-to-SQL generation")
+    schema_context: Optional[str] = Field(
+        None, description="Schema definition string for Text-to-SQL generation"
+    )
 
 
 class SQLExecutionResult(BaseModel):
@@ -24,10 +28,10 @@ def validate_sql_safety(sql: str) -> bool:
     """
     clean_sql = sql.strip().upper()
     forbidden_keywords = ["DROP", "DELETE", "TRUNCATE", "UPDATE", "INSERT", "ALTER", "CREATE"]
-    
+
     if not clean_sql.startswith("SELECT") and not clean_sql.startswith("WITH"):
         return False
-        
+
     for kw in forbidden_keywords:
         if f" {kw} " in clean_sql or clean_sql.startswith(f"{kw} "):
             return False
@@ -40,7 +44,7 @@ def execute_sql_query(input_data: SQLExecutionInput) -> SQLExecutionResult:
     Validates and executes a SQL query against the configured database URL.
     """
     sql_query = input_data.query.strip()
-    
+
     # Clean codeblock markdown markers if passed by LLM
     if sql_query.startswith("```sql"):
         sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
@@ -53,7 +57,7 @@ def execute_sql_query(input_data: SQLExecutionInput) -> SQLExecutionResult:
             rows=[],
             row_count=0,
             is_safe=False,
-            summary="SECURITY ALERT: Query rejected. Only read-only SELECT statements are permitted."
+            summary="SECURITY ALERT: Query rejected. Only read-only SELECT statements are permitted.",
         )
 
     try:
@@ -69,7 +73,7 @@ def execute_sql_query(input_data: SQLExecutionInput) -> SQLExecutionResult:
             rows=fetched_rows,
             row_count=len(fetched_rows),
             is_safe=True,
-            summary=f"SQL Query executed successfully. Returned {len(fetched_rows)} rows."
+            summary=f"SQL Query executed successfully. Returned {len(fetched_rows)} rows.",
         )
 
     except Exception as e:
@@ -79,5 +83,5 @@ def execute_sql_query(input_data: SQLExecutionInput) -> SQLExecutionResult:
             rows=[],
             row_count=0,
             is_safe=True,
-            summary=f"SQL Execution Error: {str(e)}"
+            summary=f"SQL Execution Error: {str(e)}",
         )

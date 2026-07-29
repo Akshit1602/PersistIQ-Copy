@@ -1,4 +1,3 @@
-from typing import List, Dict
 from pydantic import BaseModel, Field
 
 
@@ -6,7 +5,9 @@ class GuardrailCheckInput(BaseModel):
     metric_name: str
     control_value: float
     treatment_value: float
-    max_allowed_degradation_pct: float = Field(0.02, description="Max acceptable negative delta e.g. 2%")
+    max_allowed_degradation_pct: float = Field(
+        0.02, description="Max acceptable negative delta e.g. 2%"
+    )
 
 
 class GuardrailReport(BaseModel):
@@ -44,5 +45,5 @@ def check_guardrail_metric(input_data: GuardrailCheckInput) -> GuardrailReport:
         treatment_value=t_val,
         degradation_pct=float(delta_pct),
         is_violated=is_violated,
-        summary=summary
+        summary=summary,
     )

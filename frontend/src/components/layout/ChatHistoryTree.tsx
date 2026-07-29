@@ -13,6 +13,7 @@ import type { ThreadGroup } from '../../context/types'
 import { AppIcon } from '../shared/AppIcon'
 
 interface ChatHistoryTreeProps {
+  projectId: string
   searchQuery: string
 }
 
@@ -31,14 +32,13 @@ function filterGroups(groups: ThreadGroup[], query: string): ThreadGroup[] {
     .filter((g): g is ThreadGroup => g !== null)
 }
 
-export function ChatHistoryTree({ searchQuery }: ChatHistoryTreeProps) {
+export function ChatHistoryTree({ projectId, searchQuery }: ChatHistoryTreeProps) {
   const {
     threadGroups,
     activeThreadId,
     selectThread,
     deleteThread,
     openExperimentDataSources,
-    selectedProjectId,
   } = useMatchView()
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => {
     const group = threadGroups.find((g) => g.threads.some((t) => t.id === activeThreadId))
@@ -46,11 +46,8 @@ export function ChatHistoryTree({ searchQuery }: ChatHistoryTreeProps) {
   })
 
   const projectGroups = useMemo(
-    () =>
-      selectedProjectId
-        ? threadGroups.filter((g) => g.projectId === selectedProjectId)
-        : threadGroups,
-    [threadGroups, selectedProjectId],
+    () => threadGroups.filter((g) => g.projectId === projectId),
+    [threadGroups, projectId],
   )
 
   const filteredGroups = useMemo(

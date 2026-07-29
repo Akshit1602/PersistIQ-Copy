@@ -1,6 +1,12 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any
-from continum.mapMeta import scan_database_schema, fetch_statsig_experiment_health, StatSigFetchInput
+from typing import Any, Dict, List
+
+from fastapi import APIRouter
+
+from continum.mapMeta import (
+    StatSigFetchInput,
+    fetch_statsig_experiment_health,
+    scan_database_schema,
+)
 
 router = APIRouter(prefix="/api/experiments", tags=["Experiments & Data Catalog"])
 
@@ -11,7 +17,7 @@ async def list_experiments():
     Returns all cataloged experiments for the MatchView Hub view and Header selector.
     """
     schema_meta = scan_database_schema()
-    
+
     # Return discovered or mock experiments
     experiments = [
         {
@@ -20,7 +26,7 @@ async def list_experiments():
             "status": "RUNNING",
             "primary_metric": "conversion_rate",
             "sample_size": 24980,
-            "srm_status": "HEALTHY"
+            "srm_status": "HEALTHY",
         },
         {
             "experiment_id": "exp_cart_cross_sell_v1",
@@ -28,8 +34,8 @@ async def list_experiments():
             "status": "COMPLETED",
             "primary_metric": "average_order_value",
             "sample_size": 30000,
-            "srm_status": "HEALTHY"
-        }
+            "srm_status": "HEALTHY",
+        },
     ]
     return experiments
 

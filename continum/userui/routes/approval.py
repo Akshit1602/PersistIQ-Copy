@@ -1,6 +1,7 @@
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
+
 from continum.orchestration import app_graph
 
 router = APIRouter(prefix="/api/approval", tags=["Human-in-the-Loop"])
@@ -18,9 +19,11 @@ async def resume_interrupted_graph(payload: ApprovalRequest):
     Resumes a paused LangGraph thread following human approval or feedback.
     """
     config = {"configurable": {"thread_id": payload.thread_id}}
-    
+
     if payload.approved:
-        resume_message = f"USER APPROVED: {payload.user_feedback}" if payload.user_feedback else "USER APPROVED."
+        resume_message = (
+            f"USER APPROVED: {payload.user_feedback}" if payload.user_feedback else "USER APPROVED."
+        )
     else:
         resume_message = f"USER REJECTED ACTION: {payload.user_feedback}"
 

@@ -1,4 +1,3 @@
-import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import norm
 
@@ -31,7 +30,9 @@ def calculate_diff_in_diff(input_data: DiDInput) -> DiDResult:
     trt_diff = input_data.treatment_post - input_data.treatment_pre
     did_effect = trt_diff - ctrl_diff
 
-    rel_effect = (did_effect / input_data.control_post) * 100.0 if input_data.control_post != 0 else 0.0
+    rel_effect = (
+        (did_effect / input_data.control_post) * 100.0 if input_data.control_post != 0 else 0.0
+    )
 
     se = input_data.std_error if input_data.std_error > 0 else 1e-6
     z_stat = did_effect / se
@@ -51,5 +52,5 @@ def calculate_diff_in_diff(input_data: DiDInput) -> DiDResult:
         z_stat=float(z_stat),
         p_value=float(p_val),
         is_significant=is_sig,
-        summary=summary
+        summary=summary,
     )

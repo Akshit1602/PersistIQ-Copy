@@ -12,13 +12,12 @@ const NAV_ITEMS: { id: 'home' | 'archive' | 'settings'; icon: LucideIcon; label:
 ]
 
 export function GlobalRail() {
-  const { goHome, selectedProjectId } = useMatchView()
+  const { goHome, activeGlobalPage, setActiveGlobalPage } = useMatchView()
   const [hovered, setHovered] = useState(false)
-  const onHome = selectedProjectId === null
 
   return (
     <aside
-      className={`rail-panel absolute inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out ${
+      className={`rail-panel z-50 flex h-full shrink-0 flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out ${
         hovered ? 'w-60' : 'w-16'
       }`}
       onMouseEnter={() => setHovered(true)}
@@ -49,13 +48,22 @@ export function GlobalRail() {
 
       <nav className={`flex flex-1 flex-col gap-1 ${hovered ? 'px-2' : 'items-center px-0'}`}>
         {NAV_ITEMS.map((item) => {
-          const isActive = item.id === 'home' && onHome
+          const isActive =
+            (item.id === 'home' && activeGlobalPage === 'workspace') ||
+            (item.id === 'archive' && activeGlobalPage === 'archive') ||
+            (item.id === 'settings' && activeGlobalPage === 'settings')
           return (
             <button
               key={item.id}
               type="button"
               title={!hovered ? item.label : undefined}
-              onClick={item.id === 'home' ? goHome : undefined}
+              onClick={() => {
+                if (item.id === 'home') {
+                  goHome()
+                } else {
+                  setActiveGlobalPage(item.id)
+                }
+              }}
               className={`focus-ring-rail flex items-center rounded-xs py-2.5 text-sm transition-colors duration-instant hover:bg-rail-hover hover:text-rail-text-primary ${
                 isActive ? 'bg-rail-hover text-rail-text-primary' : 'text-rail-text-secondary'
               } ${hovered ? 'w-full gap-3 px-3' : 'h-10 w-10 justify-center px-0'}`}
