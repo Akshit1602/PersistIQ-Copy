@@ -5,11 +5,7 @@ import {
   INITIAL_THREAD_GROUPS_WITH_PROJECTS,
 } from './projects'
 
-export const EXPERIMENTS = [
-  'Walmart Banner Redesign',
-  'Cart Flow Optimization',
-  'Holiday Promo Lift Test',
-] as const
+export const EXPERIMENTS: string[] = []
 
 export {
   INITIAL_PROJECTS,
@@ -65,34 +61,7 @@ export function buildAssistantReply(persona: Persona, userMessage: string): stri
 
 export type { ChatMessage }
 
-export const MOCK_MESSAGES: ChatMessage[] = [
-  {
-    id: 'm1',
-    role: 'user',
-    content: 'What were the results of the Walmart Banner Redesign test?',
-    timestamp: '10:32 AM',
-  },
-  {
-    id: 'm2',
-    role: 'assistant',
-    content:
-      'The Walmart Banner Redesign test showed a +4.2% lift in click-through rate with 95% confidence. Treatment group GMV increased by $1.2M over the 14-day test window.',
-    timestamp: '10:32 AM',
-  },
-  {
-    id: 'm3',
-    role: 'user',
-    content: 'Can you break that down by audience segment?',
-    timestamp: '10:35 AM',
-  },
-  {
-    id: 'm4',
-    role: 'assistant',
-    content:
-      'Mobile users drove 68% of the lift (+5.8% CTR), while desktop showed a modest +1.9%. Returning customers responded strongest at +6.1% conversion lift.',
-    timestamp: '10:35 AM',
-  },
-]
+export const MOCK_MESSAGES: ChatMessage[] = []
 
 export interface ChartData {
   id: string

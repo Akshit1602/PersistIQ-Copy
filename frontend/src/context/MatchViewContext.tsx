@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { fetchExperiments, type Experiment } from '../services/api';
+import { fetchExperiments, streamChatResponse, type Experiment } from '../services/api';
 import type {
   AuthUser,
   Persona,
@@ -34,7 +34,6 @@ import {
 import {
   EXPERIMENTS,
   buildWelcomeMessage,
-  buildAssistantReply,
   formatMessageTime,
   MOCK_MESSAGES,
 } from '../data/mock';
@@ -87,6 +86,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Layout states
   const [chartDrawerOpen, setChartDrawerOpen] = useState<boolean>(false);
   const [chartDrawerTargetId, setChartDrawerTargetId] = useState<string | null>(null);
+  const [activeGlobalPage, setActiveGlobalPage] = useState<'workspace' | 'archive' | 'settings'>('workspace');
+  const [backendExperiments, setBackendExperiments] = useState<Experiment[]>([]);
+  const [chatIsGenerating, setChatIsGenerating] = useState<boolean>(false);
+  const [chatActiveToolStatus, setChatActiveToolStatus] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [hypothesisValidatorOpen, setHypothesisValidatorOpen] = useState<boolean>(false);
   const [audienceWizardOpen, setAudienceWizardOpen] = useState<boolean>(false);
@@ -137,9 +140,53 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const loadBackendData = async () => {
     try {
       const data: Experiment[] = await fetchExperiments();
+      setBackendExperiments(data);
       if (data && data.length > 0) {
         const names = data.map((exp) => exp.name);
-        setExperiments((prev) => [...new Set([...prev, ...names])]);
+        setExperiments(names);
+
+        const nextProjectIds: Record<string, string> = {};
+        const nextThreadGroups: ThreadGroup[] = [];
+        const nextMessagesByThread: Record<string, ChatMessage[]> = {};
+
+        data.forEach((exp, idx) => {
+          const projId = idx % 2 === 0 ? 'proj-walmart-digital' : 'proj-cart-reliability';
+          nextProjectIds[exp.name] = projId;
+
+          const threadId = `t_backend_${exp.experiment_id}`;
+          nextThreadGroups.push({
+            projectId: projId,
+            experiment: exp.name,
+            threads: [
+              {
+                id: threadId,
+                title: `${exp.name} Discussion`,
+                timestamp: 'Just now',
+              },
+            ],
+          });
+
+          nextMessagesByThread[threadId] = [
+            {
+              id: `system_${exp.experiment_id}_init`,
+              role: 'assistant',
+              content: `This is the discussion thread for **${exp.name}**. Ask me questions about its primary metric (${exp.primary_metric}), sample sizes, or run statistical tests like SRM checks.`,
+              timestamp: formatMessageTime(),
+              kind: 'text',
+              artifacts: [],
+            },
+          ];
+        });
+
+        setExperimentProjectIds(nextProjectIds);
+        setThreadGroupState(nextThreadGroups);
+        setMessagesByThread(nextMessagesByThread);
+
+        setSelectedExperiment(names[0]);
+        const firstThread = nextThreadGroups[0]?.threads[0]?.id;
+        if (firstThread) {
+          setActiveThreadId(firstThread);
+        }
 
         // Dynamically add to specs
         setExperimentSpecsByName((prev) => {
@@ -157,6 +204,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
           });
           return next;
         });
+      } else {
+        setExperiments([]);
       }
     } catch (err) {
       console.warn('Backend fetch failed, relying on mock data:', err);
@@ -491,39 +540,126 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const clearActiveModule = () => setActiveModuleId(null);
 
   const sendMessage = (content: string) => {
+    if (!content.trim() || chatIsGenerating) return;
+
     const timestamp = formatMessageTime();
     const userMsg: ChatMessage = {
       id: 'msg_user_' + Date.now(),
       role: 'user',
       content,
       timestamp,
+      kind: 'text',
     };
 
+    const threadId = activeThreadId || 'matchview_session';
+
     setMessagesByThread((prev) => {
-      const list = prev[activeThreadId] || [];
+      const list = prev[threadId] || [];
       return {
         ...prev,
-        [activeThreadId]: [...list, userMsg],
+        [threadId]: [...list, userMsg],
       };
     });
 
-    // Simulate assistant reply
-    setTimeout(() => {
-      const replyText = buildAssistantReply(currentPersona, content);
-      const assistantMsg: ChatMessage = {
-        id: 'msg_asst_' + Date.now(),
-        role: 'assistant',
-        content: replyText,
-        timestamp: formatMessageTime(),
+    const assistantMsgId = 'msg_asst_' + Date.now();
+    const assistantMsg: ChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: formatMessageTime(),
+      kind: 'text',
+      artifacts: [],
+    };
+
+    setMessagesByThread((prev) => {
+      const list = prev[threadId] || [];
+      return {
+        ...prev,
+        [threadId]: [...list, assistantMsg],
       };
-      setMessagesByThread((prev) => {
-        const list = prev[activeThreadId] || [];
-        return {
-          ...prev,
-          [activeThreadId]: [...list, assistantMsg],
+    });
+
+    setChatIsGenerating(true);
+    setChatActiveToolStatus('Analyzing request...');
+
+    const activeBackendExp = backendExperiments.find((e) => e.name === selectedExperiment);
+    const activeExperimentId = activeBackendExp ? activeBackendExp.experiment_id : null;
+
+    streamChatResponse({
+      message: content,
+      threadId,
+      activeExperimentId,
+      onToken: (chunk) => {
+        setChatActiveToolStatus(null);
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                return {
+                  ...msg,
+                  content: msg.content + chunk,
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+      onToolStart: (_tool, statusMsg) => {
+        setChatActiveToolStatus(statusMsg);
+      },
+      onArtifact: (artifactPayload) => {
+        const card = {
+          artifact_id: artifactPayload.artifact_id || `art_${Date.now()}`,
+          type: artifactPayload.type || 'stat_results_card',
+          title: artifactPayload.title || 'Analysis Card',
+          payload: artifactPayload.payload || artifactPayload,
         };
-      });
-    }, 700);
+
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                const existingArtifacts = msg.artifacts || [];
+                return {
+                  ...msg,
+                  artifacts: [...existingArtifacts, card],
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+      onDone: () => {
+        setChatIsGenerating(false);
+        setChatActiveToolStatus(null);
+      },
+      onError: (err) => {
+        console.error('Chat streaming error:', err);
+        setChatIsGenerating(false);
+        setChatActiveToolStatus(null);
+        setMessagesByThread((prev) => {
+          const list = prev[threadId] || [];
+          return {
+            ...prev,
+            [threadId]: list.map((msg) => {
+              if (msg.id === assistantMsgId) {
+                return {
+                  ...msg,
+                  content: '⚠️ Unable to connect to backend AI assistant. Make sure the backend server is running.',
+                };
+              }
+              return msg;
+            }),
+          };
+        });
+      },
+    });
   };
 
   const appendChatMessages = (messages: TextChatMessage[]) => {
@@ -770,6 +906,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCurrentTab('chat');
     setActivePhase('auto');
     setActiveModuleId(null);
+    setSelectedProjectId(null);
+    setActiveGlobalPage('workspace');
   };
 
   return (
@@ -809,6 +947,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         experimentSpecsByName,
         workflowProgressByExperiment,
         pendingModuleActivation,
+        activeGlobalPage,
+        setActiveGlobalPage,
+        chatIsGenerating,
+        chatActiveToolStatus,
         login,
         logout,
         setPersona: setCurrentPersona,
