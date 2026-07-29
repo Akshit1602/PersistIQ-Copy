@@ -1,0 +1,131 @@
+import { useId } from 'react'
+
+interface MatchViewSpinnerProps {
+  className?: string
+  label?: string
+}
+
+/** Animated MatchView mark — yellow/orange tick strokes pulse like a loading check. */
+export function MatchViewSpinner({
+  className = '',
+  label = 'Loading',
+}: MatchViewSpinnerProps) {
+  const uid = useId().replace(/:/g, '')
+
+  return (
+    <div
+      className={`mv-spinner relative inline-flex items-center justify-center ${className}`}
+      role="img"
+      aria-label={label}
+    >
+      <svg
+        width="61"
+        height="51"
+        viewBox="0 0 61 51"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-full w-full overflow-visible"
+        aria-hidden="true"
+      >
+        <path
+          className="mv-spinner-piece mv-spinner-blue"
+          d="M26.592 1.5489V6.16084L0 21.2237V15.2094C0 13.3417 0.997427 11.613 2.61749 10.6761L19.8941 0.702672C21.5142 -0.234224 23.509 -0.234224 25.1291 0.702672L26.592 1.5489Z"
+          fill={`url(#${uid}-g0)`}
+        />
+        <path
+          className="mv-spinner-piece mv-spinner-pink"
+          d="M45.0281 22.3389V35.1592C45.0281 37.027 44.0306 38.7557 42.4106 39.6926L25.1339 49.666C23.5139 50.6029 21.519 50.6029 19.899 49.666L15.7158 47.2482V39.5173L45.0281 22.3389Z"
+          fill={`url(#${uid}-g1)`}
+        />
+        <path
+          className="mv-spinner-piece mv-spinner-tick-stem"
+          d="M60.6647 9.53053C60.6647 12.3896 58.3494 14.7046 55.4902 14.7046C54.5895 14.7046 53.7492 14.481 53.0117 14.076L18.7305 34.2343V14.082L23.5665 11.3439V25.7962L50.3398 10.0383C50.3217 9.87506 50.3096 9.69977 50.3096 9.53053C50.3096 6.67148 52.6309 4.35645 55.4902 4.35645C58.3494 4.35645 60.6647 6.67148 60.6647 9.53053Z"
+          fill={`url(#${uid}-g2)`}
+        />
+        <path
+          className="mv-spinner-piece mv-spinner-blue-mid"
+          d="M42.87 10.9843L26.5908 20.5285V1.54883L42.4046 10.676C42.5678 10.7727 42.7189 10.8755 42.87 10.9843Z"
+          fill={`url(#${uid}-g3)`}
+        />
+        <path
+          className="mv-spinner-piece mv-spinner-pink"
+          d="M15.711 24.8252V47.2442L2.61749 39.6886C0.997427 38.7517 0 37.023 0 35.1552V33.7227L15.711 24.8252Z"
+          fill={`url(#${uid}-g4)`}
+        />
+        <path
+          className="mv-spinner-piece mv-spinner-tick-bar"
+          d="M18.7335 14.0898V19.6447L0 30.2528V24.6979L18.7335 14.0898Z"
+          fill={`url(#${uid}-g5)`}
+        />
+        <defs>
+          <linearGradient
+            id={`${uid}-g0`}
+            x1="27.864"
+            y1="0.858439"
+            x2="-1.25149"
+            y2="17.2815"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#0900FB" />
+            <stop offset="1" stopColor="#00C3FF" />
+          </linearGradient>
+          <linearGradient
+            id={`${uid}-g1`}
+            x1="17.5855"
+            y1="43.9266"
+            x2="48.1119"
+            y2="30.123"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#DC003E" />
+            <stop offset="1" stopColor="#FF6D98" />
+          </linearGradient>
+          <linearGradient
+            id={`${uid}-g2`}
+            x1="61.8445"
+            y1="10.2185"
+            x2="14.3917"
+            y2="24.8788"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#CA880F" />
+            <stop offset="1" stopColor="#FFE115" />
+          </linearGradient>
+          <linearGradient
+            id={`${uid}-g3`}
+            x1="34.7304"
+            y1="20.5285"
+            x2="34.7304"
+            y2="1.54883"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#0900FB" />
+            <stop offset="1" stopColor="#00C3FF" />
+          </linearGradient>
+          <linearGradient
+            id={`${uid}-g4`}
+            x1="20.5079"
+            y1="33.3294"
+            x2="3.5811"
+            y2="42.8772"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#DC003E" />
+            <stop offset="1" stopColor="#FF6D98" />
+          </linearGradient>
+          <linearGradient
+            id={`${uid}-g5`}
+            x1="21.1484"
+            y1="15.4127"
+            x2="2.183"
+            y2="26.2942"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#F7A000" />
+            <stop offset="1" stopColor="#FFE115" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  )
+}

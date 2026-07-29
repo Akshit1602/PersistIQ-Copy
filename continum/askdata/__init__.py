@@ -1,35 +1,29 @@
-"""AskData — the AI-powered NL→SQL / Visualization / Insight layer.
-
-Three generators, each exposing LangGraph node bodies that the
-:mod:`continum.orchestration` graph wires together:
-
-* :mod:`.SQLGenerator`   — refine/breakdown + NL→SQL on the dataset's DuckDB schema
-* :mod:`.VisualGenerator`— a Plotly chart spec from the SQL result
-* :mod:`.InsightGenerator` — short insights from the data or ContextGraph context
-
-The graph topology + engine live in :mod:`continum.orchestration`, not here.
-"""
-
-from .InsightGenerator import (
-    about,
-    describe_result,
-    get_readme_context,
-    grounded_insight,
-    insight_node,
-    run_ask,
+from continum.askdata.growth_simulator import (
+    GrowthSimulationInput,
+    GrowthSimulationResult,
+    simulate_and_visualize_growth,
 )
-from .SQLGenerator import clarification_node, refine_node, sql_node
-from .VisualGenerator import visualization_node
+from continum.askdata.sql_engine import SQLExecutionInput, SQLExecutionResult, execute_sql_query
+from continum.askdata.visual_generator import (
+    ChartGeneratorInput,
+    ChartGeneratorResult,
+    build_growth_forecast_chart,
+    build_metric_lift_chart,
+    build_srm_distribution_chart,
+    generate_visualization,
+)
 
 __all__ = [
-    "refine_node",
-    "sql_node",
-    "clarification_node",
-    "visualization_node",
-    "insight_node",
-    "describe_result",
-    "grounded_insight",
-    "about",
-    "get_readme_context",
-    "run_ask",
+    "generate_visualization",
+    "build_metric_lift_chart",
+    "build_srm_distribution_chart",
+    "build_growth_forecast_chart",
+    "ChartGeneratorInput",
+    "ChartGeneratorResult",
+    "execute_sql_query",
+    "SQLExecutionInput",
+    "SQLExecutionResult",
+    "simulate_and_visualize_growth",
+    "GrowthSimulationInput",
+    "GrowthSimulationResult",
 ]

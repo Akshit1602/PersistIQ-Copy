@@ -1,22 +1,28 @@
-pandas
-numpy
-scipy
-matplotlib
-tabulate
-duckdb
-reportlab
-pypdf
-python-docx
-statsmodels
-sqlglot
-scikit-learn
-snowflake-connector-python
-pydantic
-openai
-langchain-openai
-langchain-google-genai
-langgraph
-openpyxl
-flask
-python-dotenv
-pyprojroot
+# Web Framework & Async Server
+fastapi>=0.111.0
+starlette>=0.37.2
+uvicorn[standard]>=0.30.0
+
+# Configuration & Data Validation
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+
+# Agent Orchestration & LLM Providers
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-openai>=0.1.7
+langchain-google-genai>=1.0.0
+langgraph>=0.1.0
+
+# Math, Statistics & Causal Engine
+numpy>=1.26.0
+scipy>=1.13.0
+
+# Database & Visuals
+sqlalchemy>=2.0.0
+plotly>=5.20.0
+
+# External Telemetry & MCP
+requests>=2.31.0
+mcp>=1.0.0
