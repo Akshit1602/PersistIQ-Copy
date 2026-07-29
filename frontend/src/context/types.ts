@@ -144,6 +144,7 @@ interface ChatMessageBase {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  artifacts?: any[]
 }
 
 export interface TextChatMessage extends ChatMessageBase {
@@ -331,9 +332,13 @@ export interface MatchViewState {
   experimentSpecsByName: ExperimentSpecsByName
   workflowProgressByExperiment: WorkflowProgressByExperiment
   pendingModuleActivation: ModuleId | null
+  activeGlobalPage: 'workspace' | 'archive' | 'settings'
+  chatIsGenerating: boolean
+  chatActiveToolStatus: string | null
 }
 
 export interface MatchViewActions {
+  setActiveGlobalPage: (page: 'workspace' | 'archive' | 'settings') => void
   login: (email: string, password: string) => boolean
   logout: () => void
   setPersona: (persona: Persona) => void

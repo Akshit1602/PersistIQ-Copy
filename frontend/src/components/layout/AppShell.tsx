@@ -7,17 +7,25 @@ import { AudienceSelectionWizard } from '../workspace/AudienceSelectionWizard'
 import { NewProjectPanel } from '../workspace/NewProjectPanel'
 import { ExperimentDataSourcesDialog } from '../workspace/ExperimentDataSourcesDialog'
 import { useMatchView } from '../../context/MatchViewContext'
+import { KnowledgeArchiveView } from '../workspace/KnowledgeArchiveView'
+import { SettingsView } from '../workspace/SettingsView'
 
 export function AppShell() {
-  const { selectedProjectId } = useMatchView()
+  const { selectedProjectId, activeGlobalPage } = useMatchView()
   const onHome = selectedProjectId === null
 
   return (
     <div className="canvas-bg flex h-screen flex-col">
       <div className="relative flex min-h-0 flex-1">
         <div className="w-16 shrink-0" aria-hidden="true" />
-        {!onHome && <StaticSidebar />}
-        {onHome ? <ProjectsHome /> : <MainWorkspace />}
+        {activeGlobalPage === 'workspace' && !onHome && <StaticSidebar />}
+        {activeGlobalPage === 'workspace' ? (
+          onHome ? <ProjectsHome /> : <MainWorkspace />
+        ) : activeGlobalPage === 'archive' ? (
+          <KnowledgeArchiveView />
+        ) : (
+          <SettingsView />
+        )}
         <GlobalRail />
       </div>
       <NewProjectPanel />
