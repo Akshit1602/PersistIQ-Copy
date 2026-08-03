@@ -8,11 +8,8 @@ export function StaticSidebar() {
   const {
     openHypothesisValidator,
     goHome,
-    projects,
-    selectedProjectId,
   } = useMatchView()
   const [searchQuery, setSearchQuery] = useState('')
-  const project = projects.find((p) => p.id === selectedProjectId)
 
   return (
     <aside className="history-panel flex w-[280px] shrink-0 flex-col">
@@ -23,13 +20,11 @@ export function StaticSidebar() {
           className="focus-ring-rail mb-2 flex w-full items-center gap-1.5 rounded-xs px-1.5 py-1 text-xs font-medium text-rail-text-secondary transition-colors hover:bg-rail-hover hover:text-rail-text-primary"
         >
           <AppIcon icon={ArrowLeft} size="xs" />
-          All projects
+          Home Dashboard
         </button>
-        {project && (
-          <p className="mb-2 truncate px-1.5 text-xs font-semibold text-rail-text-primary" title={project.name}>
-            {project.name}
-          </p>
-        )}
+        <p className="mb-2 px-1.5 text-xs font-bold uppercase tracking-wider text-rail-text-primary">
+          Workspaces
+        </p>
         <div className="relative">
           <AppIcon
             icon={Search}
@@ -40,17 +35,14 @@ export function StaticSidebar() {
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search hypotheses..."
+            placeholder="Search threads..."
             className="focus-ring-rail w-full rounded-xs border border-rail-border/25 bg-rail-base/50 py-1.5 pl-10 pr-2.5 text-xs text-rail-text-primary placeholder:text-rail-text-secondary/80"
-            aria-label="Search hypotheses"
+            aria-label="Search threads"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2.5">
-        <p className="mb-1.5 px-1.5 text-micro font-semibold uppercase tracking-wide text-rail-text-secondary">
-          Hypotheses
-        </p>
         <ChatHistoryTree searchQuery={searchQuery} />
       </div>
 

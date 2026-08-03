@@ -17,6 +17,8 @@ import {
   getSmartPillsForPhase,
 } from '../data/moduleInterviewEngine';
 import { MODULE_BY_ID } from '../data/moduleRegistry';
+import { extractNlpParameters } from '../data/nlpParameterExtractor';
+import { mapToolToModuleId } from './MatchViewContext';
 
 export type PhaseType = 'DISCOVERY' | 'PLANNING' | 'EXECUTION' | 'EVALUATION' | 'INSIGHTS';
 
@@ -153,6 +155,16 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
       artifacts: [],
     };
 
+    if (matchView.currentPersona === 'analyst') {
+      const nlp = extractNlpParameters(userText, matchView.selectedExperiment, matchView.activeModuleId);
+      if (nlp) {
+        matchView.selectLabModule(nlp.moduleId);
+        matchView.selectModule(nlp.moduleId);
+        matchView.setLabPanelView('form');
+        matchView.injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+      }
+    }
+
     setMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
     setIsGenerating(true);
     setActiveToolStatus('Analyzing request...');
@@ -177,8 +189,20 @@ export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ 
           })
         );
       },
-      onToolStart: (_tool, statusMsg) => {
+      onToolStart: (tool, statusMsg) => {
         setActiveToolStatus(statusMsg);
+        if (matchView.currentPersona === 'analyst') {
+          const mappedModuleId = mapToolToModuleId(tool);
+          if (mappedModuleId) {
+            matchView.selectLabModule(mappedModuleId);
+            matchView.selectModule(mappedModuleId);
+            matchView.setLabPanelView('form');
+            const nlp = extractNlpParameters(userText, matchView.selectedExperiment, mappedModuleId);
+            if (nlp) {
+              matchView.injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+            }
+          }
+        }
       },
       onArtifact: (artifactPayload) => {
         const card: UIArtifactCard = {
