@@ -1,6 +1,6 @@
 import numpy as np
 from pydantic import BaseModel, Field
-from scipy.stats import ttest_ind, norm
+from scipy.stats import norm
 
 
 class StatTestInput(BaseModel):
@@ -36,7 +36,7 @@ def calculate_hypothesis_test(input_data: StatTestInput) -> StatTestResult:
     rel_lift = (abs_lift / c_m) if c_m != 0 else 0.0
 
     # Standard error of difference between means
-    se = np.sqrt((c_s ** 2 / c_n) + (t_s ** 2 / t_n))
+    se = np.sqrt((c_s**2 / c_n) + (t_s**2 / t_n))
     z_stat = abs_lift / se if se > 0 else 0.0
 
     # Two-tailed p-value
@@ -64,5 +64,5 @@ def calculate_hypothesis_test(input_data: StatTestInput) -> StatTestResult:
         ci_lower=float(ci_lower),
         ci_upper=float(ci_upper),
         is_stat_sig=is_sig,
-        summary=summary
+        summary=summary,
     )

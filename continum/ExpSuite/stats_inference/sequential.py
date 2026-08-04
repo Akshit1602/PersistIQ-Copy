@@ -30,18 +30,28 @@ def run_sprt(input_data: SequentialInput) -> SequentialResult:
     lower_bound = np.log(b / (1.0 - a))
     upper_bound = np.log((1.0 - b) / a)
 
-    p_ctrl = input_data.control_successes / input_data.control_count if input_data.control_count > 0 else 0.5
-    p_trt = input_data.treatment_successes / input_data.treatment_count if input_data.treatment_count > 0 else 0.5
+    p_ctrl = (
+        input_data.control_successes / input_data.control_count
+        if input_data.control_count > 0
+        else 0.5
+    )
+    p_trt = (
+        input_data.treatment_successes / input_data.treatment_count
+        if input_data.treatment_count > 0
+        else 0.5
+    )
 
     # Log likelihood ratio approximation
     e_ctrl = input_data.control_count * p_ctrl
     e_trt = input_data.treatment_count * p_trt
-    
+
     # Standardized SPRT log-ratio statistic
-    diff = (p_trt - p_ctrl)
-    se = np.sqrt((p_ctrl * (1 - p_ctrl) / max(1, input_data.control_count)) + 
-                 (p_trt * (1 - p_trt) / max(1, input_data.treatment_count)))
-    
+    diff = p_trt - p_ctrl
+    se = np.sqrt(
+        (p_ctrl * (1 - p_ctrl) / max(1, input_data.control_count))
+        + (p_trt * (1 - p_trt) / max(1, input_data.treatment_count))
+    )
+
     sprt_stat = float(diff / se) if se > 0 else 0.0
 
     if sprt_stat >= upper_bound:
@@ -59,5 +69,5 @@ def run_sprt(input_data: SequentialInput) -> SequentialResult:
         upper_bound=float(upper_bound),
         lower_bound=float(lower_bound),
         decision=decision,
-        summary=summary
+        summary=summary,
     )

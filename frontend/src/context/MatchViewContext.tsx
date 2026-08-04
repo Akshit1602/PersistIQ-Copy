@@ -47,20 +47,6 @@ import { isWorkflowStepId } from '../data/hypothesisWorkflow';
 import { buildBriefBody } from '../data/briefBuilder';
 import { extractNlpParameters } from '../data/nlpParameterExtractor';
 
-export function mapToolToModuleId(toolName: string): ModuleId | null {
-  const name = toolName.toLowerCase();
-  if (name.includes('srm') || name.includes('health')) return 'health-monitor';
-  if (name.includes('power') || name.includes('sample_size') || name.includes('sample-size')) return 'power-calculator';
-  if (name.includes('opportunity') || name.includes('validate_hypothesis')) return 'opportunity-sizing';
-  if (name.includes('metrics') || name.includes('guardrail')) return 'metrics-tracking';
-  if (name.includes('sequential') || name.includes('sprt')) return 'sequential-testing';
-  if (name.includes('diff_in_diff') || name.includes('did') || name.includes('causal')) return 'causal-did';
-  if (name.includes('forecast') || name.includes('monte_carlo')) return 'forecasting';
-  if (name.includes('balance') || name.includes('allocation')) return 'balance-diagnostics';
-  if (name.includes('cuped') || name.includes('hypothesis_test') || name.includes('bayesian')) return 'experiment-analysis';
-  return null;
-}
-
 const INITIAL_EXPERIMENT_SPECS: Record<string, ExperimentSpec> = {
   'Walmart Banner Redesign': {
     name: 'Walmart Banner Redesign',
@@ -481,6 +467,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const selectThread = (threadId: string, experiment: string) => {
     setActiveThreadId(threadId);
     setSelectedExperiment(experiment);
+    const projId = experimentProjectIds[experiment];
+    if (projId) {
+      setSelectedProjectId(projId);
+    }
   };
 
   const deleteThread = (threadId: string, _experiment: string) => {
@@ -557,6 +547,31 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const sendMessage = (content: string) => {
     if (!content.trim() || chatIsGenerating) return;
 
+    // Immediately extract NLP parameters if analyst
+    if (currentPersona === 'analyst') {
+      const nlp = extractNlpParameters(content, selectedExperiment, null);
+      if (nlp && nlp.moduleId) {
+        setLabModuleId(nlp.moduleId);
+        setLabPanelView('form');
+        setAnalyticsLabCollapsed(false);
+        setModuleFormValuesByExperiment((prev) => {
+          const expValues = prev[selectedExperiment] || {};
+          const modValues = expValues[nlp.moduleId] || {};
+          return {
+            ...prev,
+            [selectedExperiment]: {
+              ...expValues,
+              [nlp.moduleId]: {
+                ...modValues,
+                ...nlp.params,
+              },
+            },
+          };
+        });
+        setHighlightedFieldKeys(nlp.touchedFields);
+      }
+    }
+
     const timestamp = formatMessageTime();
     const userMsg: ChatMessage = {
       id: 'msg_user_' + Date.now(),
@@ -594,16 +609,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
     });
 
-    if (currentPersona === 'analyst') {
-      const nlp = extractNlpParameters(content, selectedExperiment, activeModuleId);
-      if (nlp) {
-        setLabModuleId(nlp.moduleId);
-        setActiveModuleId(nlp.moduleId);
-        setLabPanelView('form');
-        injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
-      }
-    }
-
     setChatIsGenerating(true);
     setChatActiveToolStatus('Analyzing request...');
 
@@ -634,15 +639,48 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       },
       onToolStart: (tool, statusMsg) => {
         setChatActiveToolStatus(statusMsg);
+
         if (currentPersona === 'analyst') {
-          const mappedModuleId = mapToolToModuleId(tool);
+          const TOOL_TO_MODULE_MAP: Record<string, ModuleId> = {
+            'check_srm': 'data-validation',
+            'apply_cuped_variance_reduction': 'experiment-analysis',
+            'run_hypothesis_test': 'experiment-analysis',
+            'run_sprt_sequential_test': 'sequential-testing',
+            'run_bayesian_ab_test': 'experiment-analysis',
+            'check_guardrail_degradation': 'health-monitor',
+            'calculate_power_and_sample_size': 'power-calculator',
+            'calculate_opportunity_size': 'opportunity-sizing',
+            'plan_experiment_metrics': 'metrics-tracking',
+            'balance_traffic_allocation': 'balance-diagnostics',
+            'calculate_diff_in_diff': 'causal-did',
+            'run_monte_carlo_growth_forecast': 'forecasting',
+            'run_causal_engine': 'causal-did',
+          };
+
+          const mappedModuleId = TOOL_TO_MODULE_MAP[tool];
           if (mappedModuleId) {
             setLabModuleId(mappedModuleId);
-            setActiveModuleId(mappedModuleId);
             setLabPanelView('form');
+            setAnalyticsLabCollapsed(false);
+
+            // Dynamically extract values from the user content and inject
             const nlp = extractNlpParameters(content, selectedExperiment, mappedModuleId);
             if (nlp) {
-              injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+              setModuleFormValuesByExperiment((prev) => {
+                const expValues = prev[selectedExperiment] || {};
+                const modValues = expValues[nlp.moduleId] || {};
+                return {
+                  ...prev,
+                  [selectedExperiment]: {
+                    ...expValues,
+                    [nlp.moduleId]: {
+                      ...modValues,
+                      ...nlp.params,
+                    },
+                  },
+                };
+              });
+              setHighlightedFieldKeys(nlp.touchedFields);
             }
           }
         }

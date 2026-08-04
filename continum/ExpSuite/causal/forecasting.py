@@ -1,12 +1,17 @@
 from typing import Dict
+
 import numpy as np
 from pydantic import BaseModel, Field
 
 
 class ForecastInput(BaseModel):
-    baseline_monthly_revenue: float = Field(..., description="Current baseline monthly revenue in dollars")
+    baseline_monthly_revenue: float = Field(
+        ..., description="Current baseline monthly revenue in dollars"
+    )
     expected_lift_pct: float = Field(..., description="Expected percentage lift, e.g. 0.03 for 3%")
-    lift_std_dev: float = Field(0.01, description="Standard deviation / uncertainty of the lift estimate")
+    lift_std_dev: float = Field(
+        0.01, description="Standard deviation / uncertainty of the lift estimate"
+    )
     num_simulations: int = Field(10000, description="Number of Monte Carlo simulation draws")
 
 
@@ -27,7 +32,7 @@ def run_monte_carlo_forecast(input_data: ForecastInput) -> ForecastResult:
     lift_draws = np.random.normal(
         loc=input_data.expected_lift_pct,
         scale=input_data.lift_std_dev,
-        size=input_data.num_simulations
+        size=input_data.num_simulations,
     )
 
     monthly_base = input_data.baseline_monthly_revenue
@@ -55,5 +60,5 @@ def run_monte_carlo_forecast(input_data: ForecastInput) -> ForecastResult:
         p10_annual_lift=p10,
         p90_annual_lift=p90,
         simulation_bounds={"p10": p10, "p50": p50, "p90": p90},
-        summary=summary
+        summary=summary,
     )

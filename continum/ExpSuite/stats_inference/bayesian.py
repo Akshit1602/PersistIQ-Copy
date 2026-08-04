@@ -52,5 +52,5 @@ def run_bayesian_ab_test(input_data: BayesianTestInput) -> BayesianTestResult:
         expected_relative_lift=exp_lift,
         hdi_lower=hdi_lower,
         hdi_upper=hdi_upper,
-        summary=summary
+        summary=summary,
     )

@@ -17,7 +17,7 @@ export function GlobalRail() {
 
   return (
     <aside
-      className={`rail-panel relative inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out shrink-0 ${
+      className={`rail-panel z-50 flex h-full shrink-0 flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out ${
         hovered ? 'w-60' : 'w-16'
       }`}
       onMouseEnter={() => setHovered(true)}

@@ -1,6 +1,7 @@
 import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from langchain_core.language_models.chat_models import BaseChatModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -22,11 +23,7 @@ class Settings(BaseSettings):
     STATSIG_API_KEY: str = ""
     STATSIG_BASE_URL: str = "https://statsigapi.net/v1"
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     def get_llm(self) -> BaseChatModel:
         """
@@ -34,9 +31,10 @@ class Settings(BaseSettings):
         is set in .env, otherwise falls back to OpenAI GPT-4o.
         """
         gemini_key = self.GEMINI_API_KEY or os.getenv("GOOGLE_API_KEY", "")
-        
+
         if gemini_key:
             from langchain_google_genai import ChatGoogleGenerativeAI
+
             return ChatGoogleGenerativeAI(
                 model=self.GEMINI_MODEL,
                 google_api_key=gemini_key,
@@ -44,6 +42,7 @@ class Settings(BaseSettings):
             )
         elif self.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
                 model=self.LLM_MODEL,
                 api_key=self.OPENAI_API_KEY,

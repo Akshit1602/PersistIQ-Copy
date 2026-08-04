@@ -1,5 +1,7 @@
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
+
 from continum.state import AgentState, ExperimentBrief
+
 
 def brief_generator_node(state: AgentState) -> dict:
     """Drafts hypothesis and target segment skeleton."""
@@ -8,6 +10,7 @@ def brief_generator_node(state: AgentState) -> dict:
         brief.hypothesis = state["messages"][-1].content
     return {"brief": brief}
 
+
 def metric_planner_node(state: AgentState) -> dict:
     """Selects primary, secondary, and guardrail metrics."""
     brief = state.get("brief") or ExperimentBrief()
@@ -15,12 +18,14 @@ def metric_planner_node(state: AgentState) -> dict:
     brief.guardrail_metrics = ["latency_ms", "error_rate"]
     return {"brief": brief}
 
+
 def opportunity_sizing_node(state: AgentState) -> dict:
     """Calculates historical baseline rates and revenue potential."""
     brief = state.get("brief") or ExperimentBrief()
     brief.baseline_conversion_rate = 0.12
     brief.baseline_variance = 0.1056
     return {"brief": brief}
+
 
 def power_calculator_node(state: AgentState) -> dict:
     """Calculates required sample size and test duration."""
@@ -30,9 +35,11 @@ def power_calculator_node(state: AgentState) -> dict:
     brief.estimated_duration_days = 14
     return {"brief": brief}
 
+
 def traffic_balance_node(state: AgentState) -> dict:
     """Computes traffic split ratios between control and treatment variants."""
     return {"brief": state.get("brief")}
+
 
 builder = StateGraph(AgentState)
 builder.add_node("generate_brief", brief_generator_node)

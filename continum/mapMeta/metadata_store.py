@@ -1,11 +1,15 @@
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from pydantic import BaseModel, Field
+
 from continum.state import SchemaMetadata
 
 
 class IndexExperimentsInput(BaseModel):
     current_metadata: SchemaMetadata
-    experiments: List[Dict[str, Any]] = Field(..., description="List of experiment dictionaries to catalogue")
+    experiments: List[Dict[str, Any]] = Field(
+        ..., description="List of experiment dictionaries to catalogue"
+    )
 
 
 def catalog_experiments(input_data: IndexExperimentsInput) -> SchemaMetadata:

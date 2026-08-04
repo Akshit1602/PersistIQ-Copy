@@ -14,10 +14,26 @@ import type { ThreadGroup, Project } from '../../context/types'
 import { AppIcon } from '../shared/AppIcon'
 
 interface ChatHistoryTreeProps {
+  projectId: string
   searchQuery: string
 }
 
-export function ChatHistoryTree({ searchQuery }: ChatHistoryTreeProps) {
+function filterGroups(groups: ThreadGroup[], query: string): ThreadGroup[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return groups
+
+  return groups
+    .map((group) => {
+      const folderMatch = group.experiment.toLowerCase().includes(q)
+      const matchingThreads = group.threads.filter((t) => t.title.toLowerCase().includes(q))
+      if (folderMatch) return group
+      if (matchingThreads.length > 0) return { ...group, threads: matchingThreads }
+      return null
+    })
+    .filter((g): g is ThreadGroup => g !== null)
+}
+
+export function ChatHistoryTree({ projectId, searchQuery }: ChatHistoryTreeProps) {
   const {
     projects,
     threadGroups,
@@ -40,15 +56,10 @@ export function ChatHistoryTree({ searchQuery }: ChatHistoryTreeProps) {
     return new Set(group ? [group.experiment] : [])
   })
 
-  // Group thread groups by project
-  const filteredTree = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) {
-      return projects.map((p) => ({
-        ...p,
-        groups: threadGroups.filter((g) => g.projectId === p.id),
-      }))
-    }
+  const projectGroups = useMemo(
+    () => threadGroups.filter((g) => g.projectId === projectId),
+    [threadGroups, projectId],
+  )
 
     return projects
       .map((p) => {

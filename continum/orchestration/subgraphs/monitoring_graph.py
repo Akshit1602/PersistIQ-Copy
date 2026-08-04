@@ -1,12 +1,15 @@
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
+
 from continum.state import AgentState
+
 
 def fetch_telemetry_node(state: AgentState) -> dict:
     """Retrieves pulse metrics and exposure counts from StatSig."""
     return {
         "statsig_experiment_id": state.get("active_experiment_id") or "exp_checkout_redesign",
-        "health_alerts": []
+        "health_alerts": [],
     }
+
 
 def check_srm_node(state: AgentState) -> dict:
     """Performs Chi-Square goodness-of-fit test for Sample Ratio Mismatch."""
@@ -14,6 +17,7 @@ def check_srm_node(state: AgentState) -> dict:
     # Placeholder for srm_detector execution
     has_srm = False
     return {"srm_flag": has_srm, "health_alerts": alerts}
+
 
 builder = StateGraph(AgentState)
 builder.add_node("fetch_telemetry", fetch_telemetry_node)

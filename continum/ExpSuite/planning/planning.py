@@ -1,15 +1,22 @@
-import numpy as np
 from typing import Optional
+
+import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import norm
 
 
 class PowerCalcInput(BaseModel):
-    baseline_rate: float = Field(..., description="Historical baseline conversion rate or mean (e.g. 0.10 for 10%)")
-    mde_relative: float = Field(..., description="Target relative Minimum Detectable Effect (e.g. 0.05 for 5% lift)")
+    baseline_rate: float = Field(
+        ..., description="Historical baseline conversion rate or mean (e.g. 0.10 for 10%)"
+    )
+    mde_relative: float = Field(
+        ..., description="Target relative Minimum Detectable Effect (e.g. 0.05 for 5% lift)"
+    )
     alpha: float = Field(0.05, description="Significance level (Type I error rate)")
     power: float = Field(0.80, description="Statistical power (1 - Type II error rate)")
-    daily_traffic: Optional[int] = Field(None, description="Average total daily traffic across all variants")
+    daily_traffic: Optional[int] = Field(
+        None, description="Average total daily traffic across all variants"
+    )
     num_variants: int = Field(2, description="Total number of variants including Control")
 
 
@@ -34,7 +41,7 @@ def calculate_power(input_data: PowerCalcInput) -> PowerCalcResult:
 
     # Pooled variance estimate
     p_avg = (p1 + p2) / 2.0
-    
+
     # Critical Z-values
     z_alpha = norm.ppf(1.0 - input_data.alpha / 2.0)
     z_beta = norm.ppf(input_data.power)
@@ -72,5 +79,5 @@ def calculate_power(input_data: PowerCalcInput) -> PowerCalcResult:
         alpha=input_data.alpha,
         power=input_data.power,
         estimated_days=estimated_days,
-        summary=summary
+        summary=summary,
     )
