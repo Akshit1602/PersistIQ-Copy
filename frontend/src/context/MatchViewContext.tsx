@@ -45,6 +45,21 @@ import { MODULE_BY_ID } from '../data/moduleRegistry';
 import { buildModuleEvaluation } from '../data/moduleEvaluation';
 import { isWorkflowStepId } from '../data/hypothesisWorkflow';
 import { buildBriefBody } from '../data/briefBuilder';
+import { extractNlpParameters } from '../data/nlpParameterExtractor';
+
+export function mapToolToModuleId(toolName: string): ModuleId | null {
+  const name = toolName.toLowerCase();
+  if (name.includes('srm') || name.includes('health')) return 'health-monitor';
+  if (name.includes('power') || name.includes('sample_size') || name.includes('sample-size')) return 'power-calculator';
+  if (name.includes('opportunity') || name.includes('validate_hypothesis')) return 'opportunity-sizing';
+  if (name.includes('metrics') || name.includes('guardrail')) return 'metrics-tracking';
+  if (name.includes('sequential') || name.includes('sprt')) return 'sequential-testing';
+  if (name.includes('diff_in_diff') || name.includes('did') || name.includes('causal')) return 'causal-did';
+  if (name.includes('forecast') || name.includes('monte_carlo')) return 'forecasting';
+  if (name.includes('balance') || name.includes('allocation')) return 'balance-diagnostics';
+  if (name.includes('cuped') || name.includes('hypothesis_test') || name.includes('bayesian')) return 'experiment-analysis';
+  return null;
+}
 
 const INITIAL_EXPERIMENT_SPECS: Record<string, ExperimentSpec> = {
   'Walmart Banner Redesign': {
@@ -579,6 +594,16 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
     });
 
+    if (currentPersona === 'analyst') {
+      const nlp = extractNlpParameters(content, selectedExperiment, activeModuleId);
+      if (nlp) {
+        setLabModuleId(nlp.moduleId);
+        setActiveModuleId(nlp.moduleId);
+        setLabPanelView('form');
+        injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+      }
+    }
+
     setChatIsGenerating(true);
     setChatActiveToolStatus('Analyzing request...');
 
@@ -607,8 +632,20 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
           };
         });
       },
-      onToolStart: (_tool, statusMsg) => {
+      onToolStart: (tool, statusMsg) => {
         setChatActiveToolStatus(statusMsg);
+        if (currentPersona === 'analyst') {
+          const mappedModuleId = mapToolToModuleId(tool);
+          if (mappedModuleId) {
+            setLabModuleId(mappedModuleId);
+            setActiveModuleId(mappedModuleId);
+            setLabPanelView('form');
+            const nlp = extractNlpParameters(content, selectedExperiment, mappedModuleId);
+            if (nlp) {
+              injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+            }
+          }
+        }
       },
       onArtifact: (artifactPayload) => {
         const card = {

@@ -17,7 +17,7 @@ export function AppShell() {
   return (
     <div className="canvas-bg flex h-screen flex-col">
       <div className="relative flex min-h-0 flex-1">
-        <div className="w-16 shrink-0" aria-hidden="true" />
+        <GlobalRail />
         {activeGlobalPage === 'workspace' && !onHome && <StaticSidebar />}
         {activeGlobalPage === 'workspace' ? (
           onHome ? <ProjectsHome /> : <MainWorkspace />
@@ -26,7 +26,6 @@ export function AppShell() {
         ) : (
           <SettingsView />
         )}
-        <GlobalRail />
       </div>
       <NewProjectPanel />
       <HypothesisValidatorPanel />
