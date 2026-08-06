@@ -7,6 +7,7 @@ import { ExposureTrendCard } from '../insights/ExposureTrendCard'
 import { MetricSheetCard } from '../insights/MetricSheetCard'
 import { ModuleInsightsScreen } from '../insights/ModuleInsightsScreen'
 import { SegmentConversionCard } from '../insights/SegmentConversionCard'
+import { StoreInsightsDashboard } from '../insights/StoreInsightsDashboard'
 
 function DefaultInsightsDashboard() {
   const [featured, ...rest] = MOCK_CHARTS
@@ -26,12 +27,15 @@ function DefaultInsightsDashboard() {
 }
 
 export function InsightsView() {
-  const { activeModuleId } = useMatchView()
+  const { activeModuleId, selectedExperiment, experimentProjectIds, projects } = useMatchView()
+  const channel = projects.find((p) => p.id === experimentProjectIds[selectedExperiment])?.channel ?? 'digital'
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {activeModuleId ? (
         <ModuleInsightsScreen moduleId={activeModuleId} />
+      ) : channel === 'store' ? (
+        <StoreInsightsDashboard />
       ) : (
         <DefaultInsightsDashboard />
       )}

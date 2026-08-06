@@ -166,7 +166,7 @@ export function ReportsView() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-medium text-text-primary">No reports yet</p>
             <p className="mt-1 max-w-xs text-xs text-text-secondary">
-              Complete Hypothesis Validator or run a module — outputs are saved here automatically.
+              Complete Initiative Setup & Benchmarking or run a module — outputs are saved here automatically.
             </p>
             <button
               type="button"

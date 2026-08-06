@@ -32,7 +32,9 @@ export type ModuleId =
   | 'roi-synthesis'
   | 'simpsons-paradox'
 
-export type ExperimentChannel = 'digital'
+import type { WorkflowStepId } from '../data/hypothesisWorkflow'
+
+export type ExperimentChannel = 'digital' | 'store'
 export type ExperimentTypeChoice = 'A/B' | 'A/B/C' | 'Causal'
 
 export interface ExperimentSpec {
@@ -260,20 +262,7 @@ export interface HypothesisValidatorFinalizeInput {
   opportunitySkipped?: boolean
 }
 
-export type WorkflowProgressByExperiment = Record<
-  string,
-  Partial<
-    Record<
-      | 'opportunity-sizing'
-      | 'metrics-tracking'
-      | 'experiment-type'
-      | 'power-calculator'
-      | 'audience-selection'
-      | 'brief-generator',
-      boolean
-    >
-  >
->
+export type WorkflowProgressByExperiment = Record<string, Partial<Record<WorkflowStepId, boolean>>>
 
 export type ExperimentSpecsByName = Record<string, ExperimentSpec>
 
@@ -309,8 +298,10 @@ export interface MatchViewState {
   chartDrawerTargetId: string | null
   highlightedMessageId: string | null
   hypothesisValidatorOpen: boolean
+  hypothesisValidatorInitialStep: number | null
   audienceWizardOpen: boolean
   newProjectPanelOpen: boolean
+  knowledgeArchiveOpen: boolean
   projects: Project[]
   selectedProjectId: string | null
   experimentProjectIds: Record<string, string>
@@ -326,6 +317,7 @@ export interface MatchViewState {
   moduleRunsByExperiment: ModuleRunsByExperiment
   moduleRunStatus: ModuleRunStatus
   analyticsLabCollapsed: boolean
+  analyticsLabExpanded: boolean
   highlightedFieldKeys: string[]
   experimentDataSourcesDialogExperiment: string | null
   experimentDataSources: Record<string, ExperimentDataSourceConfig>
@@ -335,10 +327,13 @@ export interface MatchViewState {
   activeGlobalPage: 'workspace' | 'archive' | 'settings'
   chatIsGenerating: boolean
   chatActiveToolStatus: string | null
+  isLlmProcessing: boolean
 }
 
 export interface MatchViewActions {
   setActiveGlobalPage: (page: 'workspace' | 'archive' | 'settings') => void
+  openKnowledgeArchive: () => void
+  closeKnowledgeArchive: () => void
   login: (email: string, password: string) => boolean
   logout: () => void
   setPersona: (persona: Persona) => void
@@ -353,6 +348,7 @@ export interface MatchViewActions {
   createProject: (input: CreateProjectInput) => void
   deleteProject: (projectId: string) => void
   openHypothesisValidator: () => void
+  openHypothesisValidatorAtStep: (step: number) => void
   closeHypothesisValidator: () => void
   openAudienceWizard: () => void
   closeAudienceWizard: () => void
@@ -372,13 +368,7 @@ export interface MatchViewActions {
   updateExperimentSpec: (experiment: string, patch: Partial<ExperimentSpec>) => void
   markWorkflowStepComplete: (
     experiment: string,
-    stepId:
-      | 'opportunity-sizing'
-      | 'metrics-tracking'
-      | 'experiment-type'
-      | 'power-calculator'
-      | 'audience-selection'
-      | 'brief-generator',
+    stepId: WorkflowStepId,
   ) => void
   clearPendingModuleActivation: () => void
   advanceToWorkflowStep: (moduleId: ModuleId) => void
@@ -400,6 +390,7 @@ export interface MatchViewActions {
   runModule: (moduleId: ModuleId, options?: { skipUserMessage?: boolean; userLabel?: string; paramOverrides?: Record<string, unknown> }) => void
   resetLabToTree: () => void
   toggleAnalyticsLabCollapsed: () => void
+  toggleAnalyticsLabExpanded: () => void
   openModuleRun: (runId: string) => void
   setLabPanelView: (view: LabPanelView) => void
   openReport: (reportId: string) => void

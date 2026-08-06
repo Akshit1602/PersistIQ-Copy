@@ -107,8 +107,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [chatActiveToolStatus, setChatActiveToolStatus] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [hypothesisValidatorOpen, setHypothesisValidatorOpen] = useState<boolean>(false);
+  const [hypothesisValidatorInitialStep, setHypothesisValidatorInitialStep] = useState<number | null>(null);
   const [audienceWizardOpen, setAudienceWizardOpen] = useState<boolean>(false);
   const [newProjectPanelOpen, setNewProjectPanelOpen] = useState<boolean>(false);
+  const [knowledgeArchiveOpen, setKnowledgeArchiveOpen] = useState<boolean>(false);
 
   // Projects & Experiments Lists
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -140,6 +142,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
   const [moduleRunStatus, setModuleRunStatus] = useState<ModuleRunStatus>('idle');
   const [analyticsLabCollapsed, setAnalyticsLabCollapsed] = useState<boolean>(false);
+  const [analyticsLabExpanded, setAnalyticsLabExpanded] = useState<boolean>(false);
+  const [isLlmProcessing] = useState<boolean>(false);
   const [highlightedFieldKeys, setHighlightedFieldKeys] = useState<string[]>([]);
 
   // Dialog configurations
@@ -281,8 +285,18 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const openNewProjectPanel = () => setNewProjectPanelOpen(true);
   const closeNewProjectPanel = () => setNewProjectPanelOpen(false);
 
+  const openKnowledgeArchive = () => setKnowledgeArchiveOpen(true);
+  const closeKnowledgeArchive = () => setKnowledgeArchiveOpen(false);
+
   const openHypothesisValidator = () => setHypothesisValidatorOpen(true);
-  const closeHypothesisValidator = () => setHypothesisValidatorOpen(false);
+  const openHypothesisValidatorAtStep = (step: number) => {
+    setHypothesisValidatorInitialStep(step);
+    setHypothesisValidatorOpen(true);
+  };
+  const closeHypothesisValidator = () => {
+    setHypothesisValidatorOpen(false);
+    setHypothesisValidatorInitialStep(null);
+  };
 
   const openAudienceWizard = () => setAudienceWizardOpen(true);
   const closeAudienceWizard = () => setAudienceWizardOpen(false);
@@ -920,6 +934,7 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const resetLabToTree = () => setLabPanelView('tree');
   const toggleAnalyticsLabCollapsed = () => setAnalyticsLabCollapsed((prev) => !prev);
+  const toggleAnalyticsLabExpanded = () => setAnalyticsLabExpanded((prev) => !prev);
 
   const openModuleRun = (_runId: string) => {
     setLabPanelView('runs');
@@ -961,8 +976,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         chartDrawerTargetId,
         highlightedMessageId,
         hypothesisValidatorOpen,
+        hypothesisValidatorInitialStep,
         audienceWizardOpen,
         newProjectPanelOpen,
+        knowledgeArchiveOpen,
         projects,
         selectedProjectId,
         experimentProjectIds,
@@ -978,6 +995,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         moduleRunsByExperiment,
         moduleRunStatus,
         analyticsLabCollapsed,
+        analyticsLabExpanded,
+        isLlmProcessing,
         highlightedFieldKeys,
         experimentDataSourcesDialogExperiment,
         experimentDataSources,
@@ -988,6 +1007,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         setActiveGlobalPage,
         chatIsGenerating,
         chatActiveToolStatus,
+        openKnowledgeArchive,
+        closeKnowledgeArchive,
         login,
         logout,
         setPersona: setCurrentPersona,
@@ -1002,6 +1023,7 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         createProject,
         deleteProject,
         openHypothesisValidator,
+        openHypothesisValidatorAtStep,
         closeHypothesisValidator,
         openAudienceWizard,
         closeAudienceWizard,
@@ -1032,6 +1054,7 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         runModule,
         resetLabToTree,
         toggleAnalyticsLabCollapsed,
+        toggleAnalyticsLabExpanded,
         openModuleRun,
         setLabPanelView,
         openReport,

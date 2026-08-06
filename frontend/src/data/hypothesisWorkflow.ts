@@ -7,6 +7,7 @@ export type WorkflowStepId =
   | 'power-calculator'
   | 'audience-selection'
   | 'brief-generator'
+  | 'balance-diagnostics'
 
 export interface WorkflowStep {
   id: WorkflowStepId
@@ -14,15 +15,16 @@ export interface WorkflowStep {
   moduleId: ModuleId
 }
 
-/** Ordered pre-planning journey after Hypothesis Validator intake.
+/** Ordered pre-planning journey after Initiative Setup & Benchmarking intake.
  * Audience remains a separate downstream step (wizard / Lab), not part of validator finalize. */
 export const HYPOTHESIS_WORKFLOW_STEPS: WorkflowStep[] = [
   { id: 'opportunity-sizing', label: 'Opportunity Sizing', moduleId: 'opportunity-sizing' },
   { id: 'metrics-tracking', label: 'Metrics Approval', moduleId: 'metrics-tracking' },
   { id: 'experiment-type', label: 'Experiment Type', moduleId: 'experiment-type' },
   { id: 'power-calculator', label: 'Power Calculator', moduleId: 'power-calculator' },
-  { id: 'audience-selection', label: 'Audience Selection', moduleId: 'audience-selection' },
+  { id: 'balance-diagnostics', label: 'Balance Diagnostics', moduleId: 'balance-diagnostics' },
   { id: 'brief-generator', label: 'Brief Generator', moduleId: 'brief-generator' },
+  { id: 'audience-selection', label: 'Audience Selection', moduleId: 'audience-selection' },
 ]
 
 export type WorkflowProgress = Partial<Record<WorkflowStepId, boolean>>
@@ -52,7 +54,7 @@ export function isStepComplete(progress: WorkflowProgress, stepId: WorkflowStepI
 }
 
 export function getRecommendedModuleId(progress: WorkflowProgress): ModuleId {
-  return getNextIncompleteStep(progress)?.moduleId ?? 'brief-generator'
+  return getNextIncompleteStep(progress)?.moduleId ?? 'balance-diagnostics'
 }
 
 export function markStepComplete(

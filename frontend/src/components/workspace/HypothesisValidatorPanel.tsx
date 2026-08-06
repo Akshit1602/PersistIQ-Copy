@@ -17,6 +17,37 @@ import type { ExperimentTypeChoice } from '../../context/types'
 import { NumericSliderField } from '../shared/NumericSliderField'
 import { AppIcon } from '../shared/AppIcon'
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
+import { StoreHypothesisExtras } from './StoreHypothesisExtras'
+import { STORE_HYPOTHESIS_EXTRAS_DEFAULTS } from '../../data/storeHypothesisExtras'
+import { StoreOpportunitySizingStep } from './StoreOpportunitySizingStep'
+import { StoreMetricsStep } from './StoreMetricsStep'
+import { StoreRolloutTargetingStep } from './StoreRolloutTargetingStep'
+import { StorePowerStep } from './StorePowerStep'
+import {
+  STORE_OPPORTUNITY_DEFAULTS,
+  STORE_VALIDATOR_STEPS,
+  type StoreValidatorStepIndex,
+} from '../../data/storeHypothesisValidator'
+import {
+  STORE_ROLLOUT_DEFAULTS,
+  isStoreRolloutValid,
+  type StoreRolloutTargeting,
+} from '../../data/storeRolloutTargeting'
+import {
+  STORE_POWER_DEFAULTS,
+  type StorePowerConfig,
+} from '../../data/storePowerGuardrails'
+import { StoreReviewStep } from './StoreReviewStep'
+import {
+  STORE_CONCURRENCY_REVIEW_DEFAULTS,
+  isConcurrencyReviewValid,
+  type ConcurrencyReviewState,
+} from '../../data/storeConcurrencyReview'
+import { STORE_METRIC_BY_ID } from '../../data/storeMetricCatalog'
+import { computeStoreOpportunityOutputs } from '../../data/storeHypothesisValidator'
+
+/** Union covering both the digital (1-5) and store (1-6) step sequences. */
+type AnyValidatorStepIndex = ValidatorStepIndex | StoreValidatorStepIndex
 import { StepTransitionOverlay } from '../shared/StepTransitionOverlay'
 import { SynthesisProgressOverlay } from '../shared/SynthesisProgressOverlay'
 import {
@@ -26,7 +57,7 @@ import {
 } from '../../data/metricCatalog'
 
 type PendingStepAdvance = {
-  nextStep: ValidatorStepIndex
+  nextStep: AnyValidatorStepIndex
   nextDraft?: HypothesisValidatorDraft
 }
 
@@ -156,9 +187,16 @@ function AutoDetectNumberInput({
 }
 
 export function HypothesisValidatorPanel() {
-  const { hypothesisValidatorOpen, closeHypothesisValidator, finalizeHypothesisValidator } =
-    useMatchView()
-  const [step, setStep] = useState<ValidatorStepIndex>(1)
+  const {
+    hypothesisValidatorOpen,
+    hypothesisValidatorInitialStep,
+    closeHypothesisValidator,
+    finalizeHypothesisValidator,
+    projects,
+    selectedProjectId,
+  } = useMatchView()
+  const channel = projects.find((p) => p.id === selectedProjectId)?.channel ?? 'digital'
+  const [step, setStep] = useState<AnyValidatorStepIndex>(1)
   const [draft, setDraft] = useState<HypothesisValidatorDraft>(createEmptyValidatorDraft)
   const [visible, setVisible] = useState(false)
   const [synthesizing, setSynthesizing] = useState(false)
@@ -180,6 +218,13 @@ export function HypothesisValidatorPanel() {
     return () => window.clearTimeout(t)
   }, [hypothesisValidatorOpen])
 
+  // Jump to a specific step when opened via "Edit" from Analytics Lab
+  useEffect(() => {
+    if (hypothesisValidatorOpen && hypothesisValidatorInitialStep != null) {
+      setStep(hypothesisValidatorInitialStep as AnyValidatorStepIndex)
+    }
+  }, [hypothesisValidatorOpen, hypothesisValidatorInitialStep])
+
   useEffect(() => {
     if (!hypothesisValidatorOpen) return
     const onKey = (e: KeyboardEvent) => {
@@ -197,7 +242,24 @@ export function HypothesisValidatorPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hypothesisValidatorOpen, synthesizing, pendingAdvance])
 
-  const canNext = isStepValid(draft, step)
+  const storeRollout: StoreRolloutTargeting = (draft as any).storeRollout ?? STORE_ROLLOUT_DEFAULTS
+  const storePower: StorePowerConfig = (draft as any).storePower ?? STORE_POWER_DEFAULTS
+  const storeConcurrencyReview: ConcurrencyReviewState =
+    (draft as any).storeConcurrencyReview ?? STORE_CONCURRENCY_REVIEW_DEFAULTS
+
+  const canNext =
+    channel === 'store'
+      ? step === 3
+        ? isStoreRolloutValid(storeRollout)
+        : step === 4
+          ? isStepValid(draft, 3 as ValidatorStepIndex) // reuses the shared metrics-required-fields check
+          : step === 5
+            ? storePower.aaTestResult ? storePower.aaTestResult.passed : true // hard-blocked if A/A test failed
+            : step === 6
+              ? Boolean(draft.derivedExperimentType && draft.typeRationale) &&
+                isConcurrencyReviewValid(storeConcurrencyReview)
+              : isStepValid(draft, step as ValidatorStepIndex)
+      : isStepValid(draft, step as ValidatorStepIndex)
 
   const resetDraft = () => {
     setStep(1)
@@ -241,6 +303,23 @@ export function HypothesisValidatorPanel() {
       })
       return
     }
+    if (channel === 'store') {
+      // Store sequence: 1 Hypothesis -> 2 Sizing -> 3 Rollout -> 4 Metrics -> 5 Power -> 6 Review
+      if (step === 3) {
+        queueAdvance({ nextStep: 4 })
+        return
+      }
+      if (step === 4) {
+        queueAdvance({ nextStep: 5 })
+        return
+      }
+      if (step === 5) {
+        queueAdvance({ nextStep: 6, nextDraft: seedDerivedTypeFromDraft(draft) })
+        return
+      }
+      return
+    }
+    // Digital sequence: 1 Hypothesis -> 2 Sizing -> 3 Metrics -> 4 Power -> 5 Review
     if (step === 3) {
       queueAdvance({ nextStep: 4 })
       return
@@ -265,7 +344,7 @@ export function HypothesisValidatorPanel() {
   }
 
   const goBack = () => {
-    if (step > 1 && !isBusy) setStep((s) => (s - 1) as ValidatorStepIndex)
+    if (step > 1 && !isBusy) setStep((s) => (s - 1) as AnyValidatorStepIndex)
   }
 
   const runFinalize = useCallback(() => {
@@ -303,7 +382,12 @@ export function HypothesisValidatorPanel() {
   }, [])
 
   const handleGetStarted = () => {
-    if (!isStepValid(draft, 5) || isBusy) return
+    const finalStepValid =
+      channel === 'store'
+        ? Boolean(draft.derivedExperimentType && draft.typeRationale) &&
+          isConcurrencyReviewValid(storeConcurrencyReview)
+        : isStepValid(draft, 5)
+    if (!finalStepValid || isBusy) return
     setSynthesizing(true)
   }
 
@@ -318,6 +402,8 @@ export function HypothesisValidatorPanel() {
     }),
     [],
   )
+
+  const activeSteps = channel === 'store' ? STORE_VALIDATOR_STEPS : VALIDATOR_STEPS
 
   if (!visible && !hypothesisValidatorOpen) return null
 
@@ -355,10 +441,10 @@ export function HypothesisValidatorPanel() {
               id="hypothesis-validator-panel-title"
               className="type-title"
             >
-              Hypothesis Validator
+              Initiative Setup & Benchmarking
             </h2>
             <p className="mt-0.5 text-xs text-text-secondary">
-              Digital experiment setup — Opportunity is optional. Audience comes after the brief.
+              {channel === 'store' ? 'Store' : 'Digital'} experiment setup — Opportunity is optional. Audience comes after the brief.
             </p>
           </div>
           <button
@@ -377,7 +463,7 @@ export function HypothesisValidatorPanel() {
           aria-label="Setup steps"
         >
           <ol className="flex w-full items-start">
-            {VALIDATOR_STEPS.map((s, index) => {
+            {activeSteps.map((s, index) => {
               const done = s.id < step
               const active = s.id === step
               const incomingComplete = s.id <= step
@@ -398,7 +484,7 @@ export function HypothesisValidatorPanel() {
                           aria-hidden="true"
                         />
                       ) : null}
-                      {index < VALIDATOR_STEPS.length - 1 ? (
+                      {index < activeSteps.length - 1 ? (
                         <span
                           className={`absolute inset-y-0 left-1/2 right-0 my-auto h-px ${
                             outgoingComplete ? 'bg-border-muted' : 'bg-border-muted/25'
@@ -419,7 +505,7 @@ export function HypothesisValidatorPanel() {
                       </span>
                     </div>
                     <span
-                      className={`w-full truncate text-micro font-medium leading-tight ${
+                      className={`w-full text-center text-micro font-medium leading-tight ${
                         active ? 'text-text-primary' : 'text-text-secondary'
                       }`}
                       title={s.label}
@@ -453,13 +539,40 @@ export function HypothesisValidatorPanel() {
                   rows={4}
                   value={draft.hypothesis}
                   onChange={(e) => setDraft((d) => ({ ...d, hypothesis: e.target.value }))}
-                  placeholder="If we change X for digital users, then Y will improve because…"
+                  placeholder={`If we change X for ${channel === 'store' ? 'store' : 'digital'} users, then Y will improve because…`}
                 />
               </div>
+              {channel === 'store' && (
+                <StoreHypothesisExtras
+                  extras={(draft as any).storeHypothesisExtras ?? STORE_HYPOTHESIS_EXTRAS_DEFAULTS}
+                  hypothesisName={draft.name}
+                  onChange={(partial) =>
+                    setDraft((d) => ({
+                      ...d,
+                      storeHypothesisExtras: {
+                        ...((d as any).storeHypothesisExtras ?? STORE_HYPOTHESIS_EXTRAS_DEFAULTS),
+                        ...partial,
+                      },
+                    }))
+                  }
+                />
+              )}
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && channel === 'store' && (
+            <StoreOpportunitySizingStep
+              inputs={(draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeOpportunity: { ...((d as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS), ...partial },
+                }))
+              }
+            />
+          )}
+
+          {step === 2 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Opportunity Sizing</p>
@@ -563,7 +676,28 @@ export function HypothesisValidatorPanel() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 3 && channel === 'store' && (
+            <StoreRolloutTargetingStep
+              rollout={storeRollout}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeRollout: { ...((d as any).storeRollout ?? STORE_ROLLOUT_DEFAULTS), ...partial },
+                }))
+              }
+            />
+          )}
+
+          {step === 4 && channel === 'store' && (
+            <StoreMetricsStep
+              metrics={draft.metrics}
+              onChange={(partial) =>
+                setDraft((d) => ({ ...d, metrics: { ...d.metrics, ...partial } }))
+              }
+            />
+          )}
+
+          {step === 3 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Metrics And Tracking</p>
@@ -692,7 +826,23 @@ export function HypothesisValidatorPanel() {
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && channel === 'store' && (
+            <StorePowerStep
+              power={storePower}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storePower: { ...((d as any).storePower ?? STORE_POWER_DEFAULTS), ...partial },
+                }))
+              }
+              targetLiftPercent={
+                (((draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS).metrics.targetCvrLift ?? 0) * 100
+              }
+              storeCount={storeRollout.matchResult?.treatmentGroupSize ?? storeRollout.treatmentFilters.targetStoreCount}
+            />
+          )}
+
+          {step === 4 && channel !== 'store' && (
             <div className="flex max-w-full flex-col gap-3.5 overflow-hidden">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Power Calculator</p>
@@ -808,7 +958,38 @@ export function HypothesisValidatorPanel() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && channel === 'store' && (
+            <StoreReviewStep
+              review={storeConcurrencyReview}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeConcurrencyReview: {
+                    ...((d as any).storeConcurrencyReview ?? STORE_CONCURRENCY_REVIEW_DEFAULTS),
+                    ...partial,
+                  },
+                }))
+              }
+              hypothesisName={draft.name}
+              primaryKpiLabel={
+                STORE_METRIC_BY_ID[draft.metrics.primaryMetricIds[0]]?.label ?? '—'
+              }
+              projectedNetRoi={
+                computeStoreOpportunityOutputs(
+                  (draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS,
+                ).projectedNetRoi
+              }
+              rollout={storeRollout}
+              power={storePower}
+              targetLiftPercent={
+                (((draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS).metrics.targetCvrLift ?? 0) * 100
+              }
+              onDeploy={handleGetStarted}
+              isDeploying={isBusy}
+            />
+          )}
+
+          {step === 5 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div className="rounded-xs border border-border-muted/25 bg-surface-base px-3 py-3">
                 <p className="text-micro font-semibold uppercase tracking-wide text-text-secondary">
@@ -893,7 +1074,7 @@ export function HypothesisValidatorPanel() {
                 <AppIcon icon={ChevronsRight} size="xs" />
               </button>
             ) : null}
-            {step < 5 ? (
+            {step < (channel === 'store' ? 6 : 5) ? (
               <button
                 type="button"
                 onClick={goNext}

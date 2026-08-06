@@ -49,6 +49,9 @@ export interface HypothesisValidatorDraft {
     guardrailMetricIds: string[]
     /** KPI id → input key → value (primary/secondary only) */
     metricInputs: Record<string, Record<string, string>>
+    /** Store channel only: alert threshold/direction for the selected guardrail */
+    guardrailThreshold?: number | null
+    guardrailDirection?: 'below' | 'above'
   }
   derivedExperimentType: ExperimentTypeChoice
   typeRationale: string
@@ -85,6 +88,8 @@ export function createEmptyValidatorDraft(): HypothesisValidatorDraft {
       secondaryMetricIds: [],
       guardrailMetricIds: [],
       metricInputs: {},
+      guardrailThreshold: null,
+      guardrailDirection: 'below',
     },
     derivedExperimentType: 'A/B',
     typeRationale: '',
