@@ -1,0 +1,553 @@
+@import "tailwindcss";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+
+@theme {
+  --font-sans: "Manrope", system-ui, -apple-system, sans-serif;
+
+  /* Type scale — prefer these over arbitrary text-[Npx] */
+  --text-micro: 0.625rem; /* 10px — badges, timestamps, overlines */
+  --text-micro--line-height: 1.4;
+  --text-xs: 0.75rem; /* 12px — captions, dense UI, chat */
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem; /* 14px — body, form controls */
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem; /* 16px — page / panel titles */
+  --text-base--line-height: 1.4;
+  --text-lg: 1.125rem; /* 18px — section emphasis */
+  --text-lg--line-height: 1.35;
+  --text-display: 1.5rem; /* 24px — login / marketing hero */
+  --text-display--line-height: 1.25;
+  --text-display-lg: 1.75rem; /* 28px — large login hero */
+  --text-display-lg--line-height: 1.2;
+
+  /* Light mode (default) */
+  --color-surface-base: #f0f8ff;
+  --color-surface-raised: #ffffff;
+  --color-surface-hover: #e8f0fe;
+  --color-text-primary: #0a1628;
+  --color-text-secondary: #475569;
+  --color-border-muted: #3b82f6;
+  --color-brand-blue: #3b82f6;
+
+  /* Dark blue rail tokens (LatentView palette) */
+  --color-rail-base: #0a1628;
+  --color-rail-raised: #132744;
+  --color-rail-hover: #1c57ab;
+  --color-rail-text-primary: #ffffff;
+  --color-rail-text-secondary: #98c7ed;
+  --color-rail-border: #558cc9;
+  --color-rail-accent: #3b82f6;
+
+  --spacing-1: 6px;
+  --spacing-2: 8px;
+  --spacing-3: 10px;
+  --spacing-4: 12px;
+  --spacing-5: 14px;
+  --spacing-6: 16px;
+  --spacing-7: 18px;
+  --spacing-8: 20px;
+
+  --radius-xs: 12px;
+  --radius-sm: 20px;
+  --radius-md: 50px;
+  --radius-lg: 9999px;
+
+  --shadow-glow: 0 4px 15px 0 rgba(59, 130, 246, 0.25);
+
+  --duration-instant: 300ms;
+  --duration-fast: 500ms;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: 400;
+    line-height: var(--text-sm--line-height);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-base);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+  }
+}
+
+@layer utilities {
+  /* Semantic type roles (size/weight; pair with surface text colors as needed) */
+  .type-display {
+    @apply text-display font-bold tracking-tight;
+  }
+
+  .type-title {
+    @apply text-base font-semibold tracking-tight text-text-primary;
+  }
+
+  .type-subtitle {
+    @apply text-xs font-normal text-text-secondary;
+  }
+
+  .type-body {
+    @apply text-sm font-normal text-text-primary;
+  }
+
+  .type-caption {
+    @apply text-xs font-medium text-text-secondary;
+  }
+
+  .type-micro {
+    @apply text-micro font-medium text-text-secondary;
+  }
+
+  .type-overline {
+    @apply text-micro font-semibold uppercase tracking-wide text-text-secondary;
+  }
+
+  .glass-panel {
+    background-color: var(--color-surface-raised);
+    border: 1px solid color-mix(in srgb, var(--color-border-muted) 18%, transparent);
+    box-shadow: 0 1px 2px rgba(10, 22, 40, 0.04);
+  }
+
+  .rail-panel {
+    background-color: var(--color-rail-base);
+    background-image: linear-gradient(
+      180deg,
+      var(--color-rail-base) 0%,
+      color-mix(in srgb, var(--color-rail-hover) 35%, var(--color-rail-base)) 100%
+    );
+    border: 1px solid color-mix(in srgb, var(--color-rail-border) 40%, transparent);
+    box-shadow: 2px 0 12px rgba(10, 22, 40, 0.15);
+  }
+
+  .history-panel {
+    background-color: var(--color-rail-raised);
+    background-image: linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--color-rail-hover) 18%, var(--color-rail-raised)) 0%,
+      var(--color-rail-raised) 45%,
+      var(--color-rail-base) 100%
+    );
+    border-right: 1px solid color-mix(in srgb, var(--color-rail-border) 30%, transparent);
+    box-shadow: 2px 0 16px rgba(10, 22, 40, 0.12);
+  }
+
+  .lab-panel {
+    background-color: var(--color-surface-raised);
+    background-image:
+      radial-gradient(ellipse at 100% 0%, rgba(59, 130, 246, 0.08) 0%, transparent 55%),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-surface-base) 70%, var(--color-surface-raised)) 0%,
+        var(--color-surface-raised) 100%
+      );
+    border-left: 3px solid color-mix(in srgb, var(--color-border-muted) 50%, transparent);
+    box-shadow: -6px 0 28px rgba(59, 130, 246, 0.07);
+  }
+
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-border-muted focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base;
+  }
+
+  .focus-ring-rail {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-rail-border focus-visible:ring-offset-2 focus-visible:ring-offset-rail-base;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .canvas-bg {
+    background-color: var(--color-surface-base);
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(59, 130, 246, 0.04) 0%, transparent 40%);
+  }
+}
+
+@keyframes loginFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loginRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Login hero illustration motion */
+@keyframes loginHeroFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes loginGearSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loginFlameFlicker {
+  0%,
+  100% {
+    transform: scaleY(1) scaleX(1);
+    opacity: 0.95;
+  }
+  25% {
+    transform: scaleY(1.12) scaleX(0.92);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.9) scaleX(1.08);
+    opacity: 0.85;
+  }
+  75% {
+    transform: scaleY(1.08) scaleX(0.96);
+    opacity: 1;
+  }
+}
+
+@keyframes loginFlameGlowPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes loginChartPulse {
+  0%,
+  100% {
+    transform: scaleY(1) translateY(0);
+  }
+  50% {
+    transform: scaleY(1.12) translateY(-3px);
+  }
+}
+
+@keyframes loginChartWave {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes loginWorkGlow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes loginIdeaPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.25);
+  }
+}
+
+.login-hero-scene {
+  animation: loginHeroFloat 7s ease-in-out infinite;
+}
+
+.login-gear-a {
+  animation: loginGearSpin 8s linear infinite;
+}
+
+.login-gear-b {
+  animation: loginGearSpin 11s linear infinite reverse;
+}
+
+.login-gear-c {
+  animation: loginGearSpin 6.5s linear infinite;
+}
+
+.login-flame-core,
+.login-flame-inner {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+  animation: loginFlameFlicker 0.55s ease-in-out infinite;
+}
+
+.login-flame-inner {
+  animation-duration: 0.4s;
+  animation-delay: -0.12s;
+}
+
+.login-flame-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: loginFlameGlowPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes loginEmberRise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.4);
+  }
+}
+
+.login-ember-a,
+.login-ember-b,
+.login-ember-c {
+  animation: loginEmberRise 1.1s ease-out infinite;
+}
+
+.login-ember-b {
+  animation-delay: 0.25s;
+  animation-duration: 1.25s;
+}
+
+.login-ember-c {
+  animation-delay: 0.5s;
+  animation-duration: 0.95s;
+}
+
+.login-chart-a {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: loginChartPulse 2.8s ease-in-out infinite;
+}
+
+.login-chart-b {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: loginChartWave 3.4s ease-in-out infinite;
+}
+
+.login-work-glow-a {
+  animation: loginWorkGlow 2.2s ease-in-out infinite;
+}
+
+.login-work-glow-b {
+  animation: loginWorkGlow 2.6s ease-in-out infinite 0.4s;
+}
+
+.login-idea-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: loginIdeaPulse 2.4s ease-in-out infinite;
+}
+
+/* MatchView step spinner — yellow/orange tick mark pulses */
+@keyframes mvSpinnerFloat {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.03);
+  }
+}
+
+@keyframes mvSpinnerBluePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes mvSpinnerPinkPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  55% {
+    opacity: 1;
+  }
+}
+
+@keyframes mvSpinnerTickDraw {
+  0% {
+    opacity: 0.25;
+    transform: scale(0.92);
+    filter: brightness(0.95);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.06);
+    filter: brightness(1.15);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1.05);
+  }
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+    filter: brightness(0.98);
+  }
+}
+
+.mv-spinner {
+  animation: mvSpinnerFloat 2.2s ease-in-out infinite;
+}
+
+.mv-spinner-piece {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mv-spinner-blue,
+.mv-spinner-blue-mid {
+  animation: mvSpinnerBluePulse 1.8s ease-in-out infinite;
+}
+
+.mv-spinner-pink {
+  animation: mvSpinnerPinkPulse 2s ease-in-out infinite 0.15s;
+}
+
+.mv-spinner-tick-stem {
+  animation: mvSpinnerTickDraw 1.4s ease-in-out infinite;
+}
+
+.mv-spinner-tick-bar {
+  animation: mvSpinnerTickDraw 1.4s ease-in-out infinite 0.18s;
+}
+
+@layer components {
+  .numeric-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 9999px;
+    background: linear-gradient(
+      to right,
+      var(--color-border-muted) 0%,
+      var(--color-border-muted) var(--slider-fill, 50%),
+      color-mix(in srgb, var(--color-border-muted) 18%, transparent) var(--slider-fill, 50%),
+      color-mix(in srgb, var(--color-border-muted) 18%, transparent) 100%
+    );
+    cursor: pointer;
+  }
+
+  .numeric-slider:focus {
+    outline: none;
+  }
+
+  .numeric-slider:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-border-muted) 45%, transparent);
+    outline-offset: 3px;
+  }
+
+  .numeric-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    border: 2px solid #fff;
+    background: var(--color-border-muted);
+    box-shadow: 0 1px 4px rgba(59, 130, 246, 0.35);
+    cursor: grab;
+    transition: transform 150ms ease;
+  }
+
+  .numeric-slider:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    transform: scale(1.08);
+  }
+
+  .numeric-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-border-muted) 18%, transparent);
+  }
+
+  .numeric-slider::-moz-range-progress {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--color-border-muted);
+  }
+
+  .numeric-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    border: 2px solid #fff;
+    background: var(--color-border-muted);
+    box-shadow: 0 1px 4px rgba(59, 130, 246, 0.35);
+    cursor: grab;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-hero-scene,
+  .login-gear-a,
+  .login-gear-b,
+  .login-gear-c,
+  .login-flame-core,
+  .login-flame-inner,
+  .login-flame-glow,
+  .login-ember-a,
+  .login-ember-b,
+  .login-ember-c,
+  .login-chart-a,
+  .login-chart-b,
+  .login-work-glow-a,
+  .login-work-glow-b,
+  .login-idea-pulse,
+  .mv-spinner,
+  .mv-spinner-blue,
+  .mv-spinner-blue-mid,
+  .mv-spinner-pink,
+  .mv-spinner-tick-stem,
+  .mv-spinner-tick-bar {
+    animation: none !important;
+  }
+}

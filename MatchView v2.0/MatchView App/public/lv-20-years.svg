@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="g20" x1="12" y1="8" x2="60" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7CFF9B"/>
+      <stop offset="0.55" stop-color="#2ECC71"/>
+      <stop offset="1" stop-color="#1A9B5A"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M36 8c8.2 2.4 14.8 6.6 18.5 12.2 3.4 5.1 4.4 11.2 2.6 17.1-1.9 6.2-6.8 11.4-13.4 14.4-6.4 2.9-13.7 3.1-20.2.6-6.1-2.4-11-7.2-13.4-13.2-2.5-6.2-1.8-13 1.8-18.8C15.6 13.8 24.2 9.4 36 8Z"
+    stroke="url(#g20)"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    opacity="0.95"
+  />
+  <path
+    d="M48 14c5.8 4.2 9.4 10.2 9.6 17.1.2 6.2-2.2 12.2-6.8 16.6"
+    stroke="url(#g20)"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    opacity="0.75"
+  />
+  <path
+    d="M22 52c-4.4-3.6-7-9-7.2-14.8-.2-5.4 1.8-10.6 5.4-14.6"
+    stroke="url(#g20)"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    opacity="0.7"
+  />
+  <text
+    x="36"
+    y="34"
+    text-anchor="middle"
+    fill="#E8FFE9"
+    font-family="Manrope, Arial, sans-serif"
+    font-size="18"
+    font-weight="700"
+  >20</text>
+  <text
+    x="36"
+    y="46"
+    text-anchor="middle"
+    fill="#B8F5C8"
+    font-family="Manrope, Arial, sans-serif"
+    font-size="8"
+    font-weight="600"
+    letter-spacing="0.04em"
+  >years</text>
+</svg>

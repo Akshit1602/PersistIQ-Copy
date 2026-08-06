@@ -1,0 +1,27 @@
+command:
+- gunicorn
+- server:app
+- --bind
+- 0.0.0.0:8000
+- --workers
+- '2'
+env:
+- name: LAKEBASE_ENDPOINT
+  value: projects/matchview/branches/production/endpoints/primary
+- name: LAKEBASE_DATABASE
+  value: matchview
+- name: LAKEBASE_SCHEMA
+  value: app_v1
+- name: FLASK_SECRET_KEY
+  value: 48c0a61ac3b247b8ae4a001d382f0c08
+# ─── Add these to enable the Deploy sign-off email (see server.py /api/send-deploy-notification) ───
+# - name: SMTP_HOST
+#   value: smtp.yourprovider.com
+# - name: SMTP_PORT
+#   value: '587'
+# - name: SMTP_USER
+#   value: your-send-account@yourdomain.com
+# - name: SMTP_PASSWORD
+#   valueFrom: smtp-password-secret   # store this as a Databricks secret, not a plain value
+# - name: SMTP_FROM_EMAIL
+#   value: matchview-notifications@yourdomain.com
