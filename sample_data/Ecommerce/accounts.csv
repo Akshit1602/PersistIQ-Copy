@@ -1,0 +1,51 @@
+account_id,account_name,account_type,industry,tier,created_at
+ACC_0001,"Rodriguez, Figueroa and Sanchez",Buyer,Automotive,SMB,2025-08-14 16:35:48
+ACC_0002,Doyle Ltd,Buyer,Aerospace,Enterprise,2026-02-07 16:35:48
+ACC_0003,"Mcclain, Miller and Henderson",Buyer,Electronics,Enterprise,2026-04-22 16:35:48
+ACC_0004,Davis and Sons,Buyer,Aerospace,Enterprise,2024-12-21 16:35:48
+ACC_0005,"Guzman, Hoffman and Baldwin",Buyer,Aerospace,SMB,2024-11-10 16:35:48
+ACC_0006,"Gardner, Robinson and Lawrence",Supplier,Aerospace,Mid-Market,2024-09-26 16:35:48
+ACC_0007,Blake and Sons,Supplier,Automotive,Enterprise,2025-03-16 16:35:48
+ACC_0008,"Henderson, Ramirez and Lewis",Supplier,Medical,Enterprise,2025-10-14 16:35:48
+ACC_0009,Garcia-James,Supplier,Automotive,Enterprise,2025-04-28 16:35:48
+ACC_0010,Abbott-Munoz,Buyer,Medical,Mid-Market,2024-09-11 16:35:48
+ACC_0011,Blair PLC,Supplier,Automotive,SMB,2025-02-06 16:35:48
+ACC_0012,Dudley Group,Buyer,Electronics,Enterprise,2024-11-03 16:35:48
+ACC_0013,Arnold Ltd,Supplier,Medical,SMB,2025-11-07 16:35:48
+ACC_0014,"Mcclure, Ward and Lee",Buyer,Automotive,SMB,2025-10-01 16:35:48
+ACC_0015,Williams and Sons,Supplier,Automotive,Enterprise,2026-02-08 16:35:48
+ACC_0016,Galloway-Wyatt,Supplier,Medical,Mid-Market,2025-05-14 16:35:48
+ACC_0017,James Group,Buyer,Medical,Mid-Market,2025-10-20 16:35:48
+ACC_0018,"Flowers, Martin and Kelly",Supplier,Automotive,SMB,2025-11-28 16:35:48
+ACC_0019,"Adams, Zuniga and Wong",Buyer,Aerospace,Mid-Market,2025-04-29 16:35:48
+ACC_0020,"Reid, Ferguson and Sanchez",Supplier,Aerospace,SMB,2025-06-24 16:35:48
+ACC_0021,Gray-Mayo,Buyer,Aerospace,Enterprise,2025-07-03 16:35:48
+ACC_0022,"Watts, Robinson and Nguyen",Supplier,Medical,Enterprise,2025-10-18 16:35:48
+ACC_0023,Perez Inc,Supplier,Aerospace,SMB,2024-12-27 16:35:48
+ACC_0024,Morales-Jones,Supplier,Electronics,Enterprise,2025-08-24 16:35:48
+ACC_0025,"Walter, Edwards and Rios",Buyer,Aerospace,SMB,2024-10-25 16:35:48
+ACC_0026,Wilkerson-Day,Supplier,Electronics,SMB,2025-04-09 16:35:48
+ACC_0027,Baker and Sons,Supplier,Aerospace,Enterprise,2024-12-17 16:35:48
+ACC_0028,"Hoffman, Baker and Richards",Supplier,Automotive,Enterprise,2026-01-30 16:35:48
+ACC_0029,"Ross, Robinson and Bright",Buyer,Aerospace,SMB,2025-03-16 16:35:48
+ACC_0030,"Snyder, Campos and Callahan",Buyer,Electronics,Mid-Market,2024-09-19 16:35:48
+ACC_0031,Burton Ltd,Supplier,Medical,SMB,2026-05-11 16:35:48
+ACC_0032,Carlson-Cruz,Buyer,Medical,SMB,2025-06-08 16:35:48
+ACC_0033,"Ferrell, Rice and Maddox",Buyer,Medical,Mid-Market,2025-12-12 16:35:48
+ACC_0034,Frazier Inc,Supplier,Automotive,SMB,2025-08-26 16:35:48
+ACC_0035,"Dyer, Potter and Mack",Buyer,Automotive,SMB,2025-07-21 16:35:48
+ACC_0036,Rodriguez-Graham,Buyer,Aerospace,Mid-Market,2025-12-08 16:35:48
+ACC_0037,Smith-Bowen,Buyer,Medical,Mid-Market,2026-05-03 16:35:48
+ACC_0038,"Baker, Mason and White",Buyer,Medical,Mid-Market,2025-09-19 16:35:48
+ACC_0039,Harrell LLC,Buyer,Aerospace,SMB,2026-03-03 16:35:48
+ACC_0040,"Romero, Gonzalez and Brooks",Buyer,Electronics,Enterprise,2024-11-23 16:35:48
+ACC_0041,Ryan PLC,Buyer,Aerospace,SMB,2025-01-21 16:35:48
+ACC_0042,George Group,Buyer,Medical,SMB,2024-09-08 16:35:48
+ACC_0043,Rodriguez LLC,Supplier,Aerospace,SMB,2025-10-29 16:35:48
+ACC_0044,Allen-Allen,Supplier,Electronics,SMB,2025-05-05 16:35:48
+ACC_0045,"Arroyo, Miller and Tucker",Supplier,Electronics,Enterprise,2025-09-11 16:35:48
+ACC_0046,Spence PLC,Buyer,Automotive,Mid-Market,2026-05-01 16:35:48
+ACC_0047,Anderson Group,Buyer,Aerospace,Enterprise,2026-03-11 16:35:48
+ACC_0048,"Martin, Rose and Obrien",Buyer,Aerospace,Enterprise,2026-04-20 16:35:48
+ACC_0049,Hickman Ltd,Supplier,Automotive,SMB,2025-09-21 16:35:48
+ACC_0050,"Harris, Collins and Carney",Supplier,Electronics,Enterprise,2024-11-16 16:35:48

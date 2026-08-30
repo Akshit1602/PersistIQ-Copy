@@ -1,0 +1,2 @@
+metric_id,metric_name,sql_formula,metric_type,pre_period_covariate
+MTR_S01,Basket Size,SUM(total_amount) / COUNT(txns),Revenue,pre_period_avg_spend

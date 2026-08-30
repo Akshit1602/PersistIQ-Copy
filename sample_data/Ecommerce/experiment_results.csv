@@ -1,0 +1,2 @@
+result_id,experiment_id,variant_id,metric_id,sample_size,raw_mean,cuped_mean,relative_lift_pct,p_value,is_stat_sig,computed_at
+RES_E01,EXP_E01,VAR_E01_B,MTR_E01,5000,0.22,0.24,9.09,0.012,1,2026-08-30 16:35:48

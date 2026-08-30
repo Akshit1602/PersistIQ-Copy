@@ -1,0 +1,3 @@
+experiment_id,account_id,name,hypothesis,status,target_metric,start_date,end_date
+EXP_E01,ACC_0030,Instant CAD Pricing Widget,Test instant quote conversion,Concluded,MTR_E01,2026-06-01,2026-06-21
+EXP_E02,ACC_0004,Checkout Net-30 Default,Test payment terms lift,Active,MTR_E02,2026-07-01,
