@@ -1,9 +1,9 @@
 import sys
-import continum.askdata as askdata
-import continum.askdata.chart_spec as chart_spec
-import continum.askdata.growth_simulator as growth_simulator
-import continum.askdata.sql_engine as sql_engine
-import continum.askdata.visual_generator as visual_generator
+import continum.AskData as askdata
+import continum.AskData.chart_spec as chart_spec
+import continum.AskData.growth_simulator as growth_simulator
+import continum.AskData.sql_engine as sql_engine
+import continum.AskData.visual_generator as visual_generator
 
 sys.modules["continum.AskData"] = askdata
 sys.modules["continum.AskData.chart_spec"] = chart_spec

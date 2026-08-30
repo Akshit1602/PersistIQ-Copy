@@ -1,6 +1,6 @@
 import sys
 
-from continum.askdata.chart_spec import (
+from continum.AskData.chart_spec import (
     ChartKind,
     ChartSeries,
     ChartSpec,
@@ -9,13 +9,13 @@ from continum.askdata.chart_spec import (
     spec_to_plotly,
     summarize_spec,
 )
-from continum.askdata.growth_simulator import (
+from continum.AskData.growth_simulator import (
     GrowthSimulationInput,
     GrowthSimulationResult,
     simulate_and_visualize_growth,
 )
-from continum.askdata.sql_engine import SQLExecutionInput, SQLExecutionResult, execute_sql_query
-from continum.askdata.visual_generator import (
+from continum.AskData.sql_engine import SQLExecutionInput, SQLExecutionResult, execute_sql_query
+from continum.AskData.visual_generator import (
     SUPPORTED_CHART_TYPES,
     ChartGeneratorInput,
     ChartGeneratorResult,
