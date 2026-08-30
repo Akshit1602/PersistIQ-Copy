@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
-import { X, BookOpen, FileText, ClipboardList, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X, BookOpen, FileText, ClipboardList, Search, Database, Table } from 'lucide-react'
 import { useMatchView } from '../../context/MatchViewContext'
 import { AppIcon } from '../shared/AppIcon'
+import { fetchDatasets } from '../../services/api'
 import {
   GLOSSARY_TERMS,
   GLOSSARY_CATEGORIES,
@@ -9,7 +10,7 @@ import {
   SOP_ENTRIES,
 } from '../../data/storeKnowledgeArchive'
 
-type ArchiveTab = 'manual' | 'sop' | 'glossary'
+type ArchiveTab = 'manual' | 'sop' | 'glossary' | 'datasets'
 
 const inputClass =
   'focus-ring box-border w-full min-w-0 rounded-xs border border-border-muted/25 bg-surface-base px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary'
@@ -31,6 +32,31 @@ export function KnowledgeArchiveView() {
       return matchesCategory && matchesQuery
     })
   }, [query, category])
+
+  const [datasets, setDatasets] = useState<any[]>([])
+  const [datasetSearch, setDatasetSearch] = useState('')
+  const [loadingDatasets, setLoadingDatasets] = useState(false)
+
+  useEffect(() => {
+    if (tab === 'datasets' && datasets.length === 0) {
+      setLoadingDatasets(true)
+      fetchDatasets()
+        .then((res) => setDatasets(res))
+        .catch((err) => console.error('Failed to fetch datasets:', err))
+        .finally(() => setLoadingDatasets(false))
+    }
+  }, [tab, datasets.length])
+
+  const filteredDatasets = useMemo(() => {
+    const q = datasetSearch.trim().toLowerCase()
+    if (!q) return datasets
+    return datasets.filter(
+      (d) =>
+        d.table_name.toLowerCase().includes(q) ||
+        d.domain.toLowerCase().includes(q) ||
+        d.columns.some((c: string) => c.toLowerCase().includes(q))
+    )
+  }, [datasets, datasetSearch])
 
   if (!knowledgeArchiveOpen) return null
 
@@ -58,6 +84,7 @@ export function KnowledgeArchiveView() {
               { id: 'manual' as ArchiveTab, label: 'Manual', icon: BookOpen },
               { id: 'sop' as ArchiveTab, label: 'SOP', icon: ClipboardList },
               { id: 'glossary' as ArchiveTab, label: 'Glossary', icon: FileText },
+              { id: 'datasets' as ArchiveTab, label: 'Loaded Datasets', icon: Database },
             ]
           ).map((t) => (
             <button
@@ -142,6 +169,74 @@ export function KnowledgeArchiveView() {
                   <p className="px-1 text-xs text-text-secondary">No terms match your search.</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {tab === 'datasets' && (
+            <div className="flex flex-col gap-4">
+              <div className="relative">
+                <AppIcon icon={Search} size="xs" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
+                <input
+                  className={`${inputClass} pl-7`}
+                  placeholder="Search dataset tables and columns…"
+                  value={datasetSearch}
+                  onChange={(e) => setDatasetSearch(e.target.value)}
+                />
+              </div>
+
+              {loadingDatasets && (
+                <p className="text-xs text-text-secondary">Loading database dataset snippets…</p>
+              )}
+
+              {!loadingDatasets && (
+                <div className="flex flex-col gap-4">
+                  {filteredDatasets.map((d) => (
+                    <div key={d.table_name} className="rounded-[8px] border border-border-muted/15 bg-surface-base/50 p-4">
+                      <div className="flex items-center justify-between border-b border-border-muted/10 pb-2">
+                        <div className="flex items-center gap-2">
+                          <AppIcon icon={Table} size="xs" className="text-text-primary" />
+                          <span className="font-mono text-sm font-semibold text-text-primary">{d.table_name}</span>
+                          <span className="rounded-xs bg-surface-hover px-1.5 py-0.5 text-micro text-text-secondary uppercase">{d.domain}</span>
+                        </div>
+                        <span className="text-xs text-text-secondary">{d.row_count.toLocaleString()} rows</span>
+                      </div>
+
+                      <div className="mt-3 overflow-x-auto">
+                        {d.sample_rows && d.sample_rows.length > 0 ? (
+                          <table className="w-full border-collapse text-left text-xs text-text-secondary">
+                            <thead>
+                              <tr className="border-b border-border-muted/20 bg-surface-raised/40">
+                                {d.columns.map((col: string) => (
+                                  <th key={col} className="px-2.5 py-1.5 font-mono text-micro font-medium text-text-primary">
+                                    {col}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {d.sample_rows.map((row: any, i: number) => (
+                                <tr key={i} className="border-b border-border-muted/10 hover:bg-surface-hover/30">
+                                  {d.columns.map((col: string) => (
+                                    <td key={col} className="max-w-[180px] truncate px-2.5 py-1.5 font-mono text-micro text-text-secondary">
+                                      {row[col] !== null && row[col] !== undefined ? String(row[col]) : 'null'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <p className="text-xs text-text-secondary">No rows available in this table.</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {filteredDatasets.length === 0 && !loadingDatasets && (
+                    <p className="px-1 text-xs text-text-secondary">No dataset tables found matching your search.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

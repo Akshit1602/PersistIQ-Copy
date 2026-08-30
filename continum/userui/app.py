@@ -9,6 +9,7 @@ from continum.config import settings
 from continum.userui.routes import (
     approval_router,
     chat_router,
+    datasets_router,
     experiments_router,
     modules_router,
     projects_router,
@@ -32,6 +33,7 @@ app.add_middleware(
 
 # Mount API Routers
 app.include_router(chat_router)
+app.include_router(datasets_router)
 app.include_router(experiments_router)
 app.include_router(approval_router)
 app.include_router(modules_router)

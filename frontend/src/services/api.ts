@@ -43,6 +43,17 @@ export async function fetchExperiments(): Promise<Experiment[]> {
 }
 
 /**
+ * Fetch loaded dataset table snippets and schemas
+ */
+export async function fetchDatasets(): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/datasets`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch datasets: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+/**
  * Fetch projects from backend database
  */
 export async function fetchProjects(): Promise<any[]> {
