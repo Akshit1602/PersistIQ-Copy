@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, inspect
 
-from continum.config import settings
+from continum.config import settings, get_db_connection, STATIC_DOMAIN_TABLES, DYNAMIC_EXPERIMENT_TABLES
+from continum.mapMeta.metadata_store import DATASET_METADATA
 from continum.state import MetricDefinition, SchemaMetadata
 
 
@@ -67,3 +68,41 @@ def scan_database_schema(input_data: Optional[ScannerInput] = None) -> SchemaMet
             metrics_catalog={},
             cataloged_experiments=[],
         )
+
+
+class MetadataScanner:
+    def __init__(self):
+        self.cached_profiles: Dict[str, Any] = {}
+
+    def profile_static_tables_once(self) -> Dict[str, Any]:
+        """Profiles static/immutable domain tables upon application startup."""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for table in STATIC_DOMAIN_TABLES:
+            if table not in self.cached_profiles:
+                try:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                    row_count = cursor.fetchone()[0]
+                    self.cached_profiles[table] = {"row_count": row_count, "type": "static"}
+                except Exception as e:
+                    self.cached_profiles[table] = {"error": str(e), "type": "static"}
+        conn.close()
+        return self.cached_profiles
+
+    def reprofile_dynamic_tables(self, domain_context: str = "ecomm") -> Dict[str, Any]:
+        """Re-scans dynamic experiment tables following analysis or execution runs."""
+        prefix = DATASET_METADATA.get(domain_context, DATASET_METADATA["ecomm"])["namespace_prefix"]
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        target_tables = [t for t in DYNAMIC_EXPERIMENT_TABLES if t.startswith(prefix)]
+        for table in target_tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                row_count = cursor.fetchone()[0]
+                self.cached_profiles[table] = {"row_count": row_count, "type": "dynamic"}
+            except Exception as e:
+                self.cached_profiles[table] = {"error": str(e), "type": "dynamic"}
+
+        conn.close()
+        return self.cached_profiles

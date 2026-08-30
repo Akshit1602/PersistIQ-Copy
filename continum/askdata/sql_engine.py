@@ -4,12 +4,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 
 from continum.config import settings
+from continum.mapMeta.metadata_store import DATASET_METADATA
 
 
 class SQLExecutionInput(BaseModel):
     query: str = Field(..., description="Natural language question or raw SQL statement")
     schema_context: Optional[str] = Field(
         None, description="Schema definition string for Text-to-SQL generation"
+    )
+    domain_context: Optional[str] = Field(
+        "ecomm", description="Domain context namespace ('ecomm' or 'store')"
     )
 
 
@@ -37,6 +41,36 @@ def validate_sql_safety(sql: str) -> bool:
             return False
 
     return True
+
+
+def build_askdata_system_prompt(domain_context: str = "ecomm") -> str:
+    """Builds a domain-specific Text-to-SQL system prompt with strict metadata schema context."""
+    meta = DATASET_METADATA.get(domain_context, DATASET_METADATA["ecomm"])
+
+    tables_fmt = "\n".join([f"- {tbl}: {desc}" for tbl, desc in meta["tables"].items()])
+    joins_fmt = "\n".join([f"- {j}" for j in meta["joins"]])
+    metrics_fmt = ", ".join(meta["default_metrics"])
+
+    return f"""You are an expert SQL engineer for an Experimentation Intelligence platform.
+Generate SQLite-compatible SQL queries based on the user's question.
+
+ACTIVE DOMAIN: {meta['domain_name']}
+NAMESPACE PREFIX: {meta['namespace_prefix']}
+
+AVAILABLE TABLES:
+{tables_fmt}
+
+VALID JOIN PATHS:
+{joins_fmt}
+
+CORE DOMAIN METRICS:
+{metrics_fmt}
+
+STRICT RULES:
+1. ONLY query tables prefixed with '{meta["namespace_prefix"]}'. Never mix ecomm_ and store_ tables in one query.
+2. Use the exact JOIN paths provided above.
+3. Return ONLY a valid executable SQL query inside a markdown ```sql code block. No explanation or introductory text.
+"""
 
 
 def execute_sql_query(input_data: SQLExecutionInput) -> SQLExecutionResult:

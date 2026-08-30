@@ -99,10 +99,6 @@ def run_stats_node(state: AnalysisState) -> dict:
 
 def analyze_segments_node(state: AnalysisState) -> dict:
     """Evaluates heterogeneous treatment effects across user segments."""
-    # Segment-level analysis has no implementation in continum today. The
-    # function that backed it, `ExpSuite/analysis/segment.py::run_segment_analysis`,
-    # was removed in 496c76d and is tracked for recovery. Report that plainly
-    # rather than returning an empty result that reads as "no heterogeneity found".
     return {
         "errors": [
             "Segment analysis is not implemented: no backend function is wired "
@@ -136,9 +132,17 @@ def synthesize_roi_node(state: AnalysisState) -> dict:
     if not stat:
         return {}
 
-    # Deliberately arithmetic-only over an already-computed lift. Projecting
-    # revenue would need traffic and order value, which this graph is not given;
-    # inventing them is what the fabrication guardrail exists to prevent.
+    domain_ctx = state.get("domain_context", "ecomm")
+    basis_msg = (
+        "Derived from the hypothesis test result only. Revenue "
+        "projection requires store foot traffic and average basket size — run "
+        "opportunity sizing or growth forecast for that."
+        if domain_ctx == "store"
+        else "Derived from the hypothesis test result only. Revenue "
+        "projection requires traffic and average order value — run "
+        "opportunity sizing or the growth forecast for that."
+    )
+
     return {
         "roi_summary": {
             "absolute_lift": stat["absolute_lift"],
@@ -146,9 +150,7 @@ def synthesize_roi_node(state: AnalysisState) -> dict:
             "ci_lower": stat["ci_lower"],
             "ci_upper": stat["ci_upper"],
             "is_stat_sig": stat["is_stat_sig"],
-            "basis": "Derived from the hypothesis test result only. Revenue "
-            "projection requires traffic and average order value — run "
-            "opportunity sizing or the growth forecast for that.",
+            "basis": basis_msg,
         }
     }
 
@@ -156,21 +158,20 @@ def synthesize_roi_node(state: AnalysisState) -> dict:
 def render_visuals_node(state: AnalysisState) -> dict:
     """
     Builds the metric-lift chart and emits it as a UIArtifact.
-
-    Without the artifact the chart existed only in subgraph state and never
-    reached the SSE stream, so an analysis that had computed a perfectly good
-    comparison still rendered in chat as text alone.
     """
     stat = state.get("stat_result")
     if not stat:
         logger.info("render_visuals skipped: the hypothesis test produced no result")
         return {}
 
+    domain_ctx = state.get("domain_context", "ecomm")
+    domain_label = "Retail Store" if domain_ctx == "store" else "E-Commerce"
+
     control_mean, treatment_mean = _effective_means(state)
     chart = generate_visualization(
         ChartGeneratorInput(
             chart_type="metric_lift",
-            title=f"Lift for {state.get('active_experiment_id') or 'experiment'}",
+            title=f"[{domain_label}] Lift for {state.get('active_experiment_id') or 'experiment'}",
             data={
                 "control_mean": control_mean,
                 "treatment_mean": treatment_mean,

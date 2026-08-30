@@ -1,11 +1,35 @@
 import os
 import re
-from typing import Literal, Optional
+import sqlite3
+from typing import Literal, Optional, Set
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# --- Table Mutability Classification ---
+STATIC_DOMAIN_TABLES: Set[str] = {
+    "ecomm_accounts",
+    "ecomm_users",
+    "ecomm_metric_catalog",
+    "store_stores",
+    "store_customers",
+    "store_metric_catalog",
+}
+
+DYNAMIC_EXPERIMENT_TABLES: Set[str] = {
+    "ecomm_experiments",
+    "ecomm_variants",
+    "ecomm_experiment_exposures",
+    "ecomm_experiment_results",
+    "ecomm_learnings_archive",
+    "store_experiments",
+    "store_variants",
+    "store_experiment_assignments",
+    "store_experiment_results",
+    "store_learnings_archive",
+}
 
 
 class Settings(BaseSettings):
@@ -29,7 +53,7 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.0
 
     # Database
-    DATABASE_URL: str = "sqlite:///./continum_warehouse.db"
+    DATABASE_URL: str = "sqlite:///./matchview_omnichannel.db"
 
     # StatSig Telemetry Connector
     STATSIG_API_KEY: str = ""
@@ -160,3 +184,25 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_db_connection():
+    """
+    Unified database connection manager.
+    Supports local SQLite (development) and Databricks SQL Warehouse (production/databricks deploy target).
+    """
+    if settings.is_databricks:
+        from databricks import sql
+
+        return sql.connect(
+            server_hostname=os.getenv("DATABRICKS_HOST", ""),
+            http_path=f"/sql/1.0/warehouses/{settings.DATABRICKS_WAREHOUSE_ID}"
+            if settings.DATABRICKS_WAREHOUSE_ID
+            else os.getenv("DATABRICKS_HTTP_PATH", ""),
+            access_token=os.getenv("DATABRICKS_TOKEN", ""),
+        )
+    else:
+        db_file = settings.DATABASE_URL.replace("sqlite:///", "")
+        conn = sqlite3.connect(db_file)
+        conn.execute("PRAGMA foreign_keys = ON;")
+        return conn

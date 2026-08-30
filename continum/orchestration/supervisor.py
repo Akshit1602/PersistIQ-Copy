@@ -156,10 +156,12 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     """
     active_exp = state.get("active_experiment_id") or "None Selected"
     active_proj = state.get("active_project_id") or "None Selected"
+    domain_ctx = state.get("domain_context") or "ecomm"
+    domain_title = "E-Commerce & Digital Marketplace" if domain_ctx == "ecomm" else "Physical Retail Store"
 
     system_prompt = (
-        "You are Continum's A/B Testing & Retail Experimentation Copilot.\n"
-        f"CURRENT CONTEXT -> Active Project: '{active_proj}', Active Experiment ID: '{active_exp}'.\n"
+        f"You are Continum's Omnichannel Experimentation Copilot for {domain_title}.\n"
+        f"CURRENT CONTEXT -> Active Domain: '{domain_ctx.upper()}', Active Project: '{active_proj}', Active Experiment ID: '{active_exp}'.\n"
         "\n"
         "TOOL DISCIPLINE (non-negotiable):\n"
         "- You have NO arithmetic ability of your own. Every number you state — sample "

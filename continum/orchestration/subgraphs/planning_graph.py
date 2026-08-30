@@ -27,16 +27,19 @@ def _missing(state: PlanningState, *names: str) -> list:
 
 
 def metric_planner_node(state: PlanningState) -> dict:
-    """Selects primary, secondary, and guardrail metrics."""
+    """Selects primary, secondary, and guardrail metrics based on domain context."""
     absent = _missing(state, "primary_metric")
     if absent:
         return {"missing_inputs": absent}
+
+    domain_ctx = state.get("domain_context", "ecomm")
+    is_retail = state.get("retail_domain") or (domain_ctx == "store")
 
     result = plan_experiment_metrics(
         MetricPlannerInput(
             **_supplied(
                 primary_metric=state["primary_metric"],
-                retail_domain=state.get("retail_domain"),
+                retail_domain=is_retail,
             )
         )
     )

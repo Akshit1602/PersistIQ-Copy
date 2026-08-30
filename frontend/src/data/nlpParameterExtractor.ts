@@ -3,6 +3,8 @@ import { fillModuleDefaults } from './experimentBaselines'
 import type { SuggestionContext } from './inputSuggestions'
 import { MODULE_BY_ID, MODULE_LIST } from './moduleRegistry'
 
+export type DomainContext = 'ecomm' | 'store'
+
 export interface NlpExtractionResult {
   moduleId: ModuleId
   params: Record<string, unknown>
@@ -37,7 +39,7 @@ function findModuleInText(text: string): ModuleId | null {
   return null
 }
 
-function extractPowerCalculatorParams(text: string): Record<string, unknown> {
+function extractPowerCalculatorParams(text: string, domainContext: DomainContext = 'ecomm'): Record<string, unknown> {
   const params: Record<string, unknown> = {}
 
   const alphaMatch =
@@ -71,8 +73,8 @@ function extractPowerCalculatorParams(text: string): Record<string, unknown> {
   if (variantsMatch?.[1]) params.variants = parseInt(variantsMatch[1], 10)
 
   const trafficMatch =
-    text.match(/(\d[\d,]*)\s*daily\s*(?:eligible\s*)?(?:traffic|inquiries)/i) ??
-    text.match(/daily\s*(?:traffic|inquiries)\s*[=:]?\s*(\d[\d,]*)/i)
+    text.match(/(\d[\d,]*)\s*daily\s*(?:eligible\s*)?(?:traffic|inquiries|visitors|foot\s*traffic)/i) ??
+    text.match(/daily\s*(?:traffic|inquiries|visitors|foot\s*traffic)\s*[=:]?\s*(\d[\d,]*)/i)
   if (trafficMatch?.[1]) {
     params.dailyTraffic = parseInt(trafficMatch[1].replace(/,/g, ''), 10)
   }
@@ -80,13 +82,17 @@ function extractPowerCalculatorParams(text: string): Record<string, unknown> {
   const fractionMatch = text.match(/traffic\s*fraction\s*[=:]\s*(0\.\d+|1(?:\.0+)?)/i)
   if (fractionMatch?.[1]) params.trafficFraction = parseFloat(fractionMatch[1])
 
+  if (domainContext === 'store') {
+    const storeMatch = text.match(/STR_\d{3}/i)
+    if (storeMatch) params.storeId = storeMatch[0].toUpperCase()
+  }
+
   return params
 }
 
 function extractForecastingParams(text: string): Record<string, unknown> {
   const params: Record<string, unknown> = {}
 
-  // "5 week forecasting", "only 5 weeks", "show 5-week forecast" etc.
   const weeksMatch =
     text.match(/(\d{1,3})\s*[-\s]?week/i) ??
     text.match(/weeks?\s*[=:]\s*(\d{1,3})/i)
@@ -95,18 +101,17 @@ function extractForecastingParams(text: string): Record<string, unknown> {
     if (n > 0 && n <= 52) params.weeksOfFlight = n
   }
 
-  // "12/26/52 week horizon" maps to the fixed future-projection selector.
   const horizonMatch = text.match(/(12|26|52)\s*[-\s]?week\s*horizon/i)
   if (horizonMatch?.[1]) params.horizonWeeks = parseInt(horizonMatch[1], 10)
 
   return params
 }
 
-function extractOpportunitySizingParams(text: string): Record<string, unknown> {
+function extractOpportunitySizingParams(text: string, domainContext: DomainContext = 'ecomm'): Record<string, unknown> {
   const params: Record<string, unknown> = {}
 
   const volumeMatch =
-    text.match(/(\d[\d,]*)\s*(k|m)?\s*(?:\/\s*week|weekly|volume)/i) ??
+    text.match(/(\d[\d,]*)\s*(k|m)?\s*(?:\/\s*week|weekly|volume|foot\s*traffic|transactions)/i) ??
     text.match(/volume\s*[=:]?\s*(\d[\d,]*)\s*(k|m)?/i)
   if (volumeMatch?.[1]) {
     let n = parseInt(volumeMatch[1].replace(/,/g, ''), 10)
@@ -129,22 +134,24 @@ function extractOpportunitySizingParams(text: string): Record<string, unknown> {
     else params.confidenceBand = '0.70'
   }
 
-  if (/digital/i.test(text)) params.channelScope = 'digital'
+  if (domainContext === 'store') {
+    params.channelScope = 'store'
+    if (/basket/i.test(text)) params.targetMetric = 'Basket Size'
+  } else if (/digital/i.test(text)) {
+    params.channelScope = 'digital'
+  }
 
   return params
 }
 
 function isAnalyticalCommand(text: string): boolean {
   return (
-    /compute|calculat|sample\s*size|power|alpha|beta|mde|configure|adjust|set\s+|size\s+|approv|proceed|suggest|recommend|validate\s+hypothesis|run\s+(simulation|forecast|model|analysis)|give\s+(me\s+)?(a\s+)?\d+|show\s+(me\s+)?\d+|next\s+\d+\s*week|\d+\s*week\s*(forecast|prediction)/i.test(
+    /compute|calculat|sample\s*size|power|alpha|beta|mde|configure|adjust|set\s+|size\s+|approv|proceed|suggest|recommend|validate\s+hypothesis|run\s+(simulation|forecast|model|analysis)|give\s+(me\s+)?(a\s+)?\d+|show\s+(me\s+)?\d+|next\s+\d+\s*week|\d+\s*week\s*(forecast|prediction)|store|kiosk|endcap/i.test(
       text,
     ) || findModuleInText(text) !== null
   )
 }
 
-/** Genuine questions ("what does X check for?", "how does the matching work?")
- * should reach the real LLM for an actual answer, not silently redirect to a
- * module panel just because they happen to mention that module's name. */
 function looksLikeQuestion(text: string): boolean {
   const trimmed = text.trim()
   return (
@@ -158,6 +165,7 @@ export function extractNlpParameters(
   experiment: string,
   activeModuleId: ModuleId | null,
   suggestionContext?: SuggestionContext,
+  domainContext: DomainContext = 'ecomm',
 ): NlpExtractionResult | null {
   if (!isAnalyticalCommand(text)) return null
 
@@ -165,11 +173,11 @@ export function extractNlpParameters(
   let partial: Record<string, unknown> = {}
 
   if (moduleId === 'power-calculator') {
-    partial = extractPowerCalculatorParams(text)
+    partial = extractPowerCalculatorParams(text, domainContext)
   } else if (moduleId === 'forecasting') {
     partial = extractForecastingParams(text)
   } else if (moduleId === 'opportunity-sizing') {
-    partial = extractOpportunitySizingParams(text)
+    partial = extractOpportunitySizingParams(text, domainContext)
   } else if (moduleId === 'metrics-tracking') {
     if (/mvp|iteration|critical/i.test(text)) {
       const maturity = text.match(/\b(mvp|iteration|critical)\b/i)?.[1]?.toLowerCase()
@@ -183,9 +191,6 @@ export function extractNlpParameters(
 
   const touchedFields = Object.keys(partial)
 
-  // No concrete parameters were parsed — if this reads like a genuine
-  // question rather than a configuration command, don't redirect; let it
-  // fall through to the real LLM for an actual conversational answer.
   if (touchedFields.length === 0 && looksLikeQuestion(text)) return null
 
   const { values, autoFilled } = fillModuleDefaults(

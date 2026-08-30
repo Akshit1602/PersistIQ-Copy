@@ -10,6 +10,7 @@ import { getModuleFormSchema } from './moduleFormSchemas'
 import { MODULE_BY_ID } from './moduleRegistry'
 import type { InterviewFieldStep, InterviewPill } from '../context/conversationalLoopTypes'
 import { getNextStepAfter, isWorkflowStepId } from './hypothesisWorkflow'
+import type { DomainContext } from './nlpParameterExtractor'
 
 const POWER_CALCULATOR_STEPS: InterviewFieldStep[] = [
   {
@@ -43,6 +44,34 @@ const POWER_CALCULATOR_STEPS: InterviewFieldStep[] = [
   },
 ]
 
+const STORE_POWER_CALCULATOR_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'mdePercent',
+    question: 'What store-level minimum detectable effect (% relative) should we target?',
+    pills: [
+      { id: 'smde-3', label: '3% relative', value: 3, fieldKey: 'mdePercent' },
+      { id: 'smde-5', label: '5% relative', value: 5, fieldKey: 'mdePercent' },
+      { id: 'smde-8', label: '8% relative', value: 8, fieldKey: 'mdePercent' },
+    ],
+  },
+  {
+    fieldKey: 'alpha',
+    question: 'Confirm the significance level (α) for store cluster randomization:',
+    pills: [
+      { id: 'sa-05', label: 'α=0.05', value: 0.05, fieldKey: 'alpha' },
+      { id: 'sa-01', label: 'α=0.01', value: 0.01, fieldKey: 'alpha' },
+    ],
+  },
+  {
+    fieldKey: 'statisticalPower',
+    question: 'What statistical power (1−β) should we target for store clusters?',
+    pills: [
+      { id: 'sp-80', label: '0.80', value: 0.8, fieldKey: 'statisticalPower' },
+      { id: 'sp-90', label: '0.90', value: 0.9, fieldKey: 'statisticalPower' },
+    ],
+  },
+]
+
 const OPPORTUNITY_SIZING_STEPS: InterviewFieldStep[] = [
   {
     fieldKey: 'monthlyInquiries',
@@ -70,6 +99,27 @@ const OPPORTUNITY_SIZING_STEPS: InterviewFieldStep[] = [
       { id: 'tior-198', label: '0.198', value: 0.198, fieldKey: 'targetIor' },
       { id: 'tior-22', label: '0.22', value: 0.22, fieldKey: 'targetIor' },
       { id: 'tior-25', label: '0.25', value: 0.25, fieldKey: 'targetIor' },
+    ],
+  },
+]
+
+const STORE_OPPORTUNITY_SIZING_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'monthlyTraffic',
+    question: 'What monthly foot traffic volume should we size against?',
+    pills: [
+      { id: 'str-25k', label: '25k visitors', value: 25000, fieldKey: 'monthlyTraffic' },
+      { id: 'str-50k', label: '50k visitors', value: 50000, fieldKey: 'monthlyTraffic' },
+      { id: 'str-100k', label: '100k visitors', value: 100000, fieldKey: 'monthlyTraffic' },
+    ],
+  },
+  {
+    fieldKey: 'averageBasketSize',
+    question: 'What is the baseline average basket size ($)?',
+    pills: [
+      { id: 'bs-45', label: '$45.00', value: 45, fieldKey: 'averageBasketSize' },
+      { id: 'bs-68', label: '$68.50', value: 68.5, fieldKey: 'averageBasketSize' },
+      { id: 'bs-95', label: '$95.00', value: 95, fieldKey: 'averageBasketSize' },
     ],
   },
 ]
@@ -110,6 +160,27 @@ const METRICS_TRACKING_STEPS: InterviewFieldStep[] = [
   },
 ]
 
+const STORE_METRICS_TRACKING_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'featureDescription',
+    question: 'Describe the retail store feature being tested:',
+    pills: [
+      { id: 'sfeat-kiosk', label: 'Self-Checkout Kiosks', value: 'Self-Checkout Kiosk Deployment', fieldKey: 'featureDescription' },
+      { id: 'sfeat-endcap', label: 'Endcap Display Lighting', value: 'Endcap Spotlight Modification', fieldKey: 'featureDescription' },
+      { id: 'sfeat-rebate', label: 'POS Instant Rebate', value: 'Register Loyalty Rebate', fieldKey: 'featureDescription' },
+    ],
+  },
+  {
+    fieldKey: 'experimentMaturity',
+    question: 'Select store rollout stage:',
+    pills: [
+      { id: 'smat-pilot', label: 'Pilot Test', value: 'mvp', fieldKey: 'experimentMaturity' },
+      { id: 'smat-regional', label: 'Regional Expansion', value: 'iteration', fieldKey: 'experimentMaturity' },
+      { id: 'smat-national', label: 'National Rollout', value: 'critical', fieldKey: 'experimentMaturity' },
+    ],
+  },
+]
+
 const EXPERIMENT_TYPE_STEPS: InterviewFieldStep[] = [
   {
     fieldKey: 'experimentType',
@@ -118,6 +189,18 @@ const EXPERIMENT_TYPE_STEPS: InterviewFieldStep[] = [
       { id: 'type-ab', label: 'A/B', value: 'A/B', fieldKey: 'experimentType' },
       { id: 'type-abc', label: 'A/B/C', value: 'A/B/C', fieldKey: 'experimentType' },
       { id: 'type-causal', label: 'Causal', value: 'Causal', fieldKey: 'experimentType' },
+    ],
+  },
+]
+
+const STORE_EXPERIMENT_TYPE_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'experimentType',
+    question: 'Confirm the recommended physical store experiment design:',
+    pills: [
+      { id: 'stype-cluster', label: 'Cluster-Randomized Trial', value: 'Cluster-Randomized', fieldKey: 'experimentType' },
+      { id: 'stype-matched', label: 'Matched-Pair Store Test', value: 'Matched-Pair', fieldKey: 'experimentType' },
+      { id: 'stype-did', label: 'Difference-in-Differences', value: 'Causal-DiD', fieldKey: 'experimentType' },
     ],
   },
 ]
@@ -143,6 +226,26 @@ const AUDIENCE_SELECTION_STEPS: InterviewFieldStep[] = [
   },
 ]
 
+const STORE_AUDIENCE_SELECTION_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'segment',
+    question: 'Which store cluster or format should be targeted?',
+    pills: [
+      { id: 'sseg-all', label: 'All Stores', value: 'all-stores', fieldKey: 'segment' },
+      { id: 'sseg-flagship', label: 'Flagship Stores', value: 'flagship', fieldKey: 'segment' },
+      { id: 'sseg-express', label: 'Express Stores', value: 'express', fieldKey: 'segment' },
+    ],
+  },
+  {
+    fieldKey: 'trafficPercent',
+    question: 'What proportion of store clusters should receive Treatment?',
+    pills: [
+      { id: 'str-30', label: '30% Stores', value: 30, fieldKey: 'trafficPercent' },
+      { id: 'str-50', label: '50% Stores', value: 50, fieldKey: 'trafficPercent' },
+    ],
+  },
+]
+
 const GENERIC_STEPS: InterviewFieldStep[] = [
   {
     fieldKey: 'notes',
@@ -153,7 +256,7 @@ const GENERIC_STEPS: InterviewFieldStep[] = [
   },
 ]
 
-const INTERVIEW_BY_MODULE: Partial<Record<ModuleId, InterviewFieldStep[]>> = {
+const INTERVIEW_BY_MODULE_ECOMM: Partial<Record<ModuleId, InterviewFieldStep[]>> = {
   'power-calculator': POWER_CALCULATOR_STEPS,
   'opportunity-sizing': OPPORTUNITY_SIZING_STEPS,
   'metrics-tracking': METRICS_TRACKING_STEPS,
@@ -162,8 +265,18 @@ const INTERVIEW_BY_MODULE: Partial<Record<ModuleId, InterviewFieldStep[]>> = {
   'brief-generator': [],
 }
 
-export function getInterviewSteps(moduleId: ModuleId): InterviewFieldStep[] {
-  return INTERVIEW_BY_MODULE[moduleId] ?? GENERIC_STEPS
+const INTERVIEW_BY_MODULE_STORE: Partial<Record<ModuleId, InterviewFieldStep[]>> = {
+  'power-calculator': STORE_POWER_CALCULATOR_STEPS,
+  'opportunity-sizing': STORE_OPPORTUNITY_SIZING_STEPS,
+  'metrics-tracking': STORE_METRICS_TRACKING_STEPS,
+  'experiment-type': STORE_EXPERIMENT_TYPE_STEPS,
+  'audience-selection': STORE_AUDIENCE_SELECTION_STEPS,
+  'brief-generator': [],
+}
+
+export function getInterviewSteps(moduleId: ModuleId, domainContext: DomainContext = 'ecomm'): InterviewFieldStep[] {
+  const map = domainContext === 'store' ? INTERVIEW_BY_MODULE_STORE : INTERVIEW_BY_MODULE_ECOMM
+  return map[moduleId] ?? GENERIC_STEPS
 }
 
 export function bootstrapModuleParams(
@@ -233,8 +346,9 @@ export function buildAutoFillSummary(
 export function getNextInterviewStep(
   moduleId: ModuleId,
   confirmedFieldKeys: string[],
+  domainContext: DomainContext = 'ecomm',
 ): InterviewFieldStep | null {
-  const steps = getInterviewSteps(moduleId)
+  const steps = getInterviewSteps(moduleId, domainContext)
   return steps.find((step) => !confirmedFieldKeys.includes(step.fieldKey)) ?? null
 }
 
@@ -279,6 +393,7 @@ export function getSmartPillsForPhase(
   confirmedFieldKeys: string[],
   interviewPhase: 'interviewing' | 'ready' | 'idle' | 'running' | 'complete',
   suggestionContext?: SuggestionContext,
+  domainContext: DomainContext = 'ecomm',
 ): InterviewPill[] {
   if (interviewPhase === 'complete') {
     const proceed = proceedPillFor(moduleId)
@@ -295,7 +410,7 @@ export function getSmartPillsForPhase(
     ]
   }
   if (interviewPhase !== 'interviewing') return []
-  const next = getNextInterviewStep(moduleId, confirmedFieldKeys)
+  const next = getNextInterviewStep(moduleId, confirmedFieldKeys, domainContext)
   if (!next) return []
 
   const suggestions = suggestionContext
@@ -317,8 +432,9 @@ export function parseInterviewAnswerFromText(
   moduleId: ModuleId,
   fieldKey: string,
   text: string,
+  domainContext: DomainContext = 'ecomm',
 ): unknown | null {
-  const step = getInterviewSteps(moduleId).find((s) => s.fieldKey === fieldKey)
+  const step = getInterviewSteps(moduleId, domainContext).find((s) => s.fieldKey === fieldKey)
   if (!step) return text
 
   const pill = step.pills.find(

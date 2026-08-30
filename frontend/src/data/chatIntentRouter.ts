@@ -10,9 +10,12 @@ import { buildAssistantReply } from './mock'
 import {
   buildNlpSyncReply,
   extractNlpParameters,
+  type DomainContext,
 } from './nlpParameterExtractor'
 import { MODULE_BY_ID, isModuleId } from './moduleRegistry'
 import { HYPOTHESIS_WORKFLOW_STEPS } from './hypothesisWorkflow'
+
+export type { DomainContext } from './nlpParameterExtractor'
 
 export interface ChatRouterContext {
   persona: Persona
@@ -23,6 +26,8 @@ export interface ChatRouterContext {
   messages: ChatMessage[]
   /** Lets parameters parsed from chat fall back to data-derived suggestions. */
   suggestionContext?: SuggestionContext
+  /** Active domain context namespace ('ecomm' or 'store') */
+  domainContext?: DomainContext
 }
 
 export type ChatIntent =
@@ -134,11 +139,14 @@ export function resolveChatIntent(content: string, ctx: ChatRouterContext): Chat
     return { type: 'contextual-run', userContent: trimmed, reply: contextual }
   }
 
+  const activeDomain = ctx.domainContext ?? 'ecomm'
+
   const nlp = extractNlpParameters(
     trimmed,
     ctx.selectedExperiment,
     resolveActiveModule(ctx),
     ctx.suggestionContext,
+    activeDomain,
   )
   if (nlp) {
     return {
