@@ -21,8 +21,13 @@ export interface ChatRouterContext {
   selectedExperiment: string
   moduleFormValuesByExperiment: ModuleFormValuesByExperiment
   messages: ChatMessage[]
+  activeDomain?: 'ecomm' | 'store'
   /** Lets parameters parsed from chat fall back to data-derived suggestions. */
   suggestionContext?: SuggestionContext
+}
+
+export function isStoreDomainQuery(text: string): boolean {
+  return /kiosk|endcap|foot\s*traffic|register|dwell\s*time|pos|aisle|store\s*cluster|cluster/i.test(text)
 }
 
 export type ChatIntent =

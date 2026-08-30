@@ -1,0 +1,2 @@
+metric_id,metric_name,sql_formula,metric_type,pre_period_covariate
+MTR_E01,Quote Approval Rate,COUNT(approved) / COUNT(total),Conversion,pre_quote_count

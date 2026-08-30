@@ -153,11 +153,33 @@ function looksLikeQuestion(text: string): boolean {
   )
 }
 
+function extractStoreParams(text: string): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+
+  const storeIdMatch = text.match(/\b(STR_\d{3}|store[_\s]?#?\d+)\b/i)
+  if (storeIdMatch?.[1]) {
+    params.storeId = storeIdMatch[1].toUpperCase()
+  }
+
+  const zoneMatch = text.match(/\b(endcap\s*[a-z]?|kiosk|checkout\s*queue|entrance|tools\s*aisle|zone\s*\w+)\b/i)
+  if (zoneMatch?.[1]) {
+    params.zone = zoneMatch[1].trim()
+  }
+
+  const formatMatch = text.match(/\b(flagship|express|standard|kiosk)\b/i)
+  if (formatMatch?.[1]) {
+    params.storeFormat = formatMatch[1].trim()
+  }
+
+  return params
+}
+
 export function extractNlpParameters(
   text: string,
   experiment: string,
   activeModuleId: ModuleId | null,
   suggestionContext?: SuggestionContext,
+  activeDomain?: 'ecomm' | 'store',
 ): NlpExtractionResult | null {
   if (!isAnalyticalCommand(text)) return null
 
@@ -179,6 +201,11 @@ export function extractNlpParameters(
     if (featureMatch?.[1]) {
       partial = { ...partial, featureDescription: featureMatch[1].trim() }
     }
+  }
+
+  if (activeDomain === 'store' || /kiosk|endcap|foot\s*traffic|register|dwell\s*time|pos|store/i.test(text)) {
+    const storeEntities = extractStoreParams(text)
+    partial = { ...partial, ...storeEntities }
   }
 
   const touchedFields = Object.keys(partial)

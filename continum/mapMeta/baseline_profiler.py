@@ -29,8 +29,8 @@ _SAMPLE_DATA_ROOT = Path(__file__).resolve().parents[2] / "sample_data"
 # Channel -> sample dataset directory. Used when the warehouse holds no
 # matching tables, which is the default state of a fresh local checkout.
 _SAMPLE_DATASETS: Dict[str, str] = {
-    "digital": "Xometry",
-    "store": "Shell",
+    "digital": "Ecommerce",
+    "store": "Store",
 }
 
 CHANNELS = tuple(_SAMPLE_DATASETS)
@@ -121,12 +121,15 @@ def _match_experiment_id(experiment: str, known_ids: Iterable[str]) -> Optional[
     if not slug:
         return None
     ids = list(known_ids)
-    if slug in ids:
-        return slug
+    if slug in ids or experiment in ids:
+        return experiment if experiment in ids else slug
     slug_tokens = set(slug.split("_"))
     best: Optional[Tuple[int, str]] = None
     for candidate in ids:
-        overlap = len(slug_tokens & set(candidate.split("_")))
+        cand_slug = _slug(candidate)
+        if cand_slug == slug:
+            return candidate
+        overlap = len(slug_tokens & set(cand_slug.split("_")))
         if overlap >= 2 and (best is None or overlap > best[0]):
             best = (overlap, candidate)
     return best[1] if best else None
@@ -215,9 +218,10 @@ def _profile_digital(dataset: Path, experiment: str) -> BaselineProfile:
         days: Dict[str, int] = {}
         for row in _read_rows(quotes_csv):
             total += 1
-            if (row.get("order_id") or "").strip():
+            status = (row.get("status") or "").strip().lower()
+            if (row.get("order_id") or "").strip() or status in ["approved", "purchased", "completed"]:
                 converted += 1
-            day = (row.get("_constructed") or "").strip()
+            day = (row.get("_constructed") or row.get("created_at") or "").strip().split(" ")[0]
             if day:
                 days[day] = days.get(day, 0) + 1
 
@@ -263,10 +267,10 @@ def _profile_digital(dataset: Path, experiment: str) -> BaselineProfile:
         totals: List[float] = []
         order_days: set[str] = set()
         for row in _read_rows(orders_csv):
-            total_value = _as_float(row.get("total"))
+            total_value = _as_float(row.get("total") or row.get("total_amount"))
             if total_value:
                 totals.append(total_value)
-            order_day = (row.get("order_time") or "").strip()
+            order_day = (row.get("order_time") or row.get("ordered_at") or "").strip()
             if order_day:
                 order_days.add(order_day)
 
@@ -290,13 +294,51 @@ def _profile_digital(dataset: Path, experiment: str) -> BaselineProfile:
 def _profile_store(dataset: Path, experiment: str) -> BaselineProfile:
     profile = BaselineProfile(channel="store", source=f"sample_data/{dataset.name}")
 
+    stores_csv = dataset / "stores.csv"
+    if stores_csv.is_file():
+        stores = list(_read_rows(stores_csv))
+        if stores:
+            profile.fields["targetStoreCount"] = BaselineValue(
+                value=float(len(stores)),
+                source="stores.csv",
+                rationale=f"{len(stores)} distinct stores in the store catalog",
+                row_count=len(stores),
+            )
+
+    traffic_csv = dataset / "foot_traffic_events.csv"
+    if traffic_csv.is_file():
+        events = list(_read_rows(traffic_csv))
+        days = {(r.get("timestamp") or "").split(" ")[0] for r in events if r.get("timestamp")}
+        day_count = len({d for d in days if d})
+        if day_count and len(events):
+            daily_traffic = len(events) / day_count
+            profile.fields["weeklyStoreTraffic"] = BaselineValue(
+                value=_round(daily_traffic * 7, 0),
+                source="foot_traffic_events.csv",
+                rationale=f"{len(events):,} foot traffic events over {day_count} days, scaled to weekly",
+                row_count=len(events),
+                as_of=_period(days),
+            )
+
+    pos_csv = dataset / "pos_transactions.csv"
+    if pos_csv.is_file():
+        txns = list(_read_rows(pos_csv))
+        if txns and traffic_csv.is_file():
+            cvr = len(txns) / len(events) if len(events) else 0.15
+            profile.fields["baselineCvr"] = BaselineValue(
+                value=_round(cvr, 4),
+                source="pos_transactions.csv",
+                rationale=f"{len(txns):,} transactions against {len(events):,} foot traffic events",
+                row_count=len(txns),
+            )
+
     stations = {
         (row.get("station_id") or "").strip()
         for path in dataset.glob("*dim_station*.csv")
         for row in _read_rows(path)
     }
     stations.discard("")
-    if stations:
+    if stations and "targetStoreCount" not in profile.fields:
         profile.fields["targetStoreCount"] = BaselineValue(
             value=float(len(stations)),
             source="dim_station",
@@ -305,86 +347,79 @@ def _profile_store(dataset: Path, experiment: str) -> BaselineProfile:
         )
 
     fact_paths = list(dataset.glob("*fact_station_day*.csv"))
-    if not fact_paths:
-        return profile
+    if fact_paths:
+        station_days: Dict[Tuple[str, str], Dict[str, str]] = {}
+        revenue = 0.0
+        margin = 0.0
+        for path in fact_paths:
+            for row in _read_rows(path):
+                key = ((row.get("station_id") or "").strip(), (row.get("date") or "").strip())
+                station_days[key] = row
+                revenue += _as_float(row.get("revenue_inr")) or 0.0
+                margin += _as_float(row.get("gross_margin_inr")) or 0.0
 
-    # The fact grain is station × day × product, but footfall, c-store
-    # transactions, and c-store revenue repeat across product rows — dedupe to
-    # station-day before averaging them or every figure inflates ~3x.
-    station_days: Dict[Tuple[str, str], Dict[str, str]] = {}
-    revenue = 0.0
-    margin = 0.0
-    for path in fact_paths:
-        for row in _read_rows(path):
-            key = ((row.get("station_id") or "").strip(), (row.get("date") or "").strip())
-            station_days[key] = row
-            revenue += _as_float(row.get("revenue_inr")) or 0.0
-            margin += _as_float(row.get("gross_margin_inr")) or 0.0
+        if station_days:
+            profile.as_of = _period({date for _, date in station_days})
+            day_count = len({date for _, date in station_days if date})
+            footfall = [
+                v for v in (_as_float(r.get("footfall_estimate")) for r in station_days.values()) if v
+            ]
+            transactions = [
+                v
+                for v in (_as_float(r.get("cstore_transactions")) for r in station_days.values())
+                if v is not None
+            ]
+            cstore_revenue = [
+                v
+                for v in (_as_float(r.get("cstore_revenue_inr")) for r in station_days.values())
+                if v is not None
+            ]
 
-    if not station_days:
-        return profile
+            daily_footfall = _mean(footfall)
+            if daily_footfall is not None and "weeklyStoreTraffic" not in profile.fields:
+                profile.fields["weeklyStoreTraffic"] = BaselineValue(
+                    value=_round(daily_footfall * 7, 0),
+                    source="fact_station_day_product",
+                    rationale=(
+                        f"Mean {_round(daily_footfall, 0):.0f} daily footfall per store across "
+                        f"{len(station_days):,} store-days ({day_count} days), scaled to a week"
+                    ),
+                    row_count=len(station_days),
+                    as_of=profile.as_of,
+                )
 
-    profile.as_of = _period({date for _, date in station_days})
-    day_count = len({date for _, date in station_days if date})
-    footfall = [
-        v for v in (_as_float(r.get("footfall_estimate")) for r in station_days.values()) if v
-    ]
-    transactions = [
-        v
-        for v in (_as_float(r.get("cstore_transactions")) for r in station_days.values())
-        if v is not None
-    ]
-    cstore_revenue = [
-        v
-        for v in (_as_float(r.get("cstore_revenue_inr")) for r in station_days.values())
-        if v is not None
-    ]
+            cvr = _ratio(sum(transactions), sum(footfall)) if footfall and transactions else None
+            if cvr is not None and 0 < cvr <= 1 and "baselineCvr" not in profile.fields:
+                profile.fields["baselineCvr"] = BaselineValue(
+                    value=_round(cvr),
+                    source="fact_station_day_product",
+                    rationale=(
+                        f"{sum(transactions):,.0f} c-store transactions against {sum(footfall):,.0f} "
+                        f"footfall over {len(station_days):,} store-days"
+                    ),
+                    row_count=len(station_days),
+                    as_of=profile.as_of,
+                )
 
-    daily_footfall = _mean(footfall)
-    if daily_footfall is not None:
-        profile.fields["weeklyStoreTraffic"] = BaselineValue(
-            value=_round(daily_footfall * 7, 0),
-            source="fact_station_day_product",
-            rationale=(
-                f"Mean {_round(daily_footfall, 0):.0f} daily footfall per store across "
-                f"{len(station_days):,} store-days ({day_count} days), scaled to a week"
-            ),
-            row_count=len(station_days),
-            as_of=profile.as_of,
-        )
+            aur = _ratio(sum(cstore_revenue), sum(transactions)) if transactions else None
+            if aur is not None and aur > 0:
+                profile.fields["baselineAur"] = BaselineValue(
+                    value=_round(aur, 2),
+                    source="fact_station_day_product",
+                    rationale=f"C-store revenue divided by {sum(transactions):,.0f} transactions",
+                    row_count=len(station_days),
+                    as_of=profile.as_of,
+                )
 
-    cvr = _ratio(sum(transactions), sum(footfall)) if footfall and transactions else None
-    if cvr is not None and 0 < cvr <= 1:
-        profile.fields["baselineCvr"] = BaselineValue(
-            value=_round(cvr),
-            source="fact_station_day_product",
-            rationale=(
-                f"{sum(transactions):,.0f} c-store transactions against {sum(footfall):,.0f} "
-                f"footfall over {len(station_days):,} store-days"
-            ),
-            row_count=len(station_days),
-            as_of=profile.as_of,
-        )
-
-    aur = _ratio(sum(cstore_revenue), sum(transactions)) if transactions else None
-    if aur is not None and aur > 0:
-        profile.fields["baselineAur"] = BaselineValue(
-            value=_round(aur, 2),
-            source="fact_station_day_product",
-            rationale=f"C-store revenue divided by {sum(transactions):,.0f} transactions",
-            row_count=len(station_days),
-            as_of=profile.as_of,
-        )
-
-    gross_margin = _ratio(margin, revenue)
-    if gross_margin is not None and 0 < gross_margin < 1:
-        profile.fields["grossMargin"] = BaselineValue(
-            value=_round(gross_margin),
-            source="fact_station_day_product",
-            rationale=f"Gross margin divided by revenue across {len(station_days):,} store-days",
-            row_count=len(station_days),
-            as_of=profile.as_of,
-        )
+            gross_margin = _ratio(margin, revenue)
+            if gross_margin is not None and 0 < gross_margin < 1:
+                profile.fields["grossMargin"] = BaselineValue(
+                    value=_round(gross_margin),
+                    source="fact_station_day_product",
+                    rationale=f"Gross margin divided by revenue across {len(station_days):,} store-days",
+                    row_count=len(station_days),
+                    as_of=profile.as_of,
+                )
 
     return profile
 
@@ -491,6 +526,9 @@ def resolve_dataset(channel: str) -> Optional[Path]:
     name = _SAMPLE_DATASETS.get(channel)
     if not name:
         return None
+    archive_dir = _SAMPLE_DATA_ROOT.parent / "archive" / "sample_datasets" / ("Xometry" if channel == "digital" else "Shell")
+    if archive_dir.is_dir():
+        return archive_dir
     dataset = _SAMPLE_DATA_ROOT / name
     return dataset if dataset.is_dir() else None
 

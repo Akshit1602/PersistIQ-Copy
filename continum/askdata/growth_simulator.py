@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
-from continum.AskData.chart_spec import ChartSpec, spec_to_plotly
-from continum.AskData.visual_generator import build_growth_forecast_spec
+from continum.askdata.chart_spec import ChartSpec, spec_to_plotly
+from continum.askdata.visual_generator import build_growth_forecast_spec
 from continum.ExpSuite.causal.forecasting import (
     ForecastInput,
     ForecastResult,

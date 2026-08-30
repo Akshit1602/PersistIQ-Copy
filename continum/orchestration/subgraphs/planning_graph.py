@@ -32,11 +32,13 @@ def metric_planner_node(state: PlanningState) -> dict:
     if absent:
         return {"missing_inputs": absent}
 
+    domain = state.get("domain_context") or state.get("retail_domain") or "ecomm"
+
     result = plan_experiment_metrics(
         MetricPlannerInput(
             **_supplied(
                 primary_metric=state["primary_metric"],
-                retail_domain=state.get("retail_domain"),
+                retail_domain=domain,
             )
         )
     )

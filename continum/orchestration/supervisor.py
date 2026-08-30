@@ -156,11 +156,22 @@ def supervisor_node(state: AgentState) -> Dict[str, Any]:
     """
     active_exp = state.get("active_experiment_id") or "None Selected"
     active_proj = state.get("active_project_id") or "None Selected"
+    domain_ctx = state.get("domain_context") or "ecomm"
+
+    domain_guidance = (
+        "ECOMM DOMAIN GUIDANCE:\n"
+        "- Focus on User-Level A/B Testing and digital conversion funnels (conversion_rate, average_order_value, quote_approval_rate).\n"
+        "- Leverage CUPED variance reduction over pre-experiment user clickstream covariates.\n"
+        if domain_ctx == "ecomm"
+        else "STORE DOMAIN GUIDANCE:\n"
+        "- Focus on Store-Level Cluster-Randomized Trials (CRT) and physical store retail metrics (basket_size, zone_dwell_time, foot_traffic, register_checkout_velocity).\n"
+        "- Account for intracluster correlation (ICC), store cluster sample sizing, store-level matching, and register queue guardrails.\n"
+    )
 
     system_prompt = (
         "You are Continum's A/B Testing & Retail Experimentation Copilot.\n"
-        f"CURRENT CONTEXT -> Active Project: '{active_proj}', Active Experiment ID: '{active_exp}'.\n"
-        "\n"
+        f"CURRENT CONTEXT -> Active Project: '{active_proj}', Active Experiment ID: '{active_exp}', Domain Context: '{domain_ctx}'.\n"
+        f"\n{domain_guidance}\n"
         "TOOL DISCIPLINE (non-negotiable):\n"
         "- You have NO arithmetic ability of your own. Every number you state — sample "
         "sizes, revenue, conversions, lift, p-values, confidence intervals, durations — "

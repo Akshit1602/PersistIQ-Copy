@@ -1,3 +1,8 @@
+import sys
+import continum.askdata
+
+sys.modules["continum.AskData"] = continum.askdata
+
 from continum.config import settings
 from continum.orchestration import app_graph
 from continum.state import AgentState

@@ -143,6 +143,60 @@ const AUDIENCE_SELECTION_STEPS: InterviewFieldStep[] = [
   },
 ]
 
+const STORE_AUDIENCE_SELECTION_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'clusterSegment',
+    question: 'Which physical store cluster segment should we target?',
+    pills: [
+      { id: 'seg-flagship', label: 'Flagship stores', value: 'flagship-stores', fieldKey: 'clusterSegment' },
+      { id: 'seg-express', label: 'Express stores', value: 'express-stores', fieldKey: 'clusterSegment' },
+      { id: 'seg-all-stores', label: 'All retail stores', value: 'all-stores', fieldKey: 'clusterSegment' },
+    ],
+  },
+  {
+    fieldKey: 'storeClusterPercent',
+    question: 'What percent of store clusters should enter the test?',
+    pills: [
+      { id: 'st-25', label: '25% of clusters', value: 25, fieldKey: 'storeClusterPercent' },
+      { id: 'st-50', label: '50% of clusters', value: 50, fieldKey: 'storeClusterPercent' },
+      { id: 'st-100', label: '100% of clusters', value: 100, fieldKey: 'storeClusterPercent' },
+    ],
+  },
+]
+
+const STORE_EXPERIMENT_TYPE_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'experimentType',
+    question: 'Confirm the recommended physical store trial design:',
+    pills: [
+      { id: 'type-crt', label: 'Cluster-Randomized Trial (CRT)', value: 'Cluster-Randomized Trial', fieldKey: 'experimentType' },
+      { id: 'type-matched', label: 'Matched-Pair Store Test', value: 'Matched-Pair Test', fieldKey: 'experimentType' },
+      { id: 'type-synthetic', label: 'Synthetic Control Store Test', value: 'Synthetic Control', fieldKey: 'experimentType' },
+    ],
+  },
+]
+
+const STORE_OPPORTUNITY_SIZING_STEPS: InterviewFieldStep[] = [
+  {
+    fieldKey: 'storeFootTraffic',
+    question: 'What monthly store foot traffic volume should we size against?',
+    pills: [
+      { id: 'trf-50k', label: '50k store visits', value: 50000, fieldKey: 'storeFootTraffic' },
+      { id: 'trf-100k', label: '100k store visits', value: 100000, fieldKey: 'storeFootTraffic' },
+      { id: 'trf-250k', label: '250k store visits', value: 250000, fieldKey: 'storeFootTraffic' },
+    ],
+  },
+  {
+    fieldKey: 'currentBasketSize',
+    question: 'What is the current baseline basket size ($)?',
+    pills: [
+      { id: 'bs-45', label: '$45.00', value: 45, fieldKey: 'currentBasketSize' },
+      { id: 'bs-65', label: '$65.00', value: 65, fieldKey: 'currentBasketSize' },
+      { id: 'bs-85', label: '$85.00', value: 85, fieldKey: 'currentBasketSize' },
+    ],
+  },
+]
+
 const GENERIC_STEPS: InterviewFieldStep[] = [
   {
     fieldKey: 'notes',
@@ -162,7 +216,12 @@ const INTERVIEW_BY_MODULE: Partial<Record<ModuleId, InterviewFieldStep[]>> = {
   'brief-generator': [],
 }
 
-export function getInterviewSteps(moduleId: ModuleId): InterviewFieldStep[] {
+export function getInterviewSteps(moduleId: ModuleId, channel: ProjectChannel = 'digital'): InterviewFieldStep[] {
+  if (channel === 'store') {
+    if (moduleId === 'audience-selection') return STORE_AUDIENCE_SELECTION_STEPS
+    if (moduleId === 'experiment-type') return STORE_EXPERIMENT_TYPE_STEPS
+    if (moduleId === 'opportunity-sizing') return STORE_OPPORTUNITY_SIZING_STEPS
+  }
   return INTERVIEW_BY_MODULE[moduleId] ?? GENERIC_STEPS
 }
 
@@ -233,8 +292,9 @@ export function buildAutoFillSummary(
 export function getNextInterviewStep(
   moduleId: ModuleId,
   confirmedFieldKeys: string[],
+  channel: ProjectChannel = 'digital',
 ): InterviewFieldStep | null {
-  const steps = getInterviewSteps(moduleId)
+  const steps = getInterviewSteps(moduleId, channel)
   return steps.find((step) => !confirmedFieldKeys.includes(step.fieldKey)) ?? null
 }
 

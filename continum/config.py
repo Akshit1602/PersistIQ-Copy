@@ -7,6 +7,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+STATIC_DOMAIN_TABLES = {"accounts", "users", "stores", "customers", "metric_catalog"}
+DYNAMIC_EXPERIMENT_TABLES = {
+    "experiments",
+    "variants",
+    "experiment_exposures",
+    "experiment_assignments",
+    "experiment_results",
+    "learnings_archive",
+}
+
 
 class Settings(BaseSettings):
     APP_NAME: str = "Continum Retail Experimentation Engine"
@@ -28,8 +38,12 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o"
     LLM_TEMPERATURE: float = 0.0
 
-    # Database
-    DATABASE_URL: str = "sqlite:///./continum_warehouse.db"
+    # Database and Data Paths
+    DATABASE_URL: str = "sqlite:///./matchview_omnichannel.db"
+    DEFAULT_SQLITE_PATH: str = "matchview_omnichannel.db"
+    ECOMM_CSV_DIR: str = "sample_data/Ecommerce"
+    STORE_CSV_DIR: str = "sample_data/Store"
+    EXPORT_DIR: str = "runtime_data/exports"
 
     # StatSig Telemetry Connector
     STATSIG_API_KEY: str = ""

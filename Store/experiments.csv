@@ -1,0 +1,2 @@
+experiment_id,name,hypothesis,allocation_level,status,target_metric,start_date,end_date
+EXP_S01,Self-Checkout Kiosk Placement,Adding kiosks reduces register queue time,Store-Level,Concluded,MTR_S01,2026-05-01,2026-05-21

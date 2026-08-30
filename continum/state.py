@@ -195,6 +195,7 @@ class AgentState(TypedDict):
     messages: Annotated[List[Any], operator.add]
     active_project_id: Optional[str]
     active_experiment_id: Optional[str]
+    domain_context: Optional[Literal["ecomm", "store"]]
     thread_id: str
     active_phase: PhaseType
     schema_metadata: Optional[SchemaMetadata]
@@ -231,6 +232,7 @@ class IngestionState(TypedDict):
 class PlanningState(TypedDict):
     messages: Annotated[List[Any], operator.add]
     active_experiment_id: Optional[str]
+    domain_context: Optional[Literal["ecomm", "store"]]
     experiment_brief: Optional[ExperimentBrief]
     # Inputs required by ExpSuite.planning — no defaults invented for these.
     baseline_rate: Optional[float]
@@ -273,6 +275,7 @@ class MonitoringState(TypedDict):
 class AnalysisState(TypedDict):
     messages: Annotated[List[Any], operator.add]
     active_experiment_id: str
+    domain_context: Optional[Literal["ecomm", "store"]]
     primary_metric: str
     use_cuped: bool
     # Inputs required by ExpSuite.calculate_hypothesis_test.
@@ -315,6 +318,7 @@ class AskDataState(TypedDict):
     """
 
     messages: Annotated[List[Any], operator.add]
+    domain_context: Optional[Literal["ecomm", "store"]]
     # SQL branch — AskData.execute_sql_query.
     query: Optional[str]
     generated_sql: Optional[str]

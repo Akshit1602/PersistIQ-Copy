@@ -1,0 +1,11 @@
+store_id,store_name,city,state,region,store_format,square_footage,opened_at
+STR_001,Store #001 - West Angela,South Williamside,KY,Midwest,Flagship,19626,2025-11-04
+STR_002,Store #002 - East Theresafurt,Lauramouth,OH,West,Flagship,34278,2025-05-23
+STR_003,Store #003 - Kariborough,Porterton,AZ,Midwest,Flagship,32272,2025-03-05
+STR_004,Store #004 - Lake Mason,Stoneberg,PA,Midwest,Flagship,17282,2025-02-13
+STR_005,Store #005 - West Sarah,Franciscoport,OR,East,Express,23778,2025-03-09
+STR_006,Store #006 - Williamhaven,Ericksonport,NJ,West,Express,29187,2025-04-16
+STR_007,Store #007 - West Markville,Silvatown,PA,West,Flagship,25418,2025-12-19
+STR_008,Store #008 - Bakershire,Lake Brett,NJ,Midwest,Flagship,25473,2025-07-27
+STR_009,Store #009 - New Cristina,Hernandezbury,AZ,Midwest,Flagship,32305,2025-01-17
+STR_010,Store #010 - East Andrewmouth,Hernandezborough,MT,Midwest,Express,23536,2025-12-18

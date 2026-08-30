@@ -2,7 +2,7 @@ import logging
 
 from langgraph.graph import END, START, StateGraph
 
-from continum.AskData import ChartGeneratorInput, generate_visualization
+from continum.askdata import ChartGeneratorInput, generate_visualization
 from continum.ExpSuite.causal import DiDInput, calculate_diff_in_diff
 from continum.ExpSuite.stats_inference import (
     CUPEDInput,
@@ -136,9 +136,14 @@ def synthesize_roi_node(state: AnalysisState) -> dict:
     if not stat:
         return {}
 
-    # Deliberately arithmetic-only over an already-computed lift. Projecting
-    # revenue would need traffic and order value, which this graph is not given;
-    # inventing them is what the fabrication guardrail exists to prevent.
+    domain_context = state.get("domain_context") or "ecomm"
+    domain_basis = (
+        "Focusing on digital funnel metrics (AOV, Quote Approval, Conversion Rate)."
+        if domain_context == "ecomm"
+        else "Focusing on physical store retail metrics (Basket Size, Zone Dwell Time, POS Velocity)."
+    )
+
+    # Deliberately arithmetic-only over an already-computed lift.
     return {
         "roi_summary": {
             "absolute_lift": stat["absolute_lift"],
@@ -146,9 +151,8 @@ def synthesize_roi_node(state: AnalysisState) -> dict:
             "ci_lower": stat["ci_lower"],
             "ci_upper": stat["ci_upper"],
             "is_stat_sig": stat["is_stat_sig"],
-            "basis": "Derived from the hypothesis test result only. Revenue "
-            "projection requires traffic and average order value — run "
-            "opportunity sizing or the growth forecast for that.",
+            "domain_context": domain_context,
+            "basis": f"{domain_basis} Derived from hypothesis test results.",
         }
     }
 
