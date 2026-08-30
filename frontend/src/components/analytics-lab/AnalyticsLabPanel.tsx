@@ -1,5 +1,5 @@
-import { ArrowLeft, ChevronLeft, FlaskConical, History, LayoutList, PanelRightClose, Settings2 } from 'lucide-react'
-import { ANALYTICS_LAB_COLLAPSED_WIDTH, ANALYTICS_LAB_WIDTH } from '../../constants/layout'
+import { ArrowLeft, ChevronLeft, FlaskConical, History, LayoutList, Maximize2, Minimize2, PanelRightClose, Settings2 } from 'lucide-react'
+import { ANALYTICS_LAB_COLLAPSED_WIDTH, ANALYTICS_LAB_WIDTH, ANALYTICS_LAB_EXPANDED_WIDTH } from '../../constants/layout'
 import { useMatchView } from '../../context/MatchViewContext'
 import type { LabPanelView } from '../../context/types'
 import { AppIcon } from '../shared/AppIcon'
@@ -47,6 +47,8 @@ export function AnalyticsLabPanel() {
     selectedExperiment,
     analyticsLabCollapsed,
     toggleAnalyticsLabCollapsed,
+    analyticsLabExpanded,
+    toggleAnalyticsLabExpanded,
     setLabPanelView,
     moduleRunsByExperiment,
   } = useMatchView()
@@ -87,8 +89,8 @@ export function AnalyticsLabPanel() {
 
   return (
     <aside
-      className="lab-panel flex shrink-0 flex-col overflow-hidden border-r border-border-muted/10"
-      style={{ width: ANALYTICS_LAB_WIDTH }}
+      className="lab-panel flex shrink-0 flex-col overflow-hidden border-r border-border-muted/10 transition-[width] duration-instant ease-in-out"
+      style={{ width: analyticsLabExpanded ? ANALYTICS_LAB_EXPANDED_WIDTH : ANALYTICS_LAB_WIDTH }}
       aria-label="Advanced Analytics Lab"
     >
       <header className="relative shrink-0 overflow-hidden border-b border-border-muted/12 px-3 pb-3 pt-3">
@@ -110,6 +112,15 @@ export function AnalyticsLabPanel() {
             </h2>
             <p className="type-subtitle mt-0.5">Modules & experiment results</p>
           </div>
+          <button
+            type="button"
+            onClick={toggleAnalyticsLabExpanded}
+            className="focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
+            aria-label={analyticsLabExpanded ? 'Contract Analytics Lab' : 'Expand Analytics Lab'}
+            title={analyticsLabExpanded ? 'Contract panel' : 'Expand panel'}
+          >
+            <AppIcon icon={analyticsLabExpanded ? Minimize2 : Maximize2} size="sm" />
+          </button>
           <button
             type="button"
             onClick={toggleAnalyticsLabCollapsed}

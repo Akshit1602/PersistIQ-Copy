@@ -1,5 +1,4 @@
-import type { ModuleId, Persona, Phase, WorkspaceStat } from '../context/types'
-import { WORKSPACE_STATS } from './workspaceStats'
+import type { ModuleId, Persona, Phase } from '../context/types'
 
 export type ModulePhaseId = 'foundation' | 'preplanning' | 'monitoring' | 'causal'
 
@@ -41,9 +40,9 @@ export const MODULE_LIST: ModuleDefinition[] = [
   { id: 'metrics-tracking', label: 'Metrics Tracking', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '1.76s' },
   { id: 'experiment-type', label: 'Experiment Type', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '1.20s' },
   { id: 'power-calculator', label: 'Power Calculator', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '3.88s' },
-  { id: 'audience-selection', label: 'Audience Selection', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '3.10s' },
   { id: 'balance-diagnostics', label: 'Balance Diagnostics', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '2.67s' },
   { id: 'brief-generator', label: 'Brief Generator', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '4.12s' },
+  { id: 'audience-selection', label: 'Audience Selection', phaseId: 'preplanning', phaseLabel: 'Pre-Planning & Specs', executivePhase: 'planning', mockDuration: '3.10s' },
   { id: 'experiment-analysis', label: 'Experiment Analysis', phaseId: 'monitoring', phaseLabel: 'Live Execution Monitoring', executivePhase: 'monitoring', mockDuration: '2.34s' },
   { id: 'health-monitor', label: 'Health Monitor', phaseId: 'monitoring', phaseLabel: 'Live Execution Monitoring', executivePhase: 'monitoring', mockDuration: '1.12s' },
   { id: 'sequential-testing', label: 'Sequential Testing', phaseId: 'monitoring', phaseLabel: 'Live Execution Monitoring', executivePhase: 'monitoring', mockDuration: '5.01s' },
@@ -222,10 +221,6 @@ export function getActionPills(
     return MODULE_PILLS[mod.id]!
   }
   return ANALYST_BUCKET_PILLS[mod?.executivePhase ?? phase] ?? ANALYST_BUCKET_PILLS.auto ?? []
-}
-
-export function getWorkspaceStats(): WorkspaceStat[] {
-  return [...WORKSPACE_STATS]
 }
 
 export function getModuleConsoleLogs(moduleId: ModuleId | null, experiment: string): string[] {

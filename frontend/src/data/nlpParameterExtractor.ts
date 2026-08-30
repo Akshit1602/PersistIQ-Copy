@@ -1,5 +1,6 @@
 import type { ModuleId } from '../context/types'
 import { fillModuleDefaults } from './experimentBaselines'
+import type { SuggestionContext } from './inputSuggestions'
 import { MODULE_BY_ID, MODULE_LIST } from './moduleRegistry'
 
 export interface NlpExtractionResult {
@@ -11,6 +12,7 @@ export interface NlpExtractionResult {
 
 const MODULE_ALIASES: [RegExp, ModuleId][] = [
   [/power\s*calc(ulator)?|sample\s*size|statistical\s*power/i, 'power-calculator'],
+  [/forecast(ing)?|counterfactual/i, 'forecasting'],
   [/causal\s*(did|difference)/i, 'causal-did'],
   [/simpson'?s?\s*paradox/i, 'simpsons-paradox'],
   [/schema\s*(discovery|scan)/i, 'schema-discovery'],
@@ -81,6 +83,25 @@ function extractPowerCalculatorParams(text: string): Record<string, unknown> {
   return params
 }
 
+function extractForecastingParams(text: string): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+
+  // "5 week forecasting", "only 5 weeks", "show 5-week forecast" etc.
+  const weeksMatch =
+    text.match(/(\d{1,3})\s*[-\s]?week/i) ??
+    text.match(/weeks?\s*[=:]\s*(\d{1,3})/i)
+  if (weeksMatch?.[1]) {
+    const n = parseInt(weeksMatch[1], 10)
+    if (n > 0 && n <= 52) params.weeksOfFlight = n
+  }
+
+  // "12/26/52 week horizon" maps to the fixed future-projection selector.
+  const horizonMatch = text.match(/(12|26|52)\s*[-\s]?week\s*horizon/i)
+  if (horizonMatch?.[1]) params.horizonWeeks = parseInt(horizonMatch[1], 10)
+
+  return params
+}
+
 function extractOpportunitySizingParams(text: string): Record<string, unknown> {
   const params: Record<string, unknown> = {}
 
@@ -115,9 +136,20 @@ function extractOpportunitySizingParams(text: string): Record<string, unknown> {
 
 function isAnalyticalCommand(text: string): boolean {
   return (
-    /compute|calculat|sample\s*size|power|alpha|beta|mde|configure|adjust|set\s+|size\s+|approv|proceed|suggest|recommend|validate\s+hypothesis/i.test(
+    /compute|calculat|sample\s*size|power|alpha|beta|mde|configure|adjust|set\s+|size\s+|approv|proceed|suggest|recommend|validate\s+hypothesis|run\s+(simulation|forecast|model|analysis)|give\s+(me\s+)?(a\s+)?\d+|show\s+(me\s+)?\d+|next\s+\d+\s*week|\d+\s*week\s*(forecast|prediction)/i.test(
       text,
     ) || findModuleInText(text) !== null
+  )
+}
+
+/** Genuine questions ("what does X check for?", "how does the matching work?")
+ * should reach the real LLM for an actual answer, not silently redirect to a
+ * module panel just because they happen to mention that module's name. */
+function looksLikeQuestion(text: string): boolean {
+  const trimmed = text.trim()
+  return (
+    trimmed.endsWith('?') ||
+    /^(what|how|why|when|where|which|who|does|is|are|can|could|would|should|explain|tell me|describe)\b/i.test(trimmed)
   )
 }
 
@@ -125,6 +157,7 @@ export function extractNlpParameters(
   text: string,
   experiment: string,
   activeModuleId: ModuleId | null,
+  suggestionContext?: SuggestionContext,
 ): NlpExtractionResult | null {
   if (!isAnalyticalCommand(text)) return null
 
@@ -133,6 +166,8 @@ export function extractNlpParameters(
 
   if (moduleId === 'power-calculator') {
     partial = extractPowerCalculatorParams(text)
+  } else if (moduleId === 'forecasting') {
+    partial = extractForecastingParams(text)
   } else if (moduleId === 'opportunity-sizing') {
     partial = extractOpportunitySizingParams(text)
   } else if (moduleId === 'metrics-tracking') {
@@ -147,7 +182,18 @@ export function extractNlpParameters(
   }
 
   const touchedFields = Object.keys(partial)
-  const { values, autoFilled } = fillModuleDefaults(moduleId, experiment, partial)
+
+  // No concrete parameters were parsed — if this reads like a genuine
+  // question rather than a configuration command, don't redirect; let it
+  // fall through to the real LLM for an actual conversational answer.
+  if (touchedFields.length === 0 && looksLikeQuestion(text)) return null
+
+  const { values, autoFilled } = fillModuleDefaults(
+    moduleId,
+    experiment,
+    partial,
+    suggestionContext,
+  )
 
   return {
     moduleId,

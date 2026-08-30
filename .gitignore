@@ -36,3 +36,6 @@ runtime_data/
 
 # graphify knowledge graph (regenerate with: graphify update .)
 graphify-out/
+
+# foglamp scan (contains edit token)
+.foglamp/

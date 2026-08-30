@@ -1,167 +1,276 @@
-import json
+"""
+Chart construction for the copilot.
+
+Every builder here produces a `ChartSpec` -- the renderer-neutral form the
+MatchView frontend draws -- and Plotly JSON is derived from that one spec rather
+than hand-assembled per chart type. Previously each builder wrote its own
+`go.Figure`, so the frontend had nothing to render but a Plotly blob it has no
+library for, and the three hard-coded chart types were the only shapes the
+copilot could ever produce. `generate_visualization` now also accepts the
+generic kinds (bar/line/pie/...) and raw result rows, which is what lets an
+arbitrary question get a chart.
+"""
+
 from typing import Any, Dict, List, Optional
 
-import plotly.express as px
-import plotly.graph_objects as go
 from pydantic import BaseModel, Field
+
+from continum.AskData.chart_spec import (
+    SERIES_COLORS,
+    ChartSeries,
+    ChartSpec,
+    derive_chart_spec,
+    spec_to_plotly,
+    summarize_spec,
+)
+
+# Named chart types carry domain semantics (which arm is which, what the error
+# bar means); generic kinds are shape-only and take their meaning from `data`.
+NAMED_CHART_TYPES = ("metric_lift", "srm_distribution", "growth_forecast")
+GENERIC_CHART_KINDS = ("bar", "grouped_bar", "line", "area", "pie", "scatter")
+SUPPORTED_CHART_TYPES = NAMED_CHART_TYPES + GENERIC_CHART_KINDS + ("auto",)
 
 
 class ChartGeneratorInput(BaseModel):
     chart_type: str = Field(
-        ...,
-        description="Type of chart: 'metric_lift', 'srm_distribution', 'p_value_trend', 'growth_forecast'",
+        "auto",
+        description=(
+            "One of: 'auto' (infer from rows), 'metric_lift', 'srm_distribution', "
+            "'growth_forecast', 'bar', 'grouped_bar', 'line', 'area', 'pie', 'scatter'"
+        ),
     )
     title: str = Field("Experiment Visualization", description="Chart title")
-    data: Dict[str, Any] = Field(..., description="Data required for the specified chart type")
+    data: Dict[str, Any] = Field(
+        default_factory=dict, description="Data required for the specified chart type"
+    )
 
 
 class ChartGeneratorResult(BaseModel):
     chart_type: str
-    plotly_json: Dict[str, Any]
+    # The renderer-neutral spec the UI draws. None when the supplied data held
+    # nothing plottable -- callers must fall back to text rather than render an
+    # empty axis.
+    chart_spec: Optional[ChartSpec] = None
+    plotly_json: Dict[str, Any] = Field(default_factory=dict)
     summary: str
 
 
-def build_metric_lift_chart(
+def build_metric_lift_spec(
     control_mean: float,
     treatment_mean: float,
     ci_lower: Optional[float] = None,
     ci_upper: Optional[float] = None,
     metric_name: str = "Metric",
     title: str = "Control vs. Treatment Comparison",
-) -> Dict[str, Any]:
+) -> ChartSpec:
     """
-    Renders a bar chart comparing Control and Treatment with optional confidence interval error bars.
+    Control against treatment, with the confidence interval drawn as an error
+    bar on the treatment arm only -- the interval is on the estimated effect,
+    and putting it on the control baseline would misstate what was measured.
     """
-    categories = ["Control", "Treatment"]
-    means = [control_mean, treatment_mean]
-
-    error_y = None
+    error: Optional[List[Optional[float]]] = None
     if ci_lower is not None and ci_upper is not None:
-        # Treatment error bar relative calculation
-        error_val = (ci_upper - ci_lower) / 2.0
-        error_y = dict(type="data", array=[0, error_val], visible=True)
+        error = [None, (ci_upper - ci_lower) / 2.0]
 
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=categories,
-                y=means,
-                marker_color=["#636EFA", "#00CC96"],
-                error_y=error_y,
-                text=[f"{m:.4f}" for m in means],
-                textposition="auto",
-            )
-        ]
-    )
-
-    fig.update_layout(
+    return ChartSpec(
+        kind="bar",
         title=title,
-        yaxis_title=metric_name,
-        template="plotly_white",
-        margin=dict(l=40, r=40, t=60, b=40),
+        categories=["Control", "Treatment"],
+        series=[
+            ChartSeries(
+                name=metric_name,
+                values=[control_mean, treatment_mean],
+                color=SERIES_COLORS[0],
+                error=error,
+            )
+        ],
+        y_title=metric_name,
+        notes=(
+            ["Error bar shows the confidence interval on the treatment estimate."] if error else []
+        ),
     )
 
-    return json.loads(fig.to_json())
 
-
-def build_srm_distribution_chart(
+def build_srm_distribution_spec(
     observed_counts: List[int],
     expected_counts: List[float],
     variant_names: Optional[List[str]] = None,
     title: str = "Sample Ratio Allocation (SRM Check)",
-) -> Dict[str, Any]:
-    """
-    Renders a grouped bar chart comparing observed vs expected traffic counts per variant.
-    """
-    num_variants = len(observed_counts)
+) -> ChartSpec:
+    """Observed against expected exposure per variant, grouped side by side."""
+    num_variants = max(len(observed_counts), len(expected_counts))
     names = variant_names or ["Control"] + [f"Treatment_{i}" for i in range(1, num_variants)]
 
-    fig = go.Figure(
-        data=[
-            go.Bar(name="Observed", x=names, y=observed_counts, marker_color="#19D3F3"),
-            go.Bar(name="Expected", x=names, y=expected_counts, marker_color="#FF6692"),
-        ]
-    )
-
-    fig.update_layout(
+    return ChartSpec(
+        kind="grouped_bar",
         title=title,
-        barmode="group",
-        yaxis_title="User Count",
-        template="plotly_white",
-        margin=dict(l=40, r=40, t=60, b=40),
+        categories=list(names[:num_variants]),
+        series=[
+            ChartSeries(
+                name="Observed",
+                values=[float(c) for c in observed_counts],
+                color=SERIES_COLORS[0],
+            ),
+            ChartSeries(
+                name="Expected",
+                values=[float(c) for c in expected_counts],
+                color=SERIES_COLORS[1],
+            ),
+        ],
+        y_title="User Count",
     )
 
-    return json.loads(fig.to_json())
 
-
-def build_growth_forecast_chart(
+def build_growth_forecast_spec(
     p10_annual: float,
     p50_annual: float,
     p90_annual: float,
     title: str = "Projected Annual Revenue Lift Distribution",
-) -> Dict[str, Any]:
-    """
-    Renders a horizon bar/range chart showing P10, P50, and P90 growth projections.
-    """
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Bar(
-            x=["P10 (Pessimistic)", "P50 (Expected)", "P90 (Optimistic)"],
-            y=[p10_annual, p50_annual, p90_annual],
-            marker_color=["#FFA15A", "#00CC96", "#AB63FA"],
-            text=[f"${v:,.2f}" for v in [p10_annual, p50_annual, p90_annual]],
-            textposition="auto",
-        )
-    )
-
-    fig.update_layout(
+) -> ChartSpec:
+    """The three simulated percentiles as a range, lowest to highest."""
+    return ChartSpec(
+        kind="bar",
         title=title,
-        yaxis_title="Annual Revenue Lift ($)",
-        template="plotly_white",
-        margin=dict(l=40, r=40, t=60, b=40),
+        categories=["P10 (Pessimistic)", "P50 (Expected)", "P90 (Optimistic)"],
+        series=[
+            ChartSeries(
+                name="Annual Revenue Lift",
+                values=[p10_annual, p50_annual, p90_annual],
+                color=SERIES_COLORS[1],
+            )
+        ],
+        y_title="Annual Revenue Lift ($)",
+        value_format="currency",
     )
 
-    return json.loads(fig.to_json())
+
+def build_generic_spec(kind: str, title: str, data: Dict[str, Any]) -> Optional[ChartSpec]:
+    """
+    Builds a shape-only chart from either explicit categories/series or raw
+    result rows. Returns None when neither form carries plottable numbers, so
+    the caller reports "no chart" rather than rendering an empty frame.
+    """
+    rows = data.get("rows")
+    if rows:
+        return derive_chart_spec(
+            rows,
+            columns=data.get("columns"),
+            title=title,
+            preferred_kind=kind if kind in GENERIC_CHART_KINDS else None,
+        )
+
+    categories = [str(c) for c in (data.get("categories") or data.get("x") or [])]
+    raw_series = data.get("series") or []
+
+    # Accept the one-series shorthand `{"categories": [...], "values": [...]}`.
+    if not raw_series and data.get("values"):
+        raw_series = [{"name": data.get("series_name") or "Value", "values": data["values"]}]
+
+    series: List[ChartSeries] = []
+    for index, entry in enumerate(raw_series):
+        if isinstance(entry, dict):
+            values = entry.get("values") or []
+            name = str(entry.get("name") or f"Series {index + 1}")
+            error = entry.get("error")
+        else:
+            values, name, error = list(entry), f"Series {index + 1}", None
+        numeric = [None if v is None else float(v) for v in values]
+        if not any(v is not None for v in numeric):
+            continue
+        series.append(
+            ChartSeries(
+                name=name,
+                values=numeric,
+                color=SERIES_COLORS[index % len(SERIES_COLORS)],
+                error=error,
+            )
+        )
+
+    if not categories or not series:
+        return None
+
+    return ChartSpec(
+        kind=kind if kind in GENERIC_CHART_KINDS else ("grouped_bar" if len(series) > 1 else "bar"),
+        title=title,
+        categories=categories,
+        series=series,
+        x_title=str(data.get("x_title") or ""),
+        y_title=str(data.get("y_title") or ""),
+        value_format=data.get("value_format") or "number",
+    )
+
+
+def build_chart_spec(input_data: ChartGeneratorInput) -> Optional[ChartSpec]:
+    """Dispatches to the builder for `chart_type`. None when nothing is plottable."""
+    chart_type = (input_data.chart_type or "auto").strip().lower()
+    data = input_data.data or {}
+
+    if chart_type == "metric_lift":
+        return build_metric_lift_spec(
+            control_mean=float(data.get("control_mean", 0.0)),
+            treatment_mean=float(data.get("treatment_mean", 0.0)),
+            ci_lower=data.get("ci_lower"),
+            ci_upper=data.get("ci_upper"),
+            metric_name=data.get("metric_name", "Value"),
+            title=input_data.title,
+        )
+    if chart_type == "srm_distribution":
+        return build_srm_distribution_spec(
+            observed_counts=data.get("observed_counts", []),
+            expected_counts=data.get("expected_counts", []),
+            variant_names=data.get("variant_names"),
+            title=input_data.title,
+        )
+    if chart_type == "growth_forecast":
+        return build_growth_forecast_spec(
+            p10_annual=float(data.get("p10", 0.0)),
+            p50_annual=float(data.get("p50", 0.0)),
+            p90_annual=float(data.get("p90", 0.0)),
+            title=input_data.title,
+        )
+    if chart_type == "auto":
+        return build_generic_spec("", input_data.title, data)
+    return build_generic_spec(chart_type, input_data.title, data)
 
 
 def generate_visualization(input_data: ChartGeneratorInput) -> ChartGeneratorResult:
     """
-    Master dispatcher for generating Plotly JSON visualizations based on chart type.
+    Master dispatcher. An unplottable request returns a result with no spec and
+    a summary saying so -- never a placeholder chart of zeroes, which is what
+    the old default branch produced and which reads downstream as real data.
     """
-    c_type = input_data.chart_type
-    d = input_data.data
+    spec = build_chart_spec(input_data)
 
-    if c_type == "metric_lift":
-        fig_json = build_metric_lift_chart(
-            control_mean=d.get("control_mean", 0.0),
-            treatment_mean=d.get("treatment_mean", 0.0),
-            ci_lower=d.get("ci_lower"),
-            ci_upper=d.get("ci_upper"),
-            metric_name=d.get("metric_name", "Value"),
-            title=input_data.title,
+    if spec is None:
+        return ChartGeneratorResult(
+            chart_type=input_data.chart_type,
+            chart_spec=None,
+            plotly_json={},
+            summary=(
+                f"No chart was generated for '{input_data.chart_type}': the supplied "
+                "data contained no numeric series to plot."
+            ),
         )
-    elif c_type == "srm_distribution":
-        fig_json = build_srm_distribution_chart(
-            observed_counts=d.get("observed_counts", []),
-            expected_counts=d.get("expected_counts", []),
-            variant_names=d.get("variant_names"),
-            title=input_data.title,
-        )
-    elif c_type == "growth_forecast":
-        fig_json = build_growth_forecast_chart(
-            p10_annual=d.get("p10", 0.0),
-            p50_annual=d.get("p50", 0.0),
-            p90_annual=d.get("p90", 0.0),
-            title=input_data.title,
-        )
-    else:
-        # Default simple bar chart
-        fig = px.bar(x=["Control", "Treatment"], y=[0, 0], title=input_data.title)
-        fig_json = json.loads(fig.to_json())
 
     return ChartGeneratorResult(
-        chart_type=c_type,
-        plotly_json=fig_json,
-        summary=f"Successfully generated Plotly JSON for '{c_type}' visual.",
+        chart_type=spec.kind if input_data.chart_type in ("auto", "") else input_data.chart_type,
+        chart_spec=spec,
+        plotly_json=spec_to_plotly(spec),
+        summary=summarize_spec(spec),
     )
+
+
+# Backwards-compatible Plotly-returning wrappers. The subgraphs build specs
+# directly; these remain for callers importing the original names.
+
+
+def build_metric_lift_chart(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return spec_to_plotly(build_metric_lift_spec(*args, **kwargs))
+
+
+def build_srm_distribution_chart(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return spec_to_plotly(build_srm_distribution_spec(*args, **kwargs))
+
+
+def build_growth_forecast_chart(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return spec_to_plotly(build_growth_forecast_spec(*args, **kwargs))

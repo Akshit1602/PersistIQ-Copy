@@ -1,4 +1,9 @@
-const API_BASE_URL = 'http://localhost:8000';
+/**
+ * Empty string means same-origin, which is what Databricks Apps needs: there the
+ * FastAPI process serves the built SPA and the API from one host. Local dev sets
+ * VITE_API_BASE_URL in frontend/.env.local to reach the backend on its own port.
+ */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface Experiment {
   experiment_id: string;
@@ -35,6 +40,50 @@ export async function fetchExperiments(): Promise<Experiment[]> {
     throw new Error(`Failed to fetch experiments: ${res.statusText}`);
   }
   return res.json();
+}
+
+export interface InputSuggestionField {
+  value: number;
+  source: string;
+  confidence: string;
+  rationale: string;
+  row_count: number;
+  as_of?: string | null;
+}
+
+export interface InputSuggestionResponse {
+  experiment: string;
+  channel: string;
+  source: string;
+  as_of?: string | null;
+  experiment_match?: string | null;
+  fields: Record<string, InputSuggestionField>;
+}
+
+const EMPTY_SUGGESTIONS: InputSuggestionResponse = {
+  experiment: '',
+  channel: 'digital',
+  source: 'unavailable',
+  fields: {},
+};
+
+/**
+ * Baselines derived from the selected experiment's own data. Resolves to an
+ * empty field map on any failure: a missing profile must degrade to the app's
+ * own suggestions, never break the form.
+ */
+export async function fetchInputSuggestions(
+  experiment: string,
+  channel: string,
+): Promise<InputSuggestionResponse> {
+  try {
+    const params = new URLSearchParams({ experiment, channel });
+    const res = await fetch(`${API_BASE_URL}/api/suggestions/inputs?${params}`);
+    if (!res.ok) return { ...EMPTY_SUGGESTIONS, experiment, channel };
+    return await res.json();
+  } catch {
+    return { ...EMPTY_SUGGESTIONS, experiment, channel };
+  }
 }
 
 /**

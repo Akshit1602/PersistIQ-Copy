@@ -1,22 +1,53 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronLeft, ChevronRight, ChevronsRight, Info, Sparkles, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, ChevronsRight, Info, X } from 'lucide-react'
 import { useMatchView } from '../../context/MatchViewContext'
 import { buildBriefBody } from '../../data/briefBuilder'
 import {
   createEmptyValidatorDraft,
   draftToModuleSnapshots,
   isStepValid,
-  OPPORTUNITY_AUTO_DETECTED,
-  POWER_AUTO_DETECTED,
   seedDerivedTypeFromDraft,
   VALIDATOR_STEPS,
   type HypothesisValidatorDraft,
   type ValidatorStepIndex,
 } from '../../data/hypothesisValidatorDraft'
 import type { ExperimentTypeChoice } from '../../context/types'
+import { shouldPrefill, type FieldSuggestion, type SuggestionScope } from '../../data/inputSuggestions'
 import { NumericSliderField } from '../shared/NumericSliderField'
 import { AppIcon } from '../shared/AppIcon'
+import { SuggestedValueBadge } from '../shared/SuggestedValueBadge'
 import { MultiSelectDropdown } from '../shared/MultiSelectDropdown'
+import { StoreHypothesisExtras } from './StoreHypothesisExtras'
+import { STORE_HYPOTHESIS_EXTRAS_DEFAULTS } from '../../data/storeHypothesisExtras'
+import { StoreOpportunitySizingStep } from './StoreOpportunitySizingStep'
+import { StoreMetricsStep } from './StoreMetricsStep'
+import { StoreRolloutTargetingStep } from './StoreRolloutTargetingStep'
+import { StorePowerStep } from './StorePowerStep'
+import {
+  STORE_OPPORTUNITY_DEFAULTS,
+  STORE_VALIDATOR_STEPS,
+  type StoreValidatorStepIndex,
+} from '../../data/storeHypothesisValidator'
+import {
+  STORE_ROLLOUT_DEFAULTS,
+  isStoreRolloutValid,
+  type StoreRolloutTargeting,
+} from '../../data/storeRolloutTargeting'
+import {
+  STORE_POWER_DEFAULTS,
+  type StorePowerConfig,
+} from '../../data/storePowerGuardrails'
+import { StoreReviewStep } from './StoreReviewStep'
+import {
+  STORE_CONCURRENCY_REVIEW_DEFAULTS,
+  isConcurrencyReviewValid,
+  type ConcurrencyReviewState,
+} from '../../data/storeConcurrencyReview'
+import { STORE_METRIC_BY_ID } from '../../data/storeMetricCatalog'
+import { computeStoreOpportunityOutputs } from '../../data/storeHypothesisValidator'
+
+/** Union covering both the digital (1-5) and store (1-6) step sequences. */
+type AnyValidatorStepIndex = ValidatorStepIndex | StoreValidatorStepIndex
 import { StepTransitionOverlay } from '../shared/StepTransitionOverlay'
 import { SynthesisProgressOverlay } from '../shared/SynthesisProgressOverlay'
 import {
@@ -25,8 +56,11 @@ import {
   METRIC_KPI_BY_ID,
 } from '../../data/metricCatalog'
 
+/** The blank draft, used to tell "never touched" from "deliberately set". */
+const STARTING_DRAFT = createEmptyValidatorDraft()
+
 type PendingStepAdvance = {
-  nextStep: ValidatorStepIndex
+  nextStep: AnyValidatorStepIndex
   nextDraft?: HypothesisValidatorDraft
 }
 
@@ -96,69 +130,90 @@ const selectClass = `${inputClass} w-full max-w-[45%] appearance-none bg-[length
 const selectChevronBg =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E\")"
 
-function AutoDetectNumberInput({
+/** Metric-bucket suggestion, rendered as KPI labels rather than raw catalog ids. */
+function MetricSuggestionBadge({
+  suggestion,
   value,
-  detectedValue,
-  detectedHint,
+  onApply,
+}: {
+  suggestion?: FieldSuggestion
+  value: string[]
+  onApply: (ids: string[]) => void
+}) {
+  if (!suggestion || !Array.isArray(suggestion.value) || suggestion.value.length === 0) return null
+  return (
+    <SuggestedValueBadge
+      suggestion={suggestion}
+      value={value}
+      formatValue={(v) =>
+        (Array.isArray(v) ? v : [v]).map((id) => METRIC_KPI_BY_ID[String(id)]?.label ?? id).join(', ')
+      }
+      onApply={(ids) => onApply((ids as string[]) ?? [])}
+    />
+  )
+}
+
+/**
+ * A number input that shows where its suggested value came from. The badge is
+ * rendered only when the engine actually has a suggestion — a field with
+ * nothing behind it stays bare rather than claiming a detection it never made.
+ */
+function SuggestedNumberInput({
+  value,
+  suggestion,
   onChange,
   min,
   max,
   step,
   clearValue = 0,
+  formatValue,
 }: {
   value: number
-  detectedValue: number
-  detectedHint: string
+  suggestion?: FieldSuggestion
   onChange: (value: number) => void
   min?: number
   max?: number
   step?: number
   clearValue?: number
+  formatValue?: (value: unknown) => string
 }) {
-  const [applied, setApplied] = useState(false)
-
-  useEffect(() => {
-    if (applied && Number(value) !== Number(detectedValue)) {
-      setApplied(false)
-    }
-  }, [value, detectedValue, applied])
-
   return (
-    <div className="relative">
+    <div>
       <input
         type="number"
-        className={`${inputClass} pr-9`}
+        className={inputClass}
         value={value}
         min={min}
         max={max}
         step={step}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
       />
-      <button
-        type="button"
-        onClick={() => {
-          if (applied) {
-            onChange(clearValue)
-            setApplied(false)
-            return
-          }
-          onChange(detectedValue)
-          setApplied(true)
-        }}
-        className="focus-ring absolute inset-y-0 right-1 my-auto flex h-6 w-6 items-center justify-center rounded-xs text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
-        title={applied ? 'Clear auto-detected value' : `Apply auto-detected: ${detectedHint}`}
-        aria-label={applied ? 'Clear auto-detected value' : `Apply auto-detected value ${detectedHint}`}
-      >
-        <AppIcon icon={applied ? X : Sparkles} size="xs" />
-      </button>
+      {suggestion ? (
+        <SuggestedValueBadge
+          suggestion={suggestion}
+          value={value}
+          formatValue={formatValue}
+          onApply={(next) => onChange(Number(next) || 0)}
+          onRevert={() => onChange(clearValue)}
+        />
+      ) : null}
     </div>
   )
 }
 
 export function HypothesisValidatorPanel() {
-  const { hypothesisValidatorOpen, closeHypothesisValidator, finalizeHypothesisValidator } =
-    useMatchView()
-  const [step, setStep] = useState<ValidatorStepIndex>(1)
+  const {
+    hypothesisValidatorOpen,
+    hypothesisValidatorInitialStep,
+    closeHypothesisValidator,
+    finalizeHypothesisValidator,
+    projects,
+    selectedProjectId,
+    getFieldSuggestions,
+    ensureDatasetSuggestions,
+  } = useMatchView()
+  const channel = projects.find((p) => p.id === selectedProjectId)?.channel ?? 'digital'
+  const [step, setStep] = useState<AnyValidatorStepIndex>(1)
   const [draft, setDraft] = useState<HypothesisValidatorDraft>(createEmptyValidatorDraft)
   const [visible, setVisible] = useState(false)
   const [synthesizing, setSynthesizing] = useState(false)
@@ -169,6 +224,8 @@ export function HypothesisValidatorPanel() {
   finalizeRef.current = finalizeHypothesisValidator
   const pendingAdvanceRef = useRef(pendingAdvance)
   pendingAdvanceRef.current = pendingAdvance
+  /** Field path → the value a pre-fill wrote there, so refills stay reversible. */
+  const prefilledRef = useRef<Record<string, unknown>>({})
   const isBusy = synthesizing || pendingAdvance !== null
 
   useEffect(() => {
@@ -179,6 +236,13 @@ export function HypothesisValidatorPanel() {
     const t = window.setTimeout(() => setVisible(false), 220)
     return () => window.clearTimeout(t)
   }, [hypothesisValidatorOpen])
+
+  // Jump to a specific step when opened via "Edit" from Analytics Lab
+  useEffect(() => {
+    if (hypothesisValidatorOpen && hypothesisValidatorInitialStep != null) {
+      setStep(hypothesisValidatorInitialStep as AnyValidatorStepIndex)
+    }
+  }, [hypothesisValidatorOpen, hypothesisValidatorInitialStep])
 
   useEffect(() => {
     if (!hypothesisValidatorOpen) return
@@ -197,7 +261,210 @@ export function HypothesisValidatorPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hypothesisValidatorOpen, synthesizing, pendingAdvance])
 
-  const canNext = isStepValid(draft, step)
+  // Suggestions follow the draft's own name once it is typed, so a named
+  // experiment picks up its own assignment log instead of the one selected in
+  // the workspace behind the dialog.
+  const suggestionExperiment = draft.name.trim()
+  useEffect(() => {
+    if (suggestionExperiment.length > 2) ensureDatasetSuggestions(suggestionExperiment)
+  }, [suggestionExperiment, ensureDatasetSuggestions])
+
+  // The draft's hypothesis is not a committed spec yet, so it is handed to the
+  // engine directly — otherwise metric and design suggestions would stay empty
+  // for exactly the experiments that need them most.
+  const draftSpecOverride = useMemo(
+    () => ({
+      spec: {
+        name: draft.name,
+        hypothesis: draft.hypothesis,
+        goal: draft.goal,
+        channel,
+      },
+      channel,
+    }),
+    [draft.name, draft.hypothesis, draft.goal, channel],
+  )
+
+  const suggestionsFor = useCallback(
+    (scope: SuggestionScope) =>
+      getFieldSuggestions(scope, suggestionExperiment || undefined, draftSpecOverride),
+    [getFieldSuggestions, suggestionExperiment, draftSpecOverride],
+  )
+
+  const sizingSuggestions = useMemo(
+    () => suggestionsFor('opportunity-sizing'),
+    [suggestionsFor],
+  )
+  const powerSuggestions = useMemo(() => suggestionsFor('power-calculator'), [suggestionsFor])
+  const metricsSuggestions = useMemo(() => suggestionsFor('wizard-metrics'), [suggestionsFor])
+  const storeSizingSuggestions = useMemo(() => suggestionsFor('store-sizing'), [suggestionsFor])
+  const storeRolloutSuggestions = useMemo(() => suggestionsFor('store-rollout'), [suggestionsFor])
+  const storeMetricsSuggestions = useMemo(() => suggestionsFor('store-metrics'), [suggestionsFor])
+
+  // A field is safe to (re)fill while it still holds its starting value, or the
+  // exact value a previous pre-fill wrote — the second case lets a late, more
+  // specific backend suggestion replace the account-wide one it beat us to,
+  // while anything the user typed is left alone forever.
+  const isOverwritable = useCallback(
+    (scope: string, key: string, current: unknown, baseline: unknown) =>
+      current === baseline || current === prefilledRef.current[`${scope}.${key}`],
+    [],
+  )
+
+  // Pre-fill anything confident enough to stand on its own.
+  useEffect(() => {
+    setDraft((d) => {
+      let changed = false
+
+      const applyNumbers = <T extends Record<string, unknown>>(
+        section: T,
+        baseline: T,
+        suggestions: Record<string, FieldSuggestion>,
+        scope: string,
+      ): T => {
+        const next = { ...section }
+        for (const [key, suggestion] of Object.entries(suggestions)) {
+          if (!shouldPrefill(suggestion) || typeof suggestion.value !== 'number') continue
+          if (!(key in next)) continue
+          if (!isOverwritable(scope, key, next[key], baseline[key])) continue
+          ;(next as Record<string, unknown>)[key] = suggestion.value
+          prefilledRef.current[`${scope}.${key}`] = suggestion.value
+          changed = true
+        }
+        return next
+      }
+
+      const opportunity = applyNumbers(
+        d.opportunity,
+        STARTING_DRAFT.opportunity,
+        sizingSuggestions,
+        'opportunity',
+      )
+      const power = applyNumbers(d.power, STARTING_DRAFT.power, powerSuggestions, 'power')
+
+      const metrics = { ...d.metrics }
+      const metricBuckets: [keyof typeof metrics, string][] = [
+        ['primaryMetricIds', 'primaryMetrics'],
+        ['secondaryMetricIds', 'secondaryMetrics'],
+        ['guardrailMetricIds', 'guardrailMetrics'],
+      ]
+      const activeMetricSuggestions =
+        channel === 'store' ? storeMetricsSuggestions : metricsSuggestions
+      for (const [draftKey, suggestionKey] of metricBuckets) {
+        const suggestion = activeMetricSuggestions[suggestionKey]
+        if (!suggestion || !shouldPrefill(suggestion) || !Array.isArray(suggestion.value)) continue
+        if ((metrics[draftKey] as string[]).length > 0) continue
+        ;(metrics[draftKey] as string[]) = suggestion.value as string[]
+        changed = true
+      }
+
+      // KPI baseline boxes are keyed metricInputs.<kpiId>.<field>; only a box
+      // that is still empty is filled.
+      const metricInputs = { ...metrics.metricInputs }
+      for (const [key, suggestion] of Object.entries(activeMetricSuggestions)) {
+        if (!key.startsWith('metricInputs.') || !shouldPrefill(suggestion)) continue
+        const [, kpiId, fieldKey] = key.split('.')
+        if (!kpiId || !fieldKey) continue
+        const current = metricInputs[kpiId]?.[fieldKey] ?? ''
+        if (!isOverwritable('metricInputs', `${kpiId}.${fieldKey}`, current, '')) continue
+        metricInputs[kpiId] = { ...(metricInputs[kpiId] ?? {}), [fieldKey]: String(suggestion.value) }
+        prefilledRef.current[`metricInputs.${kpiId}.${fieldKey}`] = String(suggestion.value)
+        changed = true
+      }
+      metrics.metricInputs = metricInputs
+
+      return changed ? { ...d, opportunity, power, metrics } : d
+    })
+  }, [
+    sizingSuggestions,
+    powerSuggestions,
+    metricsSuggestions,
+    storeMetricsSuggestions,
+    channel,
+    isOverwritable,
+  ])
+
+  // Store sizing and rollout keep their inputs in nested sections, so they get
+  // their own pass over the same untouched-only rule.
+  useEffect(() => {
+    if (channel !== 'store') return
+    setDraft((d) => {
+      const current = (d as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS
+      const rollout = (d as any).storeRollout ?? STORE_ROLLOUT_DEFAULTS
+      let changed = false
+
+      const applySection = <T extends Record<string, unknown>>(
+        section: T,
+        baseline: T,
+        scope: string,
+      ): T => {
+        const next = { ...section }
+        for (const key of Object.keys(next)) {
+          const suggestion = storeSizingSuggestions[key]
+          if (!suggestion || !shouldPrefill(suggestion) || typeof suggestion.value !== 'number') {
+            continue
+          }
+          if (!isOverwritable(scope, key, next[key], baseline[key])) continue
+          ;(next as Record<string, unknown>)[key] = suggestion.value
+          prefilledRef.current[`${scope}.${key}`] = suggestion.value
+          changed = true
+        }
+        return next
+      }
+
+      const storeOpportunity = {
+        ...current,
+        scale: applySection(current.scale, STORE_OPPORTUNITY_DEFAULTS.scale, 'store.scale'),
+        metrics: applySection(current.metrics, STORE_OPPORTUNITY_DEFAULTS.metrics, 'store.metrics'),
+        financials: applySection(
+          current.financials,
+          STORE_OPPORTUNITY_DEFAULTS.financials,
+          'store.financials',
+        ),
+      }
+
+      const storeCount = storeRolloutSuggestions.targetStoreCount
+      let treatmentFilters = rollout.treatmentFilters
+      if (
+        storeCount &&
+        shouldPrefill(storeCount) &&
+        typeof storeCount.value === 'number' &&
+        isOverwritable(
+          'store.rollout',
+          'targetStoreCount',
+          treatmentFilters.targetStoreCount,
+          STORE_ROLLOUT_DEFAULTS.treatmentFilters.targetStoreCount,
+        )
+      ) {
+        treatmentFilters = { ...treatmentFilters, targetStoreCount: storeCount.value }
+        prefilledRef.current['store.rollout.targetStoreCount'] = storeCount.value
+        changed = true
+      }
+
+      return changed
+        ? ({ ...d, storeOpportunity, storeRollout: { ...rollout, treatmentFilters } } as typeof d)
+        : d
+    })
+  }, [channel, storeSizingSuggestions, storeRolloutSuggestions, isOverwritable])
+
+  const storeRollout: StoreRolloutTargeting = (draft as any).storeRollout ?? STORE_ROLLOUT_DEFAULTS
+  const storePower: StorePowerConfig = (draft as any).storePower ?? STORE_POWER_DEFAULTS
+  const storeConcurrencyReview: ConcurrencyReviewState =
+    (draft as any).storeConcurrencyReview ?? STORE_CONCURRENCY_REVIEW_DEFAULTS
+
+  const canNext =
+    channel === 'store'
+      ? step === 3
+        ? isStoreRolloutValid(storeRollout)
+        : step === 4
+          ? isStepValid(draft, 3 as ValidatorStepIndex) // reuses the shared metrics-required-fields check
+          : step === 5
+            ? storePower.aaTestResult ? storePower.aaTestResult.passed : true // hard-blocked if A/A test failed
+            : step === 6
+              ? Boolean(draft.derivedExperimentType && draft.typeRationale) &&
+                isConcurrencyReviewValid(storeConcurrencyReview)
+              : isStepValid(draft, step as ValidatorStepIndex)
+      : isStepValid(draft, step as ValidatorStepIndex)
 
   const resetDraft = () => {
     setStep(1)
@@ -241,6 +508,23 @@ export function HypothesisValidatorPanel() {
       })
       return
     }
+    if (channel === 'store') {
+      // Store sequence: 1 Hypothesis -> 2 Sizing -> 3 Rollout -> 4 Metrics -> 5 Power -> 6 Review
+      if (step === 3) {
+        queueAdvance({ nextStep: 4 })
+        return
+      }
+      if (step === 4) {
+        queueAdvance({ nextStep: 5 })
+        return
+      }
+      if (step === 5) {
+        queueAdvance({ nextStep: 6, nextDraft: seedDerivedTypeFromDraft(draft) })
+        return
+      }
+      return
+    }
+    // Digital sequence: 1 Hypothesis -> 2 Sizing -> 3 Metrics -> 4 Power -> 5 Review
     if (step === 3) {
       queueAdvance({ nextStep: 4 })
       return
@@ -265,7 +549,7 @@ export function HypothesisValidatorPanel() {
   }
 
   const goBack = () => {
-    if (step > 1 && !isBusy) setStep((s) => (s - 1) as ValidatorStepIndex)
+    if (step > 1 && !isBusy) setStep((s) => (s - 1) as AnyValidatorStepIndex)
   }
 
   const runFinalize = useCallback(() => {
@@ -303,7 +587,12 @@ export function HypothesisValidatorPanel() {
   }, [])
 
   const handleGetStarted = () => {
-    if (!isStepValid(draft, 5) || isBusy) return
+    const finalStepValid =
+      channel === 'store'
+        ? Boolean(draft.derivedExperimentType && draft.typeRationale) &&
+          isConcurrencyReviewValid(storeConcurrencyReview)
+        : isStepValid(draft, 5)
+    if (!finalStepValid || isBusy) return
     setSynthesizing(true)
   }
 
@@ -318,6 +607,8 @@ export function HypothesisValidatorPanel() {
     }),
     [],
   )
+
+  const activeSteps = channel === 'store' ? STORE_VALIDATOR_STEPS : VALIDATOR_STEPS
 
   if (!visible && !hypothesisValidatorOpen) return null
 
@@ -355,10 +646,10 @@ export function HypothesisValidatorPanel() {
               id="hypothesis-validator-panel-title"
               className="type-title"
             >
-              Hypothesis Validator
+              Initiative Setup & Benchmarking
             </h2>
             <p className="mt-0.5 text-xs text-text-secondary">
-              Digital experiment setup — Opportunity is optional. Audience comes after the brief.
+              {channel === 'store' ? 'Store' : 'Digital'} experiment setup — Opportunity is optional. Audience comes after the brief.
             </p>
           </div>
           <button
@@ -377,7 +668,7 @@ export function HypothesisValidatorPanel() {
           aria-label="Setup steps"
         >
           <ol className="flex w-full items-start">
-            {VALIDATOR_STEPS.map((s, index) => {
+            {activeSteps.map((s, index) => {
               const done = s.id < step
               const active = s.id === step
               const incomingComplete = s.id <= step
@@ -398,7 +689,7 @@ export function HypothesisValidatorPanel() {
                           aria-hidden="true"
                         />
                       ) : null}
-                      {index < VALIDATOR_STEPS.length - 1 ? (
+                      {index < activeSteps.length - 1 ? (
                         <span
                           className={`absolute inset-y-0 left-1/2 right-0 my-auto h-px ${
                             outgoingComplete ? 'bg-border-muted' : 'bg-border-muted/25'
@@ -419,7 +710,7 @@ export function HypothesisValidatorPanel() {
                       </span>
                     </div>
                     <span
-                      className={`w-full truncate text-micro font-medium leading-tight ${
+                      className={`w-full text-center text-micro font-medium leading-tight ${
                         active ? 'text-text-primary' : 'text-text-secondary'
                       }`}
                       title={s.label}
@@ -453,13 +744,41 @@ export function HypothesisValidatorPanel() {
                   rows={4}
                   value={draft.hypothesis}
                   onChange={(e) => setDraft((d) => ({ ...d, hypothesis: e.target.value }))}
-                  placeholder="If we change X for digital users, then Y will improve because…"
+                  placeholder={`If we change X for ${channel === 'store' ? 'store' : 'digital'} users, then Y will improve because…`}
                 />
               </div>
+              {channel === 'store' && (
+                <StoreHypothesisExtras
+                  extras={(draft as any).storeHypothesisExtras ?? STORE_HYPOTHESIS_EXTRAS_DEFAULTS}
+                  hypothesisName={draft.name}
+                  onChange={(partial) =>
+                    setDraft((d) => ({
+                      ...d,
+                      storeHypothesisExtras: {
+                        ...((d as any).storeHypothesisExtras ?? STORE_HYPOTHESIS_EXTRAS_DEFAULTS),
+                        ...partial,
+                      },
+                    }))
+                  }
+                />
+              )}
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && channel === 'store' && (
+            <StoreOpportunitySizingStep
+              suggestions={storeSizingSuggestions}
+              inputs={(draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeOpportunity: { ...((d as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS), ...partial },
+                }))
+              }
+            />
+          )}
+
+          {step === 2 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Opportunity Sizing</p>
@@ -471,10 +790,10 @@ export function HypothesisValidatorPanel() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <FieldLabel>Monthly inquiries</FieldLabel>
-                  <AutoDetectNumberInput
+                  <SuggestedNumberInput
                     value={draft.opportunity.monthlyInquiries}
-                    detectedValue={OPPORTUNITY_AUTO_DETECTED.monthlyInquiries}
-                    detectedHint={`${OPPORTUNITY_AUTO_DETECTED.monthlyInquiries.toLocaleString()}/month`}
+                    suggestion={sizingSuggestions.monthlyInquiries}
+                    formatValue={(v) => `${Number(v).toLocaleString()}/month`}
                     min={0}
                     step={100}
                     onChange={(monthlyInquiries) =>
@@ -485,10 +804,10 @@ export function HypothesisValidatorPanel() {
 
                 <div className="min-w-0">
                   <FieldLabel>Average order value ($)</FieldLabel>
-                  <AutoDetectNumberInput
+                  <SuggestedNumberInput
                     value={draft.opportunity.aov}
-                    detectedValue={OPPORTUNITY_AUTO_DETECTED.aov}
-                    detectedHint={`$${OPPORTUNITY_AUTO_DETECTED.aov.toLocaleString()}`}
+                    suggestion={sizingSuggestions.aov}
+                    formatValue={(v) => `$${Number(v).toLocaleString()}`}
                     min={0}
                     step={1}
                     onChange={(aov) => patch.opportunity({ aov, skipped: false })}
@@ -499,10 +818,10 @@ export function HypothesisValidatorPanel() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <FieldLabel>Current IOR (0–1)</FieldLabel>
-                  <AutoDetectNumberInput
+                  <SuggestedNumberInput
                     value={draft.opportunity.currentIor}
-                    detectedValue={OPPORTUNITY_AUTO_DETECTED.currentIor}
-                    detectedHint={OPPORTUNITY_AUTO_DETECTED.currentIor.toFixed(4)}
+                    suggestion={sizingSuggestions.currentIor}
+                    formatValue={(v) => Number(v).toFixed(4)}
                     min={0}
                     max={1}
                     step={0.0001}
@@ -512,19 +831,14 @@ export function HypothesisValidatorPanel() {
 
                 <div className="min-w-0">
                   <FieldLabel>Target IOR after experiment</FieldLabel>
-                  <input
-                    type="number"
-                    className={inputClass}
+                  <SuggestedNumberInput
                     value={draft.opportunity.targetIor}
+                    suggestion={sizingSuggestions.targetIor}
+                    formatValue={(v) => Number(v).toFixed(4)}
                     min={0}
                     max={1}
                     step={0.0001}
-                    onChange={(e) =>
-                      patch.opportunity({
-                        targetIor: Number(e.target.value) || 0,
-                        skipped: false,
-                      })
-                    }
+                    onChange={(targetIor) => patch.opportunity({ targetIor, skipped: false })}
                   />
                 </div>
               </div>
@@ -543,6 +857,16 @@ export function HypothesisValidatorPanel() {
                       patch.opportunity({ grossMargin, skipped: false })
                     }
                   />
+                  {sizingSuggestions.grossMargin ? (
+                    <SuggestedValueBadge
+                      suggestion={sizingSuggestions.grossMargin}
+                      value={draft.opportunity.grossMargin}
+                      formatValue={(v) => `${Math.round(Number(v) * 100)}%`}
+                      onApply={(grossMargin) =>
+                        patch.opportunity({ grossMargin: Number(grossMargin), skipped: false })
+                      }
+                    />
+                  ) : null}
                 </div>
 
                 <div className="min-w-0">
@@ -558,12 +882,48 @@ export function HypothesisValidatorPanel() {
                       patch.opportunity({ timeHorizonMonths, skipped: false })
                     }
                   />
+                  {sizingSuggestions.timeHorizonMonths ? (
+                    <SuggestedValueBadge
+                      suggestion={sizingSuggestions.timeHorizonMonths}
+                      value={draft.opportunity.timeHorizonMonths}
+                      formatValue={(v) => `${v} mo`}
+                      onApply={(timeHorizonMonths) =>
+                        patch.opportunity({
+                          timeHorizonMonths: Number(timeHorizonMonths),
+                          skipped: false,
+                        })
+                      }
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>
           )}
 
-          {step === 3 && (
+          {step === 3 && channel === 'store' && (
+            <StoreRolloutTargetingStep
+              suggestions={storeRolloutSuggestions}
+              rollout={storeRollout}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeRollout: { ...((d as any).storeRollout ?? STORE_ROLLOUT_DEFAULTS), ...partial },
+                }))
+              }
+            />
+          )}
+
+          {step === 4 && channel === 'store' && (
+            <StoreMetricsStep
+              suggestions={storeMetricsSuggestions}
+              metrics={draft.metrics}
+              onChange={(partial) =>
+                setDraft((d) => ({ ...d, metrics: { ...d.metrics, ...partial } }))
+              }
+            />
+          )}
+
+          {step === 3 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Metrics And Tracking</p>
@@ -597,6 +957,11 @@ export function HypothesisValidatorPanel() {
                     patch.metrics({ primaryMetricIds, metricInputs })
                   }}
                 />
+                <MetricSuggestionBadge
+                  suggestion={metricsSuggestions.primaryMetrics}
+                  value={draft.metrics.primaryMetricIds}
+                  onApply={(primaryMetricIds) => patch.metrics({ primaryMetricIds })}
+                />
               </div>
 
               <div>
@@ -622,6 +987,11 @@ export function HypothesisValidatorPanel() {
                     for (const id of dropped) delete metricInputs[id]
                     patch.metrics({ secondaryMetricIds, metricInputs })
                   }}
+                />
+                <MetricSuggestionBadge
+                  suggestion={metricsSuggestions.secondaryMetrics}
+                  value={draft.metrics.secondaryMetricIds}
+                  onApply={(secondaryMetricIds) => patch.metrics({ secondaryMetricIds })}
                 />
               </div>
 
@@ -663,6 +1033,25 @@ export function HypothesisValidatorPanel() {
                                   patch.metrics({ metricInputs: next })
                                 }}
                               />
+                              {metricsSuggestions[`metricInputs.${kpiId}.${field.key}`] ? (
+                                <SuggestedValueBadge
+                                  suggestion={
+                                    metricsSuggestions[`metricInputs.${kpiId}.${field.key}`]
+                                  }
+                                  value={draft.metrics.metricInputs[kpiId]?.[field.key] ?? ''}
+                                  onApply={(next) =>
+                                    patch.metrics({
+                                      metricInputs: {
+                                        ...draft.metrics.metricInputs,
+                                        [kpiId]: {
+                                          ...(draft.metrics.metricInputs[kpiId] ?? {}),
+                                          [field.key]: String(next),
+                                        },
+                                      },
+                                    })
+                                  }
+                                />
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -688,11 +1077,32 @@ export function HypothesisValidatorPanel() {
                   value={draft.metrics.guardrailMetricIds}
                   onChange={(guardrailMetricIds) => patch.metrics({ guardrailMetricIds })}
                 />
+                <MetricSuggestionBadge
+                  suggestion={metricsSuggestions.guardrailMetrics}
+                  value={draft.metrics.guardrailMetricIds}
+                  onApply={(guardrailMetricIds) => patch.metrics({ guardrailMetricIds })}
+                />
               </div>
             </div>
           )}
 
-          {step === 4 && (
+          {step === 5 && channel === 'store' && (
+            <StorePowerStep
+              power={storePower}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storePower: { ...((d as any).storePower ?? STORE_POWER_DEFAULTS), ...partial },
+                }))
+              }
+              targetLiftPercent={
+                (((draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS).metrics.targetCvrLift ?? 0) * 100
+              }
+              storeCount={storeRollout.matchResult?.treatmentGroupSize ?? storeRollout.treatmentFilters.targetStoreCount}
+            />
+          )}
+
+          {step === 4 && channel !== 'store' && (
             <div className="flex max-w-full flex-col gap-3.5 overflow-hidden">
               <div>
                 <p className="text-sm font-semibold text-text-primary">Power Calculator</p>
@@ -704,10 +1114,10 @@ export function HypothesisValidatorPanel() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <SoftFieldLabel required>Baseline IOR rate (0–1)</SoftFieldLabel>
-                  <AutoDetectNumberInput
+                  <SuggestedNumberInput
                     value={draft.power.baselineIor}
-                    detectedValue={POWER_AUTO_DETECTED.baselineIor}
-                    detectedHint={POWER_AUTO_DETECTED.baselineIor.toFixed(4)}
+                    suggestion={powerSuggestions.baselineIor}
+                    formatValue={(v) => Number(v).toFixed(4)}
                     min={0}
                     max={1}
                     step={0.0001}
@@ -765,23 +1175,24 @@ export function HypothesisValidatorPanel() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <SoftFieldLabel required>Number of variants (incl. control)</SoftFieldLabel>
-                  <input
-                    type="number"
-                    className={inputClass}
+                  <SuggestedNumberInput
                     value={draft.power.variants}
+                    suggestion={powerSuggestions.variants}
+                    formatValue={(v) => `${v} variants`}
                     min={2}
                     max={10}
                     step={1}
-                    onChange={(e) => patch.power({ variants: Number(e.target.value) || 2 })}
+                    clearValue={2}
+                    onChange={(variants) => patch.power({ variants: variants || 2 })}
                   />
                 </div>
 
                 <div className="min-w-0">
                   <SoftFieldLabel required>Daily eligible traffic</SoftFieldLabel>
-                  <AutoDetectNumberInput
+                  <SuggestedNumberInput
                     value={draft.power.dailyTraffic}
-                    detectedValue={POWER_AUTO_DETECTED.dailyTraffic}
-                    detectedHint={`${POWER_AUTO_DETECTED.dailyTraffic} daily inquiries`}
+                    suggestion={powerSuggestions.dailyTraffic}
+                    formatValue={(v) => `${v} daily inquiries`}
                     min={1}
                     step={1}
                     onChange={(dailyTraffic) => patch.power({ dailyTraffic })}
@@ -808,7 +1219,38 @@ export function HypothesisValidatorPanel() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 6 && channel === 'store' && (
+            <StoreReviewStep
+              review={storeConcurrencyReview}
+              onChange={(partial) =>
+                setDraft((d) => ({
+                  ...d,
+                  storeConcurrencyReview: {
+                    ...((d as any).storeConcurrencyReview ?? STORE_CONCURRENCY_REVIEW_DEFAULTS),
+                    ...partial,
+                  },
+                }))
+              }
+              hypothesisName={draft.name}
+              primaryKpiLabel={
+                STORE_METRIC_BY_ID[draft.metrics.primaryMetricIds[0]]?.label ?? '—'
+              }
+              projectedNetRoi={
+                computeStoreOpportunityOutputs(
+                  (draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS,
+                ).projectedNetRoi
+              }
+              rollout={storeRollout}
+              power={storePower}
+              targetLiftPercent={
+                (((draft as any).storeOpportunity ?? STORE_OPPORTUNITY_DEFAULTS).metrics.targetCvrLift ?? 0) * 100
+              }
+              onDeploy={handleGetStarted}
+              isDeploying={isBusy}
+            />
+          )}
+
+          {step === 5 && channel !== 'store' && (
             <div className="flex flex-col gap-3.5">
               <div className="rounded-xs border border-border-muted/25 bg-surface-base px-3 py-3">
                 <p className="text-micro font-semibold uppercase tracking-wide text-text-secondary">
@@ -893,7 +1335,7 @@ export function HypothesisValidatorPanel() {
                 <AppIcon icon={ChevronsRight} size="xs" />
               </button>
             ) : null}
-            {step < 5 ? (
+            {step < (channel === 'store' ? 6 : 5) ? (
               <button
                 type="button"
                 onClick={goNext}

@@ -14,15 +14,18 @@ export type ValidatorStepIndex = (typeof VALIDATOR_STEPS)[number]['id']
 
 export type ExperimentMaturity = 'mvp' | 'iteration' | 'critical'
 
-/** Mock auto-detected baselines shown under sizing field labels. */
-export const OPPORTUNITY_AUTO_DETECTED = {
+/**
+ * Starting values for a blank draft. Deliberately plain defaults, not claims:
+ * anything actually derived arrives from the suggestion engine and is rendered
+ * with its provenance in the wizard.
+ */
+const OPPORTUNITY_STARTING_VALUES = {
   monthlyInquiries: 10000,
   currentIor: 0.18,
   aov: 500,
 } as const
 
-/** Mock auto-detected values shown under power field labels. */
-export const POWER_AUTO_DETECTED = {
+const POWER_STARTING_VALUES = {
   baselineIor: 0.18,
   dailyTraffic: 500,
 } as const
@@ -49,6 +52,9 @@ export interface HypothesisValidatorDraft {
     guardrailMetricIds: string[]
     /** KPI id → input key → value (primary/secondary only) */
     metricInputs: Record<string, Record<string, string>>
+    /** Store channel only: alert threshold/direction for the selected guardrail */
+    guardrailThreshold?: number | null
+    guardrailDirection?: 'below' | 'above'
   }
   derivedExperimentType: ExperimentTypeChoice
   typeRationale: string
@@ -71,10 +77,10 @@ export function createEmptyValidatorDraft(): HypothesisValidatorDraft {
     opportunity: {
       skipped: false,
       channelScope: 'digital',
-      monthlyInquiries: OPPORTUNITY_AUTO_DETECTED.monthlyInquiries,
-      currentIor: OPPORTUNITY_AUTO_DETECTED.currentIor,
+      monthlyInquiries: OPPORTUNITY_STARTING_VALUES.monthlyInquiries,
+      currentIor: OPPORTUNITY_STARTING_VALUES.currentIor,
       targetIor: 0.198,
-      aov: OPPORTUNITY_AUTO_DETECTED.aov,
+      aov: OPPORTUNITY_STARTING_VALUES.aov,
       grossMargin: 0.3,
       timeHorizonMonths: 12,
     },
@@ -85,16 +91,18 @@ export function createEmptyValidatorDraft(): HypothesisValidatorDraft {
       secondaryMetricIds: [],
       guardrailMetricIds: [],
       metricInputs: {},
+      guardrailThreshold: null,
+      guardrailDirection: 'below',
     },
     derivedExperimentType: 'A/B',
     typeRationale: '',
     power: {
-      baselineIor: POWER_AUTO_DETECTED.baselineIor,
+      baselineIor: POWER_STARTING_VALUES.baselineIor,
       mdePercent: 10,
       alpha: 0.05,
       statisticalPower: 0.8,
       variants: 2,
-      dailyTraffic: POWER_AUTO_DETECTED.dailyTraffic,
+      dailyTraffic: POWER_STARTING_VALUES.dailyTraffic,
       trafficFraction: 1,
     },
   }

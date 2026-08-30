@@ -206,6 +206,19 @@ class AgentState(TypedDict):
 
 
 # Subgraph-Specific States
+#
+# Each subgraph carries (a) the inputs its domain functions genuinely require and
+# (b) the results those functions returned, stored as `model_dump()` dicts — the
+# same convention `orchestration/tools/adapter.py` uses when it builds UIArtifact
+# payloads. Results are dicts rather than typed ExpSuite models on purpose: this
+# module is imported BY `mapMeta`, so importing ExpSuite/mapMeta types back into
+# it would create an import cycle.
+#
+# Required inputs are Optional here only because a graph may be invoked before
+# the caller has supplied them. A node that finds one missing appends its name to
+# `missing_inputs` and returns — it must never substitute a default. Fabricated
+# statistics are the failure mode `19f8d33` fixed, and the supervisor prompt
+# forbids them outright.
 
 
 class IngestionState(TypedDict):
@@ -219,6 +232,24 @@ class PlanningState(TypedDict):
     messages: Annotated[List[Any], operator.add]
     active_experiment_id: Optional[str]
     experiment_brief: Optional[ExperimentBrief]
+    # Inputs required by ExpSuite.planning — no defaults invented for these.
+    baseline_rate: Optional[float]
+    mde_relative: Optional[float]
+    primary_metric: Optional[str]
+    retail_domain: Optional[str]
+    annual_traffic: Optional[int]
+    average_order_value: Optional[float]
+    assumed_relative_lift: Optional[float]
+    daily_traffic: Optional[int]
+    num_variants: Optional[int]
+    control_split: Optional[float]
+    # Results from calculate_power / calculate_opportunity_size /
+    # plan_experiment_metrics / calculate_traffic_balance.
+    power_result: Optional[Dict[str, Any]]
+    opportunity_result: Optional[Dict[str, Any]]
+    metric_plan_result: Optional[Dict[str, Any]]
+    traffic_balance_result: Optional[Dict[str, Any]]
+    missing_inputs: Annotated[List[str], operator.add]
     ui_artifacts: Annotated[List[UIArtifact], operator.add]
     errors: Annotated[List[str], operator.add]
 
@@ -226,9 +257,17 @@ class PlanningState(TypedDict):
 class MonitoringState(TypedDict):
     messages: Annotated[List[Any], operator.add]
     active_experiment_id: str
+    # Inputs required by ExpSuite.detect_srm.
+    observed_counts: Optional[List[int]]
+    expected_ratios: Optional[List[float]]
+    # Live telemetry from mapMeta.fetch_statsig_experiment_health, dumped.
+    telemetry: Optional[Dict[str, Any]]
+    srm_result: Optional[Dict[str, Any]]
     srm_status: SRMStatusType
     guardrail_alerts: List[str]
+    missing_inputs: Annotated[List[str], operator.add]
     ui_artifacts: Annotated[List[UIArtifact], operator.add]
+    errors: Annotated[List[str], operator.add]
 
 
 class AnalysisState(TypedDict):
@@ -236,14 +275,66 @@ class AnalysisState(TypedDict):
     active_experiment_id: str
     primary_metric: str
     use_cuped: bool
+    # Inputs required by ExpSuite.calculate_hypothesis_test.
+    control_mean: Optional[float]
+    control_std: Optional[float]
+    control_count: Optional[int]
+    treatment_mean: Optional[float]
+    treatment_std: Optional[float]
+    treatment_count: Optional[int]
+    alpha: Optional[float]
+    # Optional pre-period covariates for ExpSuite.apply_cuped.
+    y_control: Optional[List[float]]
+    x_control: Optional[List[float]]
+    y_treatment: Optional[List[float]]
+    x_treatment: Optional[List[float]]
+    # Optional pre/post means for ExpSuite.calculate_diff_in_diff.
+    control_pre: Optional[float]
+    control_post: Optional[float]
+    treatment_pre: Optional[float]
+    treatment_post: Optional[float]
+    # Results.
+    cuped_result: Optional[Dict[str, Any]]
+    stat_result: Optional[Dict[str, Any]]
+    causal_result: Optional[Dict[str, Any]]
+    roi_summary: Optional[Dict[str, Any]]
+    chart_spec: Optional[Dict[str, Any]]
+    plotly_json: Optional[Dict[str, Any]]
     statistical_significance: Optional[bool]
+    missing_inputs: Annotated[List[str], operator.add]
     ui_artifacts: Annotated[List[UIArtifact], operator.add]
     errors: Annotated[List[str], operator.add]
 
 
 class AskDataState(TypedDict):
+    """
+    Backs three independent entry points rather than one fixed chain: SQL,
+    visualization, and growth insights. Each reads only the fields its own
+    branch needs, so a caller asking purely for a chart never has to supply
+    SQL or forecast parameters.
+    """
+
     messages: Annotated[List[Any], operator.add]
+    # SQL branch — AskData.execute_sql_query.
+    query: Optional[str]
     generated_sql: Optional[str]
     query_results: Optional[List[Dict[str, Any]]]
+    row_count: Optional[int]
+    sql_summary: Optional[str]
+    # Visualization branch — AskData.generate_visualization. `visualize`
+    # controls the SQL branch's auto-chart step: None means "chart it if the
+    # rows are chartable", False suppresses it outright.
+    chart_type: Optional[str]
+    chart_title: Optional[str]
+    chart_data: Optional[Dict[str, Any]]
+    visualize: Optional[bool]
+    chart_spec: Optional[Dict[str, Any]]
+    plotly_json: Optional[Dict[str, Any]]
+    # Insights branch — AskData.simulate_and_visualize_growth.
+    baseline_monthly_revenue: Optional[float]
+    expected_lift_pct: Optional[float]
+    lift_std_dev: Optional[float]
+    growth_result: Optional[Dict[str, Any]]
+    missing_inputs: Annotated[List[str], operator.add]
     ui_artifacts: Annotated[List[UIArtifact], operator.add]
     errors: Annotated[List[str], operator.add]

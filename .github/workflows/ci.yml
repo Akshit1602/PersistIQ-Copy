@@ -34,22 +34,21 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install duckdb pandas numpy scipy scikit-learn statsmodels \
-                      pydantic reportlab openpyxl pytest pytest-cov
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Run unit tests
+      - name: Run fast tests
         run: |
-          python -m pytest continum/tests/test_statistics.py \
-            -v --tb=short \
-            --cov=continum/ExpSuite/stats \
+          python -m pytest continum/tests \
+            -v --tb=short -m "not slow" \
+            --cov=continum/ExpSuite/stats_inference \
             --cov-report=term-missing \
             --cov-fail-under=60
 
       - name: Run calibration tests
         run: |
-          python -m pytest continum/tests/test_calibration.py \
-            -v --tb=short \
-            -m "not slow"
+          python -m pytest continum/tests \
+            -v --tb=short -m "slow"
 
       - name: Syntax check all modules
         run: |
@@ -80,26 +79,31 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic reportlab
+      - run: pip install -r requirements.txt
       - name: Test all public imports
         run: |
           python -c "
-          from continum.ExpSuite.stats.statistics import proportion_test, means_test, compute_sample_size
-          from continum.ExpSuite.stats.cuped import apply_cuped, bootstrap_ci, delta_method_ratio
-          from continum.ExpSuite.stats.bayesian import beta_binomial_test, bayesian_multi_arm
-          from continum.ExpSuite.stats.sequential import SequentialTester, compute_e_value
-          from continum.ExpSuite.stats.srm_detector import detect_srm
-          from continum.ExpSuite.stats.guardrails import run_guardrail_checks
-          from continum.ExpSuite.discovery.detectors import detect_volume_anomaly, detect_distribution_shift
-          from continum.ExpSuite.discovery.monitors import PipelineHealthMonitor, WatchtowerMonitor
-          from continum.ExpSuite.analysis.narrative import generate_executive_narrative
-          from continum.ExpSuite.planning.metric_planner import METRICS_KB, gen_metrics_bundle
-          from continum.ContextGraph.lineage import ExecutionRegistry
-          from continum.ExpSuite.registry import list_modules, _build_registry
-          _build_registry()
+          from continum.config import settings
+          from continum.state import AgentState, AnalysisState, PlanningState, MonitoringState, IngestionState, AskDataState
+          from continum.ExpSuite.stats_inference import (
+              calculate_hypothesis_test, detect_srm, apply_cuped,
+              run_sprt, run_bayesian_ab_test, check_guardrail_metric,
+          )
+          from continum.ExpSuite.causal import calculate_diff_in_diff, run_monte_carlo_forecast, run_causal_engine
+          from continum.ExpSuite.planning import (
+              calculate_power, calculate_opportunity_size,
+              plan_experiment_metrics, calculate_traffic_balance,
+          )
+          from continum.AskData import generate_visualization, execute_sql_query, simulate_and_visualize_growth
+          from continum.mapMeta import scan_database_schema, catalog_experiments, fetch_statsig_experiment_health
+          from continum.orchestration.tools.registry import all_experimentation_tools
+          from continum.orchestration.supervisor import app_graph
+          from continum.registry import list_modules
+
           mods = list_modules()
           assert len(mods) >= 18, f'Expected >= 18 modules, got {len(mods)}'
-          print(f'All imports OK — {len(mods)} modules registered')
+          assert len(all_experimentation_tools) >= 15, f'Expected >= 15 tools, got {len(all_experimentation_tools)}'
+          print(f'All imports OK — {len(mods)} modules, {len(all_experimentation_tools)} tools registered')
           "
 
   # ── Pipeline integration test ─────────────────────────────────────────────
@@ -112,44 +116,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install duckdb pandas numpy scipy scikit-learn pydantic statsmodels
+      - run: pip install -r requirements.txt pytest
       - name: End-to-end pipeline test
         run: |
-          python -c "
-          import sys, numpy as np, pandas as pd, duckdb
-          sys.path.insert(0, '.')
-
-          # Generate minimal synthetic data
-          from continum.mapMeta import generate_all
-          datasets = generate_all('./test_data', n_users=500, seed=42)
-
-          # Set up DB
-          db = duckdb.connect(':memory:')
-          rng = np.random.default_rng(42)
-          n = 600
-          df = pd.DataFrame({
-              'experiment_name':    'ci_test_exp',
-              'variant':            rng.choice(['control','treatment'], n),
-              'converted_to_order': rng.binomial(1, 0.18, n),
-              'order_value':        rng.exponential(4000, n),
-              'created_at':         pd.date_range('2025-01-01', periods=n, freq='h'),
-              'account_segment':    rng.choice(['Core','Growth','Enterprise','Individuals'], n),
-          })
-          db.register('gold_experiment_analysis', df)
-
-          # Run full pipeline
-          from continum.ExpSuite.analysis.analysis_dag import run_experiment_analysis_pipeline
-          result = run_experiment_analysis_pipeline(
-              experiment_id='ci_test_exp',
-              experiment_name='ci_test_exp',
-              db=db, llm=None, save_result=False,
-          )
-          r = result.get('result')
-          assert r is not None, f'Pipeline returned no result: {result.get(\"error\")}'
-          assert 0 <= r.primary_delta.p_value <= 1
-          assert r.verdict is not None
-          assert r.ship_recommendation is not None
-          print(f'Pipeline OK: verdict={r.verdict.value} p={r.primary_delta.p_value:.4f}')
-
-          import shutil; shutil.rmtree('./test_data', ignore_errors=True)
-          "
+          python -m pytest continum/tests/test_pipeline_integration.py -v --tb=short

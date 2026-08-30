@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Send } from 'lucide-react'
+import { Send, Loader2 } from 'lucide-react'
 import { useMatchView } from '../../context/MatchViewContext'
 import { useConversationalLoop } from '../../context/ConversationalLoopContext'
 import { getActionPills } from '../../data/moduleRegistry'
@@ -12,7 +12,7 @@ import { ActionPills } from './ActionPills'
 import { SmartActionPhasePills } from './SmartActionPhasePills'
 
 export function MessagingBar() {
-  const { currentPersona, activePhase, activeModuleId, sendMessage, executePill, advanceToWorkflowStep } =
+  const { currentPersona, activePhase, activeModuleId, sendMessage, executePill, advanceToWorkflowStep, chatIsGenerating } =
     useMatchView()
   const {
     activeModuleContext,
@@ -102,23 +102,32 @@ export function MessagingBar() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={chatIsGenerating}
           placeholder={
-            inInterview && pendingFieldKey
-              ? 'Type your answer or pick a pill above…'
-              : 'Type your conversational query...'
+            chatIsGenerating
+              ? 'Agent is processing…'
+              : inInterview && pendingFieldKey
+                ? 'Type your answer or pick a pill above…'
+                : 'Type your conversational query...'
           }
-          className="focus-ring min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary"
+          className={`focus-ring min-w-0 flex-1 bg-transparent px-1.5 py-1.5 text-xs text-text-primary placeholder:text-text-secondary ${
+            chatIsGenerating ? 'cursor-not-allowed opacity-50' : ''
+          }`}
           aria-label="Conversational query input"
         />
         <button
           type="button"
           onClick={handleSend}
-          disabled={!inputValue.trim()}
+          disabled={!inputValue.trim() || chatIsGenerating}
           className="focus-ring flex shrink-0 items-center gap-1 rounded-xs bg-border-muted px-2.5 py-1.5 text-xs font-medium text-white transition-opacity duration-instant hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Send message"
         >
-          <AppIcon icon={Send} size="xs" />
-          Send
+          {chatIsGenerating ? (
+            <AppIcon icon={Loader2} size="xs" className="animate-spin" />
+          ) : (
+            <AppIcon icon={Send} size="xs" />
+          )}
+          {chatIsGenerating ? 'Processing' : 'Send'}
         </button>
       </div>
     </div>

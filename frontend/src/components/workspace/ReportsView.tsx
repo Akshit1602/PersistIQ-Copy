@@ -5,10 +5,16 @@ import type { ModuleId } from '../../context/types'
 import { getModuleIcon } from '../../data/moduleIcons'
 import { MODULE_BY_ID } from '../../data/moduleRegistry'
 import { ChatRichText } from '../chat/ChatRichText'
+import { ArtifactCardList } from '../chat/ArtifactCard'
 import { DownloadAsMenu } from '../shared/DownloadAsMenu'
 import { AppIcon } from '../shared/AppIcon'
+import { Sparkles } from 'lucide-react'
 
-type ReportFilter = 'all' | ModuleId
+/** Copilot reports have no Analytics Lab module, so they filter under their own
+ * bucket rather than being hidden by every module filter. */
+const COPILOT_FILTER = 'copilot'
+
+type ReportFilter = 'all' | ModuleId | typeof COPILOT_FILTER
 
 export function ReportsView() {
   const { chatReports, selectedExperiment, openReport, setTab } = useMatchView()
@@ -26,13 +32,15 @@ export function ReportsView() {
   )
 
   const filterOptions = useMemo(() => {
-    const ids = [...new Set(experimentReports.map((r) => r.moduleId))]
+    const ids = [...new Set(experimentReports.map((r) => r.moduleId).filter(Boolean))] as ModuleId[]
+    const hasUnmapped = experimentReports.some((r) => !r.moduleId)
     return [
-      { value: 'all' as const, label: 'All types' },
+      { value: 'all' as ReportFilter, label: 'All types' },
       ...ids.map((id) => ({
-        value: id,
+        value: id as ReportFilter,
         label: MODULE_BY_ID[id]?.label ?? id,
       })),
+      ...(hasUnmapped ? [{ value: COPILOT_FILTER as ReportFilter, label: 'Copilot' }] : []),
     ]
   }, [experimentReports])
 
@@ -67,9 +75,13 @@ export function ReportsView() {
   const reports = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     return experimentReports.filter((r) => {
-      if (filter !== 'all' && r.moduleId !== filter) return false
+      if (filter === COPILOT_FILTER) {
+        if (r.moduleId) return false
+      } else if (filter !== 'all' && r.moduleId !== filter) {
+        return false
+      }
       if (!q) return true
-      const modLabel = MODULE_BY_ID[r.moduleId]?.label ?? ''
+      const modLabel = (r.moduleId ? MODULE_BY_ID[r.moduleId]?.label : 'Copilot') ?? ''
       const body = r.evaluation?.summary ?? r.summary
       return (
         r.title.toLowerCase().includes(q) ||
@@ -166,7 +178,7 @@ export function ReportsView() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <p className="text-sm font-medium text-text-primary">No reports yet</p>
             <p className="mt-1 max-w-xs text-xs text-text-secondary">
-              Complete Hypothesis Validator or run a module — outputs are saved here automatically.
+              Complete Initiative Setup & Benchmarking or run a module — outputs are saved here automatically.
             </p>
             <button
               type="button"
@@ -196,10 +208,14 @@ export function ReportsView() {
         ) : (
           <ul className="flex flex-col gap-3">
             {reports.map((report) => {
-              const mod = MODULE_BY_ID[report.moduleId]
-              const ModIcon = getModuleIcon(report.moduleId)
+              const mod = report.moduleId ? MODULE_BY_ID[report.moduleId] : undefined
+              const ModIcon = report.moduleId ? getModuleIcon(report.moduleId) : Sparkles
               const isBrief = report.moduleId === 'brief-generator'
               const fullBody = report.evaluation?.summary ?? report.summary
+              const artifacts = report.artifacts ?? []
+              // A report whose charts are already on the card has nothing more
+              // to open elsewhere.
+              const canOpenInInsights = Boolean(report.moduleId) && artifacts.length === 0
 
               return (
                 <li key={report.id}>
@@ -216,7 +232,7 @@ export function ReportsView() {
                           </span>
                         </div>
                         <p className="mt-1 text-micro text-text-secondary">
-                          {mod.label} · {report.completedAt}
+                          {mod?.label ?? 'Copilot'} · {report.completedAt}
                         </p>
                       </div>
                     </div>
@@ -225,10 +241,12 @@ export function ReportsView() {
                       <ChatRichText content={fullBody} />
                     </div>
 
+                    <ArtifactCardList artifacts={artifacts} />
+
                     <div className="mt-2.5 flex items-center justify-end gap-2">
                       {isBrief ? (
                         <DownloadAsMenu filename={report.title} markdown={fullBody} />
-                      ) : (
+                      ) : canOpenInInsights ? (
                         <button
                           type="button"
                           onClick={() => openReport(report.id)}
@@ -237,7 +255,7 @@ export function ReportsView() {
                           Open in Insights
                           <AppIcon icon={ArrowUpRight} size="xs" />
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </article>
                 </li>

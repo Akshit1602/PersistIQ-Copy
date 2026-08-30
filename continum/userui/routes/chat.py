@@ -12,6 +12,27 @@ from continum.orchestration import app_graph
 router = APIRouter(prefix="/api/chat", tags=["Chat & Copilot"])
 
 
+def _as_text(content) -> str:
+    """
+    Flattens LangChain message content to plain text.
+
+    Gemini streams content-block lists (e.g. [{"type": "text", "text": "...",
+    "extras": {"signature": ...}}]) rather than bare strings — usually only for
+    the first chunk of a response. Forwarding the raw list let the frontend
+    string-concatenate an object and render "[object Object]", so normalise here
+    where the provider-specific shape is already known.
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        return content.get("text") or ""
+    if isinstance(content, list):
+        return "".join(_as_text(block) for block in content)
+    return str(content)
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User prompt text")
     thread_id: str = Field("default_thread", description="Unique conversation thread ID")
@@ -37,12 +58,13 @@ async def chat_stream_endpoint(payload: ChatRequest):
 
     async def event_generator():
         has_streamed_tokens = False
+        has_streamed_artifacts = False
         async for event in app_graph.astream_events(initial_state, config, version="v2"):
             kind = event["event"]
 
             # 1. Stream text token chunks from the LLM
             if kind == "on_chat_model_stream":
-                chunk = event["data"]["chunk"].content
+                chunk = _as_text(event["data"]["chunk"].content)
                 if chunk:
                     has_streamed_tokens = True
                     yield f"data: {json.dumps({'type': 'text_token', 'content': chunk})}\n\n"
@@ -53,7 +75,7 @@ async def chat_stream_endpoint(payload: ChatRequest):
                     output = event["data"].get("output")
                     if isinstance(output, dict) and "messages" in output and output["messages"]:
                         last_msg = output["messages"][-1]
-                        content = getattr(last_msg, "content", str(last_msg))
+                        content = _as_text(getattr(last_msg, "content", last_msg))
                         for i in range(0, len(content), 12):
                             chunk = content[i : i + 12]
                             yield f"data: {json.dumps({'type': 'text_token', 'content': chunk})}\n\n"
@@ -82,7 +104,17 @@ async def chat_stream_endpoint(payload: ChatRequest):
                     artifacts = tool_output["ui_artifacts"]
                     for art in artifacts:
                         art_dict = art.model_dump() if hasattr(art, "model_dump") else art
+                        has_streamed_artifacts = True
                         yield f"data: {json.dumps({'type': 'artifact', 'payload': art_dict})}\n\n"
+
+        # A turn that emits neither text nor a card renders as an empty chat
+        # bubble, which reads as "the copilot ignored me". Say something instead.
+        if not has_streamed_tokens and not has_streamed_artifacts:
+            notice = (
+                "I wasn't able to produce a response for that message. "
+                "Please rephrase it, or check the server logs if this repeats."
+            )
+            yield f"data: {json.dumps({'type': 'text_token', 'content': notice})}\n\n"
 
         yield "data: [DONE]\n\n"
 

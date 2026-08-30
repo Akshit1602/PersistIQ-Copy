@@ -17,6 +17,10 @@ import {
 import { useMatchView } from '../../context/MatchViewContext'
 import type { Project, ProjectChannel } from '../../context/types'
 import { AppIcon } from '../shared/AppIcon'
+import { ExecutiveView } from './ExecutiveView'
+import { OTHER_PLANNED_INITIATIVES, formatDateRange } from '../../data/storeConcurrencyReview'
+
+const FIXED_CONCURRENT_INITIATIVE = OTHER_PLANNED_INITIATIVES[0]
 
 type SortKey = 'name-asc' | 'name-desc' | 'date-newest' | 'date-oldest'
 type FilterKey = 'all' | 'internal' | 'external'
@@ -235,7 +239,7 @@ export function ProjectsHome() {
         <div className="min-w-0 shrink">
           <h1 className="type-title">Projects</h1>
           <p className="type-subtitle mt-0.5">
-            Open a project folder to run Hypothesis Validator and analyze experiments.
+            Open a project folder to run Initiative Setup & Benchmarking and analyze experiments.
           </p>
         </div>
 
@@ -360,6 +364,24 @@ export function ProjectsHome() {
           </button>
         </div>
       </header>
+
+      <div className="mx-6 mt-4">
+        <ExecutiveView />
+      </div>
+
+      {projects.some((p) => projectChannel(p) === 'store') && (
+        <div className="mx-6 mt-4 flex items-start gap-2.5 rounded-[8px] border border-amber-500/30 bg-amber-50/40 px-4 py-3">
+          <AppIcon icon={Store} size="sm" className="mt-0.5 shrink-0 text-amber-700" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-amber-800">
+              Concurrent Store Initiative Active: {FIXED_CONCURRENT_INITIATIVE.initiativeName}
+            </p>
+            <p className="mt-0.5 text-micro text-amber-800">
+              {FIXED_CONCURRENT_INITIATIVE.archetype} · {formatDateRange(FIXED_CONCURRENT_INITIATIVE.startDate, FIXED_CONCURRENT_INITIATIVE.endDate)} · Checked against every store experiment's Review &amp; Concurrency step.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-6">
         {projects.length === 0 ? (

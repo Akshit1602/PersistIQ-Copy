@@ -1,6 +1,5 @@
 import { ArrowUpRight, Loader2 } from 'lucide-react'
 import { useMatchView } from '../../context/MatchViewContext'
-import { useConversationalLoop } from '../../context/ConversationalLoopContext'
 import type { ModuleRunChatMessage } from '../../context/types'
 import { getModuleIcon } from '../../data/moduleIcons'
 import { MODULE_BY_ID } from '../../data/moduleRegistry'
@@ -12,8 +11,7 @@ interface InteractiveEvaluationCardProps {
 }
 
 export function InteractiveEvaluationCard({ message }: InteractiveEvaluationCardProps) {
-  const { selectLabModule } = useMatchView()
-  const { pushResultsToInsights } = useConversationalLoop()
+  const { selectLabModule, setTab } = useMatchView()
 
   const mod = MODULE_BY_ID[message.moduleId]
   const ModIcon = getModuleIcon(message.moduleId)
@@ -33,7 +31,7 @@ export function InteractiveEvaluationCard({ message }: InteractiveEvaluationCard
 
   const openInsights = () => {
     selectLabModule(message.moduleId)
-    pushResultsToInsights()
+    setTab('insights')
   }
 
   return (

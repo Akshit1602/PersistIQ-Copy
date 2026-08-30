@@ -26,3 +26,11 @@ plotly>=5.20.0
 # External Telemetry & MCP
 requests>=2.31.0
 mcp>=1.0.0
+
+# Databricks Apps deployment. Only needed when DEPLOY_TARGET resolves to
+# databricks — every adapter imports these lazily, inside the function that
+# uses them, so local development runs without them installed.
+gunicorn>=22.0
+databricks-sdk>=0.118.0
+psycopg[binary]>=3.1.0
+openai>=1.40.0

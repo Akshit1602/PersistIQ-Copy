@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Pencil } from 'lucide-react'
 import { useMatchView } from '../../context/MatchViewContext'
 import { useConversationalLoop } from '../../context/ConversationalLoopContext'
 import { getModuleIcon, getPhaseIcon } from '../../data/moduleIcons'
@@ -9,6 +9,15 @@ import {
   isWorkflowStepId,
 } from '../../data/hypothesisWorkflow'
 import { AppIcon } from '../shared/AppIcon'
+
+/** Maps Analytics Lab module IDs to Initiative Setup & Benchmarking step indices.
+ *  Store channel: 1 Hypothesis → 2 Sizing → 3 Rollout → 4 Metrics → 5 Power → 6 Review */
+const MODULE_TO_VALIDATOR_STEP: Record<string, number> = {
+  'opportunity-sizing': 2,
+  'experiment-type': 3,
+  'metrics-tracking': 4,
+  'power-calculator': 5,
+}
 
 const PHASE_SHORT_LABELS: Record<ModulePhaseId, string> = {
   foundation: 'Foundation',
@@ -24,12 +33,33 @@ export function AnalyticsLabModuleTree() {
     moduleRunsByExperiment,
     workflowProgressByExperiment,
     experimentSpecsByName,
+    experimentProjectIds,
+    projects,
+    openHypothesisValidatorAtStep,
   } = useMatchView()
   const { activeModuleContext, activateModuleContext } = useConversationalLoop()
   const hasSpec = Boolean(experimentSpecsByName[selectedExperiment])
   const [selectedPhaseId, setSelectedPhaseId] = useState<ModulePhaseId>(
     hasSpec ? 'preplanning' : 'foundation',
   )
+
+  const channel = projects.find((p) => p.id === experimentProjectIds[selectedExperiment])?.channel ?? 'digital'
+
+  const displayLabelFor = (moduleId: string, defaultLabel: string): string => {
+    if (channel !== 'store') return defaultLabel
+    const overrides: Record<string, string> = {
+      'audience-selection': 'Store Matching & Panel Selection',
+      'experiment-analysis': 'Store Feed & Execution Diagnostics',
+      'health-monitor': 'Peeking Protection & Futility',
+      'sequential-testing': 'In-Flight Lift Trajectory',
+      'causal-did': 'Causal Inference Engine',
+      'forecasting': 'Forecasting & Counterfactual Predictor',
+      'roi-synthesis': 'ROI Synthesis (P&L Money Waterfall)',
+      'simpsons-paradox': "Simpson's Paradox & Heterogeneity Checker",
+      'learnings-repository': 'Learnings & Meta-Analysis Repository',
+    }
+    return overrides[moduleId] ?? defaultLabel
+  }
 
   const experimentRuns = moduleRunsByExperiment[selectedExperiment] ?? []
   const progress = workflowProgressByExperiment[selectedExperiment] ?? {}
@@ -177,7 +207,7 @@ export function AnalyticsLabModuleTree() {
                         isActive ? 'font-semibold text-text-primary' : 'font-medium text-text-primary'
                       }`}
                     >
-                      {mod.label}
+                      {displayLabelFor(mod.id, mod.label)}
                     </span>
                     {isRecommended && !isComplete ? (
                       <span className="mt-0.5 block text-micro font-medium text-border-muted">
@@ -196,6 +226,20 @@ export function AnalyticsLabModuleTree() {
                       <AppIcon icon={CheckCircle2} size="xs" />
                       {isComplete ? 'Done' : runCount}
                     </span>
+                  )}
+                  {isComplete && MODULE_TO_VALIDATOR_STEP[mod.id] != null && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openHypothesisValidatorAtStep(MODULE_TO_VALIDATOR_STEP[mod.id])
+                      }}
+                      className="focus-ring flex h-6 w-6 shrink-0 items-center justify-center rounded-xs text-text-secondary transition-colors hover:bg-surface-hover hover:text-border-muted"
+                      title={`Edit ${mod.label} in Initiative Setup & Benchmarking`}
+                      aria-label={`Edit ${mod.label} in Initiative Setup & Benchmarking`}
+                    >
+                      <AppIcon icon={Pencil} size="xs" />
+                    </button>
                   )}
                   {isActive ? (
                     <span

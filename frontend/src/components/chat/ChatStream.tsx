@@ -9,8 +9,8 @@ import {
 import noMessageImg from '../../assets/NoMessage.png'
 import { InteractiveEvaluationCard } from './InteractiveEvaluationCard'
 import { BriefHandoffCard } from './BriefHandoffCard'
+import { ArtifactCardList } from './ArtifactCard'
 import { ChatRichText } from './ChatRichText'
-import { ArtifactCardRenderer } from '../workspace/ChatView'
 import type { ModuleConfigChatMessage } from '../../context/types'
 import { MODULE_BY_ID } from '../../data/moduleRegistry'
 import { AppIcon } from '../shared/AppIcon'
@@ -42,8 +42,6 @@ export function ChatStream() {
     highlightedMessageId,
     threadGroups,
     selectThread,
-    chatIsGenerating,
-    chatActiveToolStatus,
   } = useMatchView()
   const messages = messagesByThread[activeThreadId] ?? []
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -78,7 +76,7 @@ export function ChatStream() {
         />
         <p className="text-sm font-semibold text-text-primary">No messages yet</p>
         <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-text-secondary">
-          Open Hypothesis Validator from the sidebar to set up a digital experiment, then Get
+          Open Initiative Setup & Benchmarking from the sidebar to set up a digital experiment, then Get
           Started to begin chat with your brief.
         </p>
       </div>
@@ -129,6 +127,7 @@ export function ChatStream() {
         }
 
         const isSystem = kind === 'system'
+        const artifacts = msg.artifacts ?? []
 
         return (
           <div
@@ -137,7 +136,10 @@ export function ChatStream() {
             className={`flex ${alignment} ${isHighlighted ? 'rounded-sm ring-2 ring-border-muted/40' : ''}`}
           >
             <div
-              className={`max-w-[75%] rounded-sm px-3 py-2 ${
+              className={`${
+                // A chart squeezed into a 75% bubble loses its axis labels.
+                artifacts.length > 0 ? 'w-[92%] max-w-[92%]' : 'max-w-[75%]'
+              } rounded-sm px-3 py-2 ${
                 msg.role === 'user'
                   ? 'border border-border-muted/25 bg-surface-hover'
                   : isSystem
@@ -154,26 +156,12 @@ export function ChatStream() {
                 content={msg.content}
                 onExperimentLink={msg.role === 'assistant' ? openExperiment : undefined}
               />
-              {msg.artifacts && msg.artifacts.length > 0 && (
-                <div className="mt-3 space-y-2.5 border-t border-border-muted/10 pt-2.5">
-                  {msg.artifacts.map((card, idx) => (
-                    <ArtifactCardRenderer key={idx} card={card} />
-                  ))}
-                </div>
-              )}
+              <ArtifactCardList artifacts={artifacts} />
               <time className="mt-1 block text-micro text-text-secondary">{msg.timestamp}</time>
             </div>
           </div>
         )
       })}
-      {chatIsGenerating && chatActiveToolStatus && (
-        <div className="flex justify-start">
-          <div className="glass-panel flex items-center gap-2 rounded-sm px-3 py-1.5 text-xs text-text-secondary">
-            <span className="h-2 w-2 animate-ping rounded-full bg-amber-400" />
-            <span>{chatActiveToolStatus}</span>
-          </div>
-        </div>
-      )}
       <div ref={bottomRef} aria-hidden="true" />
     </div>
   )

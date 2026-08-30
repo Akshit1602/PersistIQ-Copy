@@ -2,7 +2,9 @@ import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { AlignLeft, Hash, List, Percent, ToggleLeft } from 'lucide-react'
 import type { FormFieldSchema } from '../../../data/moduleFormSchemas'
+import type { FieldSuggestion } from '../../../data/inputSuggestions'
 import { AppIcon } from '../../shared/AppIcon'
+import { SuggestedValueBadge } from '../../shared/SuggestedValueBadge'
 import { NumberField } from './NumberField'
 import { SelectField } from './SelectField'
 import { SliderField } from './SliderField'
@@ -24,6 +26,8 @@ interface FormFieldRendererProps {
   value: unknown
   onChange: (key: string, value: unknown) => void
   highlighted?: boolean
+  /** Provenance for this field, when the suggestion engine has one. */
+  suggestion?: FieldSuggestion
 }
 
 function FieldGroup({
@@ -61,7 +65,29 @@ function FieldLabel({ field }: { field: FormFieldSchema }) {
   )
 }
 
-export function FormFieldRenderer({ field, value, onChange, highlighted }: FormFieldRendererProps) {
+export function FormFieldRenderer({
+  field,
+  value,
+  onChange,
+  highlighted,
+  suggestion,
+}: FormFieldRendererProps) {
+  return (
+    <div>
+      <FieldControl field={field} value={value} onChange={onChange} highlighted={highlighted} />
+      {suggestion ? (
+        <SuggestedValueBadge
+          suggestion={suggestion}
+          value={value}
+          onApply={(next) => onChange(field.key, next)}
+          onRevert={() => onChange(field.key, field.defaultValue)}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function FieldControl({ field, value, onChange, highlighted }: FormFieldRendererProps) {
   switch (field.type) {
     case 'number':
       return (

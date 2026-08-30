@@ -18,7 +18,7 @@ export interface MetricKpiOption {
   inputs?: MetricInputField[]
 }
 
-/** Shared digital-experiment KPI catalog for Hypothesis Validator metrics. */
+/** Shared digital-experiment KPI catalog for Initiative Setup & Benchmarking metrics. */
 export const METRIC_KPI_OPTIONS: MetricKpiOption[] = [
   {
     id: 'ctr',

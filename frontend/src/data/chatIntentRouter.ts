@@ -5,6 +5,7 @@ import type {
   Persona,
 } from '../context/types'
 import { isModuleRunMessage } from '../context/types'
+import type { SuggestionContext } from './inputSuggestions'
 import { buildAssistantReply } from './mock'
 import {
   buildNlpSyncReply,
@@ -20,6 +21,8 @@ export interface ChatRouterContext {
   selectedExperiment: string
   moduleFormValuesByExperiment: ModuleFormValuesByExperiment
   messages: ChatMessage[]
+  /** Lets parameters parsed from chat fall back to data-derived suggestions. */
+  suggestionContext?: SuggestionContext
 }
 
 export type ChatIntent =
@@ -131,7 +134,12 @@ export function resolveChatIntent(content: string, ctx: ChatRouterContext): Chat
     return { type: 'contextual-run', userContent: trimmed, reply: contextual }
   }
 
-  const nlp = extractNlpParameters(trimmed, ctx.selectedExperiment, resolveActiveModule(ctx))
+  const nlp = extractNlpParameters(
+    trimmed,
+    ctx.selectedExperiment,
+    resolveActiveModule(ctx),
+    ctx.suggestionContext,
+  )
   if (nlp) {
     return {
       type: 'nlp-inject',

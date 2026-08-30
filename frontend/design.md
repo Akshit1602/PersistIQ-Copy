@@ -40,18 +40,43 @@ MatchView App/
 │   │   ├── auth/           # Login screen, brand lockup, hero illustration
 │   │   ├── chat/           # Chat stream, pills, evaluation cards, messaging bar
 │   │   ├── insights/       # Dashboard cards, chart drawer, metric sheets
-│   │   ├── layout/         # App shell, global rail, sidebar, workspace chrome
+│   │   ├── layout/         # App shell, global rail, sidebar, knowledge archive
 │   │   ├── shared/         # Cross-feature primitives (icons, sliders, overlays)
 │   │   └── workspace/      # Project home, validators, wizards, reports, headers
 │   ├── constants/          # Layout dimensions, magic numbers (not design tokens)
 │   ├── context/            # Global app state + hooks
 │   ├── data/               # Mock data, schemas, builders, registries (no JSX)
+│   ├── services/           # Backend HTTP/SSE client (api.ts)
 │   ├── utils/              # Pure helpers
 │   ├── index.css           # ★ Single source of design tokens & global utilities
 │   ├── App.tsx
 │   └── main.tsx
 └── design.md               # This file
 ```
+
+### Channels: digital vs store
+
+Projects carry a `channel` (`ProjectChannel = 'digital' | 'store'`), and experiments
+inherit it from their project. The store channel covers retail concurrent-impact
+testing — panel matching, rollout waves, store-level guardrails — and reuses the
+same 21 Analytics Lab modules rather than adding new ones.
+
+Store-specific surfaces are **sibling components prefixed `Store*`**, selected at
+render time by channel; the digital component stays untouched:
+
+```tsx
+const channel = projects.find((p) => p.id === activeExperimentProjectId)?.channel ?? 'digital'
+{channel === 'store' ? <StoreInsightsDashboard /> : <InsightsDashboardGrid />}
+```
+
+Families: `analytics-lab/Store*Panel.tsx` (per-module store panels),
+`workspace/Store*Step.tsx` + `StorePanelMatchingWizard.tsx` (setup flow),
+`insights/Store*.tsx` and the chart components (store readouts), with their
+domain calculators in `data/store*.ts`.
+
+**Do not branch on channel inside a shared component.** Add a `Store*` sibling and
+switch at the call site, so each file stays readable and one channel can never
+break the other.
 
 ### Folder placement rules
 

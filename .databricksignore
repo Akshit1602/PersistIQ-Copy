@@ -1,0 +1,35 @@
+# What NOT to upload to Databricks Apps.
+#
+# Inverted from the upstream store config: that one excluded src/ and *.tsx
+# because it shipped only a prebuilt frontend. Here the Python backend IS the
+# app, so continum/ must ship — only the frontend *sources* are excluded, while
+# frontend/dist (the built SPA that app.py serves) is kept.
+
+# Frontend sources — the build output in frontend/dist is what gets served.
+frontend/src/
+frontend/node_modules/
+frontend/public/
+frontend/*.json
+frontend/*.ts
+frontend/*.js
+frontend/design.md
+frontend/README.md
+
+# Local Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Local data and scratch
+runtime_data/
+sample_data/
+archive/
+*.db
+
+# Repo metadata
+.git/
+.github/
+.claude/

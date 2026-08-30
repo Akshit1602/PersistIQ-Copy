@@ -112,13 +112,23 @@ export interface ClassifyOptions {
 
 export function buildMetricsFormDefaults(
   hypothesis: string,
-  _goal?: string,
-  _options?: number | ClassifyOptions,
+  goal?: string,
+  options?: number | ClassifyOptions,
 ): Record<string, unknown> {
-  const featureDescription = hypothesis.trim().slice(0, 160)
+  const opts: ClassifyOptions =
+    typeof options === 'number' ? { expectedLift: options } : (options ?? {})
+  // The classifier already derives the metric buckets from the hypothesis —
+  // seeding them here means the form opens with a defensible starting set
+  // instead of three empty boxes.
+  const classified = classifyHypothesisMetrics(hypothesis, goal ?? '', opts)
+  const names = (suggestions: { name: string }[]) => suggestions.map((m) => m.name).join(', ')
+
   return {
-    featureDescription,
+    featureDescription: hypothesis.trim().slice(0, 160),
     experimentMaturity: 'mvp',
+    primaryMetrics: names(classified.primary),
+    secondaryMetrics: names(classified.secondary),
+    guardrailMetrics: names(classified.guardrail),
   }
 }
 

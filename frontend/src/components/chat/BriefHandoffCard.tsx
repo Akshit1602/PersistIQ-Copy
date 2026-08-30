@@ -9,7 +9,9 @@ interface BriefHandoffCardProps {
 }
 
 export function BriefHandoffCard({ message }: BriefHandoffCardProps) {
-  const { openReport, setTab, openAudienceWizard } = useMatchView()
+  const { openReport, setTab, openAudienceWizard, selectedExperiment, experimentProjectIds, projects } = useMatchView()
+  const activeExperimentProjectId = experimentProjectIds[selectedExperiment]
+  const channel = projects.find((p) => p.id === activeExperimentProjectId)?.channel ?? 'digital'
   const preview =
     message.briefBody.length > 280 ? `${message.briefBody.slice(0, 280)}…` : message.briefBody
 
@@ -55,7 +57,7 @@ export function BriefHandoffCard({ message }: BriefHandoffCardProps) {
               className="focus-ring inline-flex items-center gap-1 rounded-xs bg-border-muted px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
             >
               <AppIcon icon={Users} size="xs" />
-              Configure Audience
+              {channel === 'store' ? 'Configure Store Matching & Panel Selection' : 'Configure Audience'}
             </button>
             <button
               type="button"

@@ -1,67 +1,69 @@
-import { Activity, CheckCircle2, TrendingUp } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import type { WorkspaceStat } from '../context/types'
+import { formatLiftLabel, type LiveExperimentStats } from './executiveStats'
 
-export const WORKSPACE_STATS: WorkspaceStat[] = [
+/**
+ * Metadata (label, sizing, icon, priority for responsive hiding) for each ticker stat.
+ * The actual `value` is filled in at render time from live app data via
+ * `buildWorkspaceStats` below — nothing here is a hardcoded placeholder number.
+ */
+const WORKSPACE_STAT_META: Omit<WorkspaceStat, 'value' | 'valueTone'>[] = [
   {
     id: 'total-experiments',
     label: 'Total Experiments',
-    value: '247',
     variant: 'highlight-blue',
-    priority: 5,
+    priority: 3,
     minWidth: 128,
   },
   {
     id: 'active-tests',
     label: 'Active Tests',
-    value: '34',
     variant: 'highlight-green',
-    priority: 4,
+    priority: 2,
     minWidth: 112,
   },
   {
-    id: 'success-rate',
-    label: 'Success Rate',
-    value: '92.3%',
-    variant: 'metric',
-    priority: 3,
-    minWidth: 118,
-    icon: TrendingUp,
-    valueTone: 'positive',
-  },
-  {
-    id: 'avg-duration',
-    label: 'Avg. Test Duration',
-    value: '14 days',
-    variant: 'metric',
-    priority: 2,
-    minWidth: 132,
-    icon: Activity,
-  },
-  {
-    id: 'completed-month',
-    label: 'Completed This Month',
-    value: '18',
+    id: 'avg-performance',
+    label: 'Avg. Performance',
     variant: 'metric',
     priority: 1,
-    minWidth: 148,
-    icon: CheckCircle2,
-    iconTone: 'accent',
+    minWidth: 140,
+    icon: TrendingUp,
   },
 ]
 
-const HIDE_PRIORITY_ORDER = [...WORKSPACE_STATS]
+export function buildWorkspaceStats(liveStats: LiveExperimentStats): WorkspaceStat[] {
+  const { totalExperiments, activeCount, avgLiftPercent } = liveStats
+  const avgPositive = avgLiftPercent === null || avgLiftPercent >= 0
+
+  const values: Record<string, { value: string; valueTone?: 'positive' | 'default' }> = {
+    'total-experiments': { value: String(totalExperiments) },
+    'active-tests': { value: String(activeCount) },
+    'avg-performance': {
+      value: formatLiftLabel(avgLiftPercent),
+      valueTone: avgPositive ? 'positive' : 'default',
+    },
+  }
+
+  return WORKSPACE_STAT_META.map((meta) => ({
+    ...meta,
+    ...values[meta.id],
+  }))
+}
+
+const HIDE_PRIORITY_ORDER = [...WORKSPACE_STAT_META]
   .sort((a, b) => a.priority - b.priority)
   .map((s) => s.id)
 
 const STAT_GAP = 6
 
-export function getVisibleWorkspaceStats(containerWidth: number): WorkspaceStat[] {
-  if (containerWidth <= 0) return WORKSPACE_STATS.slice(0, 1)
+export function getVisibleWorkspaceStats(stats: WorkspaceStat[], containerWidth: number): WorkspaceStat[] {
+  if (containerWidth <= 0) return stats.slice(0, 1)
 
-  let visible = [...WORKSPACE_STATS]
+  let visible = [...stats]
 
-  const measure = (stats: WorkspaceStat[]) =>
-    stats.reduce((sum, stat, index) => sum + stat.minWidth + (index > 0 ? STAT_GAP : 0), 0)
+  const measure = (list: WorkspaceStat[]) =>
+    list.reduce((sum, stat, index) => sum + stat.minWidth + (index > 0 ? STAT_GAP : 0), 0)
 
   while (visible.length > 1 && measure(visible) > containerWidth) {
     const toRemove = HIDE_PRIORITY_ORDER.find((id) => visible.some((s) => s.id === id))
@@ -71,3 +73,4 @@ export function getVisibleWorkspaceStats(containerWidth: number): WorkspaceStat[
 
   return visible
 }
+

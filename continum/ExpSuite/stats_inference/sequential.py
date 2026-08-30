@@ -41,10 +41,6 @@ def run_sprt(input_data: SequentialInput) -> SequentialResult:
         else 0.5
     )
 
-    # Log likelihood ratio approximation
-    e_ctrl = input_data.control_count * p_ctrl
-    e_trt = input_data.treatment_count * p_trt
-
     # Standardized SPRT log-ratio statistic
     diff = p_trt - p_ctrl
     se = np.sqrt(

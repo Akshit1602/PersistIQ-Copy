@@ -1,11 +1,16 @@
-import type { ChatMessage, Persona } from '../context/types'
+import type { ChatMessage, Persona, ProjectChannel } from '../context/types'
 import {
   INITIAL_EXPERIMENT_PROJECT_IDS,
   INITIAL_PROJECTS,
   INITIAL_THREAD_GROUPS_WITH_PROJECTS,
 } from './projects'
 
-export const EXPERIMENTS: string[] = []
+export const EXPERIMENTS = [
+  'Walmart Banner Redesign',
+  'Cart Flow Optimization',
+  'Holiday Promo Lift Test',
+  'Dedicated Cashier Staffing Rollout',
+] as const
 
 export {
   INITIAL_PROJECTS,
@@ -42,13 +47,14 @@ export function buildWelcomeMessage(
   name: string,
   hypothesis?: string,
   goal?: string,
+  channel: ProjectChannel = 'digital',
 ): string {
   const hypLine = hypothesis?.trim() ? ` Hypothesis: "${hypothesis.trim()}".` : ''
   const goalLine = goal?.trim() ? ` Goal: "${goal.trim()}".` : ''
   if (persona === 'executive') {
-    return `Setup complete for ${name} (digital MVP).${hypLine}${goalLine} Your experiment brief is ready below — open it as a report or download the markdown.`
+    return `Setup complete for ${name} (${channel} MVP).${hypLine}${goalLine} Your experiment brief is ready below — open it as a report or download the markdown.`
   }
-  return `Hypothesis Validator setup is complete for "${name}" (digital MVP).${hypLine}${goalLine} Your brief is ready in this chat and under Reports. You can refine modules anytime in Analytics Lab.`
+  return `Initiative Setup & Benchmarking setup is complete for "${name}" (${channel} MVP).${hypLine}${goalLine} Your brief is ready in this chat and under Reports. You can refine modules anytime in Analytics Lab.`
 }
 
 export function buildAssistantReply(persona: Persona, userMessage: string): string {
@@ -61,7 +67,34 @@ export function buildAssistantReply(persona: Persona, userMessage: string): stri
 
 export type { ChatMessage }
 
-export const MOCK_MESSAGES: ChatMessage[] = []
+export const MOCK_MESSAGES: ChatMessage[] = [
+  {
+    id: 'm1',
+    role: 'user',
+    content: 'What were the results of the Walmart Banner Redesign test?',
+    timestamp: '10:32 AM',
+  },
+  {
+    id: 'm2',
+    role: 'assistant',
+    content:
+      'The Walmart Banner Redesign test showed a +4.2% lift in click-through rate with 95% confidence. Treatment group GMV increased by $1.2M over the 14-day test window.',
+    timestamp: '10:32 AM',
+  },
+  {
+    id: 'm3',
+    role: 'user',
+    content: 'Can you break that down by audience segment?',
+    timestamp: '10:35 AM',
+  },
+  {
+    id: 'm4',
+    role: 'assistant',
+    content:
+      'Mobile users drove 68% of the lift (+5.8% CTR), while desktop showed a modest +1.9%. Returning customers responded strongest at +6.1% conversion lift.',
+    timestamp: '10:35 AM',
+  },
+]
 
 export interface ChartData {
   id: string

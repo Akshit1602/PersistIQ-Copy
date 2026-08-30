@@ -63,7 +63,7 @@ export function CriticalInsightsTicker() {
     if (!node) return
 
     const update = () => {
-      setVisibleStats(getVisibleWorkspaceStats(node.clientWidth))
+      setVisibleStats(getVisibleWorkspaceStats(tickerMetrics, node.clientWidth))
     }
 
     update()

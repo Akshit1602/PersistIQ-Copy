@@ -1,6 +1,4 @@
-from mcp.server.fastmcp import FastMCP
-
-from continum.askdata import SQLExecutionInput, execute_sql_query
+from continum.AskData import SQLExecutionInput, execute_sql_query
 from continum.ExpSuite.planning import (
     OpportunitySizingInput,
     PowerCalcInput,
@@ -8,14 +6,16 @@ from continum.ExpSuite.planning import (
     calculate_power,
 )
 
-# Import pure functions and input models from ExpSuite, mapMeta, and askdata
+# Import pure functions and input models from ExpSuite, mapMeta, and AskData
 from continum.ExpSuite.stats_inference import (
     SRMInput,
     StatTestInput,
     calculate_hypothesis_test,
     detect_srm,
 )
-from continum.mapMeta import StatSigFetchInput, fetch_statsig_experiment_health
+from continum.mapMeta import StatSigFetchInput
+from continum.mapMeta import fetch_statsig_experiment_health as _fetch_statsig_experiment_health
+from mcp.server.fastmcp import FastMCP
 
 # Initialize FastMCP Server
 mcp_server = FastMCP(
@@ -101,7 +101,7 @@ def run_hypothesis_test(
 @mcp_server.tool()
 def fetch_statsig_experiment_health(experiment_id: str) -> str:
     """Retrieve live StatSig pulse telemetry and variant exposure health for an active experiment."""
-    res = fetch_statsig_experiment_health(StatSigFetchInput(experiment_id=experiment_id))
+    res = _fetch_statsig_experiment_health(StatSigFetchInput(experiment_id=experiment_id))
     return res.summary
 
 

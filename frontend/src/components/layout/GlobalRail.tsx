@@ -12,12 +12,13 @@ const NAV_ITEMS: { id: 'home' | 'archive' | 'settings'; icon: LucideIcon; label:
 ]
 
 export function GlobalRail() {
-  const { goHome, activeGlobalPage, setActiveGlobalPage } = useMatchView()
+  const { goHome, activeGlobalPage, setActiveGlobalPage, knowledgeArchiveOpen, openKnowledgeArchive, closeKnowledgeArchive } =
+    useMatchView()
   const [hovered, setHovered] = useState(false)
 
   return (
     <aside
-      className={`rail-panel z-50 flex h-full shrink-0 flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out ${
+      className={`rail-panel relative inset-y-0 left-0 z-50 flex flex-col overflow-hidden border-r border-rail-border/30 transition-[width] duration-instant ease-in-out shrink-0 ${
         hovered ? 'w-60' : 'w-16'
       }`}
       onMouseEnter={() => setHovered(true)}
@@ -49,9 +50,9 @@ export function GlobalRail() {
       <nav className={`flex flex-1 flex-col gap-1 ${hovered ? 'px-2' : 'items-center px-0'}`}>
         {NAV_ITEMS.map((item) => {
           const isActive =
-            (item.id === 'home' && activeGlobalPage === 'workspace') ||
-            (item.id === 'archive' && activeGlobalPage === 'archive') ||
-            (item.id === 'settings' && activeGlobalPage === 'settings')
+            (item.id === 'home' && activeGlobalPage === 'workspace' && !knowledgeArchiveOpen) ||
+            (item.id === 'archive' && knowledgeArchiveOpen) ||
+            (item.id === 'settings' && activeGlobalPage === 'settings' && !knowledgeArchiveOpen)
           return (
             <button
               key={item.id}
@@ -59,8 +60,12 @@ export function GlobalRail() {
               title={!hovered ? item.label : undefined}
               onClick={() => {
                 if (item.id === 'home') {
+                  closeKnowledgeArchive()
                   goHome()
+                } else if (item.id === 'archive') {
+                  openKnowledgeArchive()
                 } else {
+                  closeKnowledgeArchive()
                   setActiveGlobalPage(item.id)
                 }
               }}

@@ -34,7 +34,7 @@ const POWER_CALCULATOR_SCHEMA: ModuleFormSchema = {
       min: 0,
       max: 1,
       step: 0.0001,
-      helpText: 'Auto-detected from historical data: 0.1800',
+      // Provenance is rendered from the live suggestion, never asserted here.
     },
     {
       key: 'mdePercent',
@@ -80,7 +80,6 @@ const POWER_CALCULATOR_SCHEMA: ModuleFormSchema = {
       defaultValue: 500,
       min: 1,
       step: 1,
-      helpText: 'Auto-detected: 500 daily inquiries',
     },
     {
       key: 'trafficFraction',

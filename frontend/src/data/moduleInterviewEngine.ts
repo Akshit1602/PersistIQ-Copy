@@ -1,5 +1,11 @@
-import type { ModuleId } from '../context/types'
+import type { ModuleId, ProjectChannel } from '../context/types'
 import { fillModuleDefaults } from './experimentBaselines'
+import {
+  prefillableValues,
+  suggestFieldValues,
+  type FieldSuggestion,
+  type SuggestionContext,
+} from './inputSuggestions'
 import { getModuleFormSchema } from './moduleFormSchemas'
 import { MODULE_BY_ID } from './moduleRegistry'
 import type { InterviewFieldStep, InterviewPill } from '../context/conversationalLoopTypes'
@@ -164,13 +170,25 @@ export function bootstrapModuleParams(
   moduleId: ModuleId,
   experiment: string,
   existingParams?: Record<string, unknown>,
+  suggestionContext?: SuggestionContext,
 ): { params: Record<string, unknown>; autoFilledFields: string[] } {
   const schema = getModuleFormSchema(moduleId, experiment)
   const defaults = Object.fromEntries(schema.fields.map((f) => [f.key, f.defaultValue]))
-  const { values, autoFilled } = fillModuleDefaults(moduleId, experiment, {
-    ...defaults,
-    ...(existingParams ?? {}),
-  })
+  // Schema defaults are the floor, so suggestions have to be applied against
+  // the caller's values rather than merged underneath them.
+  const suggestions = suggestionContext
+    ? prefillableValues(suggestFieldValues(moduleId, suggestionContext), existingParams ?? {})
+    : { values: {}, filledKeys: [] as string[] }
+  const { values, autoFilled } = fillModuleDefaults(
+    moduleId,
+    experiment,
+    {
+      ...defaults,
+      ...suggestions.values,
+      ...(existingParams ?? {}),
+    },
+    suggestionContext,
+  )
   const params = { ...values, ...(existingParams ?? {}) }
 
   // Suggested seeds (metrics/type/brief) count as auto-filled so interview skips those turns
@@ -184,7 +202,9 @@ export function bootstrapModuleParams(
         )
       : []
 
-  const autoFilledFields = [...new Set([...autoFilled, ...suggestedKeys])]
+  const autoFilledFields = [
+    ...new Set([...autoFilled, ...suggestions.filledKeys, ...suggestedKeys]),
+  ]
   return { params, autoFilledFields }
 }
 
@@ -193,12 +213,19 @@ export function buildAutoFillSummary(
   experiment: string,
   autoFilledFields: string[],
   params: Record<string, unknown>,
+  channel: ProjectChannel = 'digital',
+  suggestions: Record<string, FieldSuggestion> = {},
 ): string {
   if (autoFilledFields.length === 0) {
-    return `Starting ${MODULE_BY_ID[moduleId].label} for "${experiment}" (digital MVP).`
+    return `Starting ${MODULE_BY_ID[moduleId].label} for "${experiment}" (${channel} MVP).`
   }
+  // Name the source per field so the chat never implies data provenance the
+  // value does not have.
   const details = autoFilledFields
-    .map((key) => `${key}=${JSON.stringify(params[key])}`)
+    .map((key) => {
+      const source = suggestions[key]?.label
+      return `${key}=${JSON.stringify(params[key])}${source ? ` (${source})` : ''}`
+    })
     .join(', ')
   return `I've pulled suggested inputs for "${experiment}" (${details}). I'll confirm the remaining inputs with you one at a time.`
 }
@@ -223,10 +250,35 @@ function proceedPillFor(moduleId: ModuleId): InterviewPill | null {
   }
 }
 
+function formatPillValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(', ')
+  return String(value)
+}
+
+/**
+ * Leads the offered options with the engine's suggestion for the field being
+ * asked about, so the fastest answer is also the one grounded in the
+ * experiment's own data rather than a fixed guess.
+ */
+function suggestedPillFor(
+  fieldKey: string,
+  suggestions: Record<string, FieldSuggestion>,
+): InterviewPill | null {
+  const suggestion = suggestions[fieldKey]
+  if (!suggestion || suggestion.value === undefined || suggestion.value === '') return null
+  return {
+    id: `suggested-${fieldKey}`,
+    label: `${formatPillValue(suggestion.value)} — ${suggestion.label}`,
+    value: suggestion.value,
+    fieldKey,
+  }
+}
+
 export function getSmartPillsForPhase(
   moduleId: ModuleId,
   confirmedFieldKeys: string[],
   interviewPhase: 'interviewing' | 'ready' | 'idle' | 'running' | 'complete',
+  suggestionContext?: SuggestionContext,
 ): InterviewPill[] {
   if (interviewPhase === 'complete') {
     const proceed = proceedPillFor(moduleId)
@@ -244,7 +296,17 @@ export function getSmartPillsForPhase(
   }
   if (interviewPhase !== 'interviewing') return []
   const next = getNextInterviewStep(moduleId, confirmedFieldKeys)
-  return next?.pills ?? []
+  if (!next) return []
+
+  const suggestions = suggestionContext
+    ? suggestFieldValues(moduleId, suggestionContext)
+    : {}
+  const suggested = suggestedPillFor(next.fieldKey, suggestions)
+  if (!suggested) return next.pills
+
+  // Drop any fixed option that duplicates the suggestion.
+  const rest = next.pills.filter((p) => String(p.value) !== String(suggested.value))
+  return [suggested, ...rest]
 }
 
 export function buildReadyMessage(moduleId: ModuleId): string {

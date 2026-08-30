@@ -2,11 +2,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
-from continum.mapMeta import (
-    StatSigFetchInput,
-    fetch_statsig_experiment_health,
-    scan_database_schema,
-)
+from continum.mapMeta import StatSigFetchInput, fetch_statsig_experiment_health
 
 router = APIRouter(prefix="/api/experiments", tags=["Experiments & Data Catalog"])
 
@@ -16,8 +12,6 @@ async def list_experiments():
     """
     Returns all cataloged experiments for the MatchView Hub view and Header selector.
     """
-    schema_meta = scan_database_schema()
-
     # Return discovered or mock experiments
     experiments = [
         {

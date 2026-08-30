@@ -1,0 +1,51 @@
+# Databricks Apps entrypoint.
+#
+# Serves both the API and the built SPA from one process, which is why the
+# frontend's API base URL is left unset here — same-origin. Locally the frontend
+# runs on its own Vite port and sets VITE_API_BASE_URL instead.
+#
+# Run `npm run build --prefix frontend` before deploying: frontend/dist is
+# gitignored and is what continum/userui/app.py mounts.
+command:
+  - gunicorn
+  - continum.userui.app:app
+  - -k
+  - uvicorn.workers.UvicornWorker
+  - --bind
+  - 0.0.0.0:8000
+  - --workers
+  - "2"
+  - --timeout
+  - "120"
+
+env:
+  # Makes the environment explicit rather than relying on auto-detection.
+  - name: DEPLOY_TARGET
+    value: "databricks"
+  - name: LAKEBASE_ENDPOINT
+    value: "projects/matchview/branches/production/endpoints/primary"
+  - name: LAKEBASE_DATABASE
+    value: "matchview"
+  - name: LAKEBASE_SCHEMA
+    value: "app_v1"
+  - name: UC_CATALOG
+    value: "dev"
+  - name: UC_SCHEMA
+    value: "matchview_store"
+  - name: FMAPI_DEFAULT_ENDPOINT
+    value: "databricks-claude-sonnet-4-6"
+  # DATABRICKS_WAREHOUSE_ID is deliberately NOT hardcoded here. The upstream
+  # store config pinned a specific workspace's warehouse id, which does not
+  # travel between environments and should not live in version control. Supply
+  # it per environment — via a Databricks secret scope or the app's environment
+  # configuration — before enabling any Unity Catalog query path.
+
+# Without this block the app's service principal cannot call the FMAPI serving
+# endpoints, and every model call fails with 401 / "Model endpoint unavailable".
+permissions:
+  - permission: CAN_QUERY
+    serving_endpoint: databricks-claude-sonnet-4-6
+  - permission: CAN_QUERY
+    serving_endpoint: databricks-claude-haiku-4-5
+  - permission: CAN_QUERY
+    serving_endpoint: databricks-claude-opus-4-6

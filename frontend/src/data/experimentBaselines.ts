@@ -1,4 +1,10 @@
 import type { ModuleId } from '../context/types'
+import {
+  createSuggestionContext,
+  prefillableValues,
+  suggestFieldValues,
+  type SuggestionContext,
+} from './inputSuggestions'
 
 export interface ExperimentBaselines {
   baselineIor: number
@@ -10,91 +16,88 @@ export interface ExperimentBaselines {
   trafficFraction: number
 }
 
-const EXPERIMENT_BASELINES: Record<string, ExperimentBaselines> = {
-  'Walmart Banner Redesign': {
-    baselineIor: 0.18,
-    mdePercent: 10,
-    alpha: 0.05,
-    statisticalPower: 0.8,
-    variants: 2,
-    dailyTraffic: 500,
-    trafficFraction: 1,
-  },
-  'Cart Flow Optimization': {
-    baselineIor: 0.22,
-    mdePercent: 8,
-    alpha: 0.05,
-    statisticalPower: 0.8,
-    variants: 2,
-    dailyTraffic: 750,
-    trafficFraction: 1,
-  },
-  'Holiday Promo Lift Test': {
-    baselineIor: 0.15,
-    mdePercent: 12,
-    alpha: 0.01,
-    statisticalPower: 0.9,
-    variants: 3,
-    dailyTraffic: 1200,
-    trafficFraction: 0.5,
-  },
+/**
+ * Conventions, not data. Significance, power, and traffic fraction are design
+ * choices with no baseline to detect, so they stay fixed here; everything a
+ * dataset can actually answer comes from the suggestion engine instead.
+ */
+const DESIGN_CONVENTIONS: ExperimentBaselines = {
+  baselineIor: 0.18,
+  mdePercent: 10,
+  alpha: 0.05,
+  statisticalPower: 0.8,
+  variants: 2,
+  dailyTraffic: 500,
+  trafficFraction: 1,
 }
 
-export function getExperimentBaselines(experiment: string): ExperimentBaselines {
-  const stored = EXPERIMENT_BASELINES[experiment]
-  if (stored) return { ...stored }
+/**
+ * Power-calculator starting point for an experiment. Pass a suggestion context
+ * (the app does, via MatchViewContext) to get values derived from the
+ * experiment's own data; without one this returns the design conventions.
+ */
+export function getExperimentBaselines(
+  experiment: string,
+  ctx?: SuggestionContext,
+): ExperimentBaselines {
+  const suggestions = suggestFieldValues(
+    'power-calculator',
+    ctx ?? createSuggestionContext({ experiment }),
+  )
+
+  const numeric = (key: keyof ExperimentBaselines): number => {
+    const value = suggestions[key]?.value
+    return typeof value === 'number' && !Number.isNaN(value) ? value : DESIGN_CONVENTIONS[key]
+  }
 
   return {
-    baselineIor: 0.18,
-    mdePercent: 10,
-    alpha: 0.05,
-    statisticalPower: 0.8,
-    variants: 2,
-    dailyTraffic: 500,
-    trafficFraction: 1,
+    baselineIor: numeric('baselineIor'),
+    mdePercent: numeric('mdePercent'),
+    alpha: DESIGN_CONVENTIONS.alpha,
+    statisticalPower: DESIGN_CONVENTIONS.statisticalPower,
+    variants: numeric('variants'),
+    dailyTraffic: numeric('dailyTraffic'),
+    trafficFraction: DESIGN_CONVENTIONS.trafficFraction,
   }
 }
 
+/**
+ * Fills the blanks in a partially-specified module payload. Only high/medium
+ * confidence suggestions are written; benchmark-grade values stay behind the
+ * click-to-apply chip in the form UI.
+ */
 export function fillModuleDefaults(
   moduleId: ModuleId,
   experiment: string,
   partial: Record<string, unknown>,
+  ctx?: SuggestionContext,
 ): { values: Record<string, unknown>; autoFilled: string[] } {
-  const baselines = getExperimentBaselines(experiment)
-  const autoFilled: string[] = []
-  const values = { ...partial }
+  const context = ctx ?? createSuggestionContext({ experiment })
+  const suggestions = suggestFieldValues(moduleId, context)
+  const { values: suggested, filledKeys } = prefillableValues(suggestions, partial)
+
+  const values = { ...partial, ...suggested }
+  const autoFilled = [...filledKeys]
 
   if (moduleId === 'power-calculator') {
-    const defaults: Record<string, unknown> = {
-      baselineIor: baselines.baselineIor,
-      mdePercent: baselines.mdePercent,
-      alpha: baselines.alpha,
-      statisticalPower: baselines.statisticalPower,
-      variants: baselines.variants,
-      dailyTraffic: baselines.dailyTraffic,
-      trafficFraction: baselines.trafficFraction,
-    }
-    for (const [key, value] of Object.entries(defaults)) {
+    // Design conventions have no data source, so they are filled but never
+    // badged as detected.
+    const baselines = getExperimentBaselines(experiment, context)
+    for (const key of ['alpha', 'statisticalPower', 'trafficFraction', 'mdePercent'] as const) {
       if (values[key] === undefined || values[key] === null || values[key] === '') {
-        values[key] = value
+        values[key] = baselines[key]
         autoFilled.push(key)
       }
     }
   }
 
-  if (moduleId === 'opportunity-sizing') {
-    if (values.channelScope === undefined || values.channelScope === '') {
-      values.channelScope = 'digital'
-      autoFilled.push('channelScope')
-    }
+  if (
+    (moduleId === 'opportunity-sizing' || moduleId === 'experiment-type') &&
+    (values.channelScope === undefined || values.channelScope === '')
+  ) {
+    values.channelScope = context.channel
+    autoFilled.push('channelScope')
   }
 
-  if (moduleId === 'experiment-type') {
-    if (values.channelScope === undefined || values.channelScope === '') {
-      values.channelScope = 'digital'
-      autoFilled.push('channelScope')
-    }
-  }
-
-  return { values, autoFilled }
+  return { values, autoFilled: [...new Set(autoFilled)] }
 }

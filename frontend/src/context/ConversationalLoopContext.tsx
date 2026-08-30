@@ -1,460 +1,383 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { streamChatResponse, fetchExperiments, type Experiment } from '../services/api';
-import { useMatchView } from './MatchViewContext';
-import type { ModuleId } from './types';
-import type {
-  ActiveModuleContext,
-  InterviewPhase,
-  InterviewPill,
-  ConversationalLoopContextValue,
-} from './conversationalLoopTypes';
-
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { formatMessageTime } from '../data/mock'
 import {
   bootstrapModuleParams,
   buildAutoFillSummary,
   buildReadyMessage,
   getNextInterviewStep,
   getSmartPillsForPhase,
-} from '../data/moduleInterviewEngine';
-import { MODULE_BY_ID } from '../data/moduleRegistry';
-import { extractNlpParameters } from '../data/nlpParameterExtractor';
-import { mapToolToModuleId } from './MatchViewContext';
+} from '../data/moduleInterviewEngine'
+import {
+  buildBriefBody,
+  buildExperimentTypeDefaults,
+  buildMetricsFormDefaults,
+} from '../data/briefBuilder'
+import { suggestFieldValues } from '../data/inputSuggestions'
+import { MODULE_BY_ID } from '../data/moduleRegistry'
+import type { ModuleId, TextChatMessage } from './types'
+import { isModuleRunMessage } from './types'
+import { useMatchView } from './MatchViewContext'
+import type {
+  ActiveModuleContext,
+  ConversationalLoopContextValue,
+  InterviewPhase,
+  InterviewPill,
+} from './conversationalLoopTypes'
 
-export type PhaseType = 'DISCOVERY' | 'PLANNING' | 'EXECUTION' | 'EVALUATION' | 'INSIGHTS';
+const ConversationalLoopContext = createContext<ConversationalLoopContextValue | null>(null)
 
-export interface ToolExecution {
-  tool: string;
-  message: string;
-  status: 'running' | 'completed' | 'failed';
+let loopMessageCounter = 500
+
+function nextLoopMessageId() {
+  loopMessageCounter += 1
+  return `lm${loopMessageCounter}`
 }
 
-export interface UIArtifactCard {
-  artifact_id: string;
-  type: string;
-  title: string;
-  payload: Record<string, any>;
-}
+export function ConversationalLoopProvider({ children }: { children: ReactNode }) {
+  const {
+    activeThreadId,
+    selectedExperiment,
+    moduleRunStatus,
+    messagesByThread,
+    pendingModuleActivation,
+    experimentSpecsByName,
+    moduleFormValuesByExperiment,
+    setTab,
+    selectLabModule,
+    updateModuleFormField,
+    injectNlpParameters,
+    runModule,
+    setActivePhase,
+    appendChatMessages,
+    clearPendingModuleActivation,
+    openAudienceWizard,
+    getSuggestionContext,
+  } = useMatchView()
 
-export interface ChatMessage {
-  id: string;
-  sender: 'user' | 'assistant' | 'system';
-  content: string;
-  text?: string;
-  timestamp: string;
-  phase?: PhaseType;
-  executionStatus?: string | null;
-  artifacts?: UIArtifactCard[];
-  toolsRan?: ToolExecution[];
-}
+  const [activeModuleContext, setActiveModuleContext] = useState<ActiveModuleContext | null>(null)
+  const [interviewPhase, setInterviewPhase] = useState<InterviewPhase>('idle')
+  const [pendingFieldKey, setPendingFieldKey] = useState<string | null>(null)
+  const [confirmedFieldKeys, setConfirmedFieldKeys] = useState<string[]>([])
 
-export interface ConversationalLoopContextType {
-  // Chat state
-  messages: ChatMessage[];
-  isGenerating: boolean;
-  activeToolStatus: string | null;
-  executionStatus: string | null;
+  const interviewRef = useRef({ confirmedFieldKeys, interviewPhase, activeModuleContext })
+  interviewRef.current = { confirmedFieldKeys, interviewPhase, activeModuleContext }
 
-  // Artifacts & Cards
-  artifacts: UIArtifactCard[];
-  activeArtifact: UIArtifactCard | null;
-  setActiveArtifact: (artifact: UIArtifactCard | null) => void;
-  addArtifact: (artifact: UIArtifactCard) => void;
-
-  // Experiment state & Lifecycle
-  experiments: Experiment[];
-  selectedExperimentId: string | null;
-  setSelectedExperimentId: (id: string | null) => void;
-  activePhase: PhaseType;
-  setActivePhase: (phase: PhaseType) => void;
-
-  // Actions
-  sendMessage: (text: string) => Promise<void>;
-  clearHistory: () => void;
-}
-
-export type CombinedConversationalLoopContextType = ConversationalLoopContextType & ConversationalLoopContextValue;
-
-const ConversationalLoopContext = createContext<CombinedConversationalLoopContextType | undefined>(undefined);
-
-export const ConversationalLoopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const matchView = useMatchView();
-
-  // Custom Streaming Chat states
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'msg_welcome',
-      sender: 'assistant',
-      content: 'Welcome to Continum MatchView Copilot! Select an experiment above or ask me to perform power calculations, SRM checks, or hypothesis tests.',
-      text: 'Welcome to Continum MatchView Copilot! Select an experiment above or ask me to perform power calculations, SRM checks, or hypothesis tests.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      phase: 'DISCOVERY',
+  const appendMessages = useCallback(
+    (messages: TextChatMessage[]) => {
+      if (!activeThreadId || messages.length === 0) return
+      appendChatMessages(messages)
     },
-  ]);
+    [activeThreadId, appendChatMessages],
+  )
 
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [activeToolStatus, setActiveToolStatus] = useState<string | null>(null);
-  const [artifacts, setArtifacts] = useState<UIArtifactCard[]>([]);
-  const [activeArtifact, setActiveArtifact] = useState<UIArtifactCard | null>(null);
-
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [selectedExperimentId, setSelectedExperimentId] = useState<string | null>(null);
-  const [activePhase, setActivePhase] = useState<PhaseType>('DISCOVERY');
-
-  // Interview state machine states
-  const [activeModuleContext, setActiveModuleContext] = useState<ActiveModuleContext | null>(null);
-  const [interviewPhase, setInterviewPhase] = useState<InterviewPhase>('idle');
-  const [pendingFieldKey, setPendingFieldKey] = useState<string | null>(null);
-  const [confirmedFieldKeys, setConfirmedFieldKeys] = useState<string[]>([]);
-  const [smartPills, setSmartPills] = useState<InterviewPill[]>([]);
-
-  // Fetch experiments catalog on initial load
-  useEffect(() => {
-    fetchExperiments()
-      .then((data) => {
-        setExperiments(data);
-        if (data && data.length > 0) {
-          setSelectedExperimentId(data[0].experiment_id);
-        }
-      })
-      .catch((err) => {
-        console.warn('Backend server not connected yet or experiments fetch failed:', err);
-      });
-  }, []);
-
-  const addArtifact = (artifact: UIArtifactCard) => {
-    setArtifacts((prev) => {
-      const exists = prev.some((a) => a.artifact_id === artifact.artifact_id);
-      if (exists) return prev;
-      return [...prev, artifact];
-    });
-    setActiveArtifact(artifact);
-  };
-
-  const sendMessage = async (userText: string) => {
-    if (!userText.trim() || isGenerating) return;
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const userMsg: ChatMessage = {
-      id: `user_${Date.now()}`,
-      sender: 'user',
-      content: userText,
-      text: userText,
-      timestamp: timeStr,
-      phase: activePhase,
-    };
-
-    const assistantMsgId = `assistant_${Date.now()}`;
-    const assistantPlaceholder: ChatMessage = {
-      id: assistantMsgId,
-      sender: 'assistant',
-      content: '',
-      text: '',
-      timestamp: timeStr,
-      phase: activePhase,
-      artifacts: [],
-    };
-
-    if (matchView.currentPersona === 'analyst') {
-      const nlp = extractNlpParameters(userText, matchView.selectedExperiment, matchView.activeModuleId);
-      if (nlp) {
-        matchView.selectLabModule(nlp.moduleId);
-        matchView.selectModule(nlp.moduleId);
-        matchView.setLabPanelView('form');
-        matchView.injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
+  const askNextQuestion = useCallback(
+    (moduleId: ModuleId, confirmed: string[]) => {
+      const next = getNextInterviewStep(moduleId, confirmed)
+      if (!next) {
+        setInterviewPhase('ready')
+        setPendingFieldKey(null)
+        appendMessages([
+          {
+            kind: 'text',
+            id: nextLoopMessageId(),
+            role: 'assistant',
+            content: buildReadyMessage(moduleId),
+            timestamp: formatMessageTime(),
+          },
+        ])
+        return
       }
-    }
+      setPendingFieldKey(next.fieldKey)
+      setInterviewPhase('interviewing')
+      appendMessages([
+        {
+          kind: 'text',
+          id: nextLoopMessageId(),
+          role: 'assistant',
+          content: next.question,
+          timestamp: formatMessageTime(),
+        },
+      ])
+    },
+    [appendMessages],
+  )
 
-    setMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
-    setIsGenerating(true);
-    setActiveToolStatus('Analyzing request...');
+  const activateModuleContext = useCallback(
+    (moduleId: ModuleId) => {
+      if (moduleId === 'audience-selection') {
+        setTab('chat')
+        setActivePhase(moduleId)
+        selectLabModule(moduleId)
+        openAudienceWizard()
+        return
+      }
 
-    await streamChatResponse({
-      message: userText,
-      threadId: 'matchview_session',
-      activeExperimentId: selectedExperimentId,
-      onToken: (chunk) => {
-        setActiveToolStatus(null);
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id === assistantMsgId) {
-              const updatedContent = msg.content + chunk;
-              return {
-                ...msg,
-                content: updatedContent,
-                text: updatedContent,
-              };
-            }
-            return msg;
-          })
-        );
-      },
-      onToolStart: (tool, statusMsg) => {
-        setActiveToolStatus(statusMsg);
-        if (matchView.currentPersona === 'analyst') {
-          const mappedModuleId = mapToolToModuleId(tool);
-          if (mappedModuleId) {
-            matchView.selectLabModule(mappedModuleId);
-            matchView.selectModule(mappedModuleId);
-            matchView.setLabPanelView('form');
-            const nlp = extractNlpParameters(userText, matchView.selectedExperiment, mappedModuleId);
-            if (nlp) {
-              matchView.injectNlpParameters(nlp.moduleId, nlp.params, nlp.touchedFields);
-            }
-          }
+      const mod = MODULE_BY_ID[moduleId]
+      const now = formatMessageTime()
+      const spec = experimentSpecsByName[selectedExperiment]
+      const existing = moduleFormValuesByExperiment[selectedExperiment]?.[moduleId]
+
+      setTab('chat')
+      setActivePhase(moduleId)
+      selectLabModule(moduleId)
+
+      let seed = existing ? { ...existing } : undefined
+      if (!seed && spec && moduleId === 'metrics-tracking') {
+        const sizing = moduleFormValuesByExperiment[selectedExperiment]?.['opportunity-sizing']
+        const expectedLift =
+          typeof sizing?.expectedLift === 'number' ? sizing.expectedLift : undefined
+        seed = buildMetricsFormDefaults(spec.hypothesis, spec.goal, {
+          expectedLift,
+          addressableVolume:
+            typeof sizing?.monthlyInquiries === 'number'
+              ? sizing.monthlyInquiries
+              : typeof sizing?.addressableVolume === 'number'
+                ? sizing.addressableVolume
+                : undefined,
+          currentInteractionRate:
+            typeof sizing?.currentIor === 'number'
+              ? sizing.currentIor * 100
+              : typeof sizing?.currentInteractionRate === 'number'
+                ? sizing.currentInteractionRate
+                : undefined,
+          targetInteractionRate:
+            typeof sizing?.targetIor === 'number'
+              ? sizing.targetIor * 100
+              : typeof sizing?.targetInteractionRate === 'number'
+                ? sizing.targetInteractionRate
+                : undefined,
+        })
+      }
+      if (!seed && spec && moduleId === 'experiment-type') {
+        const sizing = moduleFormValuesByExperiment[selectedExperiment]?.['opportunity-sizing']
+        seed = buildExperimentTypeDefaults(spec.hypothesis, spec.goal, {
+          expectedLift:
+            typeof sizing?.expectedLift === 'number' ? sizing.expectedLift : undefined,
+          addressableVolume:
+            typeof sizing?.monthlyInquiries === 'number'
+              ? sizing.monthlyInquiries
+              : typeof sizing?.addressableVolume === 'number'
+                ? sizing.addressableVolume
+                : undefined,
+          currentInteractionRate:
+            typeof sizing?.currentIor === 'number'
+              ? sizing.currentIor * 100
+              : typeof sizing?.currentInteractionRate === 'number'
+                ? sizing.currentInteractionRate
+                : undefined,
+          targetInteractionRate:
+            typeof sizing?.targetIor === 'number'
+              ? sizing.targetIor * 100
+              : typeof sizing?.targetInteractionRate === 'number'
+                ? sizing.targetInteractionRate
+                : undefined,
+        })
+      }
+      if (spec && moduleId === 'brief-generator') {
+        const snapshots = moduleFormValuesByExperiment[selectedExperiment] ?? {}
+        seed = {
+          ...(existing ?? {}),
+          briefTitle: `${spec.name} — Digital Experiment Brief`,
+          briefBody: buildBriefBody(spec, snapshots),
         }
-      },
-      onArtifact: (artifactPayload) => {
-        const card: UIArtifactCard = {
-          artifact_id: artifactPayload.artifact_id || `art_${Date.now()}`,
-          type: artifactPayload.type || 'stat_results_card',
-          title: artifactPayload.title || 'Analysis Card',
-          payload: artifactPayload.payload || artifactPayload,
-        };
+      }
 
-        addArtifact(card);
+      const suggestionContext = getSuggestionContext(selectedExperiment)
+      const { params, autoFilledFields } = bootstrapModuleParams(
+        moduleId,
+        selectedExperiment,
+        seed,
+        suggestionContext,
+      )
+      injectNlpParameters(moduleId, params, autoFilledFields)
 
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.id === assistantMsgId) {
-              const currentArtifacts = msg.artifacts || [];
-              return {
-                ...msg,
-                artifacts: [...currentArtifacts, card],
-              };
-            }
-            return msg;
-          })
-        );
-      },
-      onDone: () => {
-        setIsGenerating(false);
-        setActiveToolStatus(null);
-      },
-      onError: (err) => {
-        console.error('Chat stream error:', err);
-        setIsGenerating(false);
-        setActiveToolStatus(null);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  content: '⚠️ Unable to reach Continum backend. Ensure Python server is running on http://localhost:8000.',
-                  text: '⚠️ Unable to reach Continum backend. Ensure Python server is running on http://localhost:8000.',
-                }
-              : msg
-          )
-        );
-      },
-    });
-  };
+      // Suggested seeds count as auto-filled so interview skips those turns
+      const confirmed = autoFilledFields
+      setActiveModuleContext({ moduleId, label: mod.label, startedAt: now })
+      setConfirmedFieldKeys(confirmed)
+      setInterviewPhase('interviewing')
+      setPendingFieldKey(null)
 
-  const clearHistory = () => {
-    setMessages([]);
-    setArtifacts([]);
-    setActiveArtifact(null);
-  };
-
-  // Interview state machine actions
-  const activateModuleContext = (moduleId: ModuleId) => {
-    const existingParams = matchView.getLockedModuleSnapshot(moduleId);
-    const { params, autoFilledFields } = bootstrapModuleParams(
-      moduleId,
-      matchView.selectedExperiment,
-      existingParams
-    );
-
-    const context: ActiveModuleContext = {
-      moduleId,
-      label: MODULE_BY_ID[moduleId]?.label ?? moduleId,
-      startedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setActiveModuleContext(context);
-    setConfirmedFieldKeys(autoFilledFields);
-
-    // Save defaults back
-    Object.entries(params).forEach(([k, v]) => {
-      matchView.updateModuleFormField(moduleId, k, v);
-    });
-
-    const nextStep = getNextInterviewStep(moduleId, autoFilledFields);
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (nextStep) {
-      setInterviewPhase('interviewing');
-      setPendingFieldKey(nextStep.fieldKey);
-      setSmartPills(getSmartPillsForPhase(moduleId, autoFilledFields, 'interviewing'));
-
-      const greeting = buildAutoFillSummary(moduleId, matchView.selectedExperiment, autoFilledFields, params);
-
-      setMessages((prev) => [
-        ...prev,
+      appendMessages([
         {
-          id: `system_${Date.now()}`,
-          sender: 'system',
-          content: greeting,
-          timestamp: timeStr,
+          kind: 'text',
+          id: nextLoopMessageId(),
+          role: 'assistant',
+          content: buildAutoFillSummary(
+            moduleId,
+            selectedExperiment,
+            autoFilledFields,
+            params,
+            suggestionContext.channel,
+            suggestFieldValues(moduleId, suggestionContext),
+          ),
+          timestamp: now,
         },
-        {
-          id: `asst_q_${Date.now()}`,
-          sender: 'assistant',
-          content: nextStep.question,
-          timestamp: timeStr,
-        },
-      ]);
-    } else {
-      setInterviewPhase('ready');
-      setPendingFieldKey(null);
-      setSmartPills(getSmartPillsForPhase(moduleId, autoFilledFields, 'ready'));
+      ])
 
-      const readyMsg = buildReadyMessage(moduleId);
+      window.setTimeout(() => askNextQuestion(moduleId, confirmed), 80)
+    },
+    [
+      setTab,
+      setActivePhase,
+      selectLabModule,
+      openAudienceWizard,
+      selectedExperiment,
+      experimentSpecsByName,
+      moduleFormValuesByExperiment,
+      injectNlpParameters,
+      appendMessages,
+      askNextQuestion,
+      getSuggestionContext,
+    ],
+  )
 
-      setMessages((prev) => [
-        ...prev,
+  const submitInterviewAnswer = useCallback(
+    (fieldKey: string, value: unknown, label?: string) => {
+      const ctx = interviewRef.current.activeModuleContext
+      if (!ctx || interviewRef.current.interviewPhase === 'running') return
+
+      const display = label ?? String(value)
+      appendMessages([
         {
-          id: `asst_r_${Date.now()}`,
-          sender: 'assistant',
-          content: readyMsg,
-          timestamp: timeStr,
+          kind: 'text',
+          id: nextLoopMessageId(),
+          role: 'user',
+          content: display,
+          timestamp: formatMessageTime(),
         },
-      ]);
+      ])
+
+      updateModuleFormField(ctx.moduleId, fieldKey, value)
+
+      const nextConfirmed = interviewRef.current.confirmedFieldKeys.includes(fieldKey)
+        ? interviewRef.current.confirmedFieldKeys
+        : [...interviewRef.current.confirmedFieldKeys, fieldKey]
+
+      setConfirmedFieldKeys(nextConfirmed)
+      askNextQuestion(ctx.moduleId, nextConfirmed)
+    },
+    [appendMessages, updateModuleFormField, askNextQuestion],
+  )
+
+  const executeSimulation = useCallback(() => {
+    const ctx = interviewRef.current.activeModuleContext
+    if (!ctx || moduleRunStatus === 'running') return
+
+    setInterviewPhase('running')
+    setPendingFieldKey(null)
+
+    appendMessages([
+      {
+        kind: 'text',
+        id: nextLoopMessageId(),
+        role: 'user',
+        content: '🚀 Run Simulation Now',
+        timestamp: formatMessageTime(),
+      },
+    ])
+
+    runModule(ctx.moduleId, { skipUserMessage: true })
+  }, [moduleRunStatus, appendMessages, runModule])
+
+  const pushResultsToInsights = useCallback(() => {
+    const ctx = interviewRef.current.activeModuleContext
+    if (ctx) {
+      selectLabModule(ctx.moduleId)
     }
+    setTab('insights')
+  }, [setTab, selectLabModule])
 
-    matchView.selectLabModule(moduleId);
-    matchView.setLabPanelView('form');
-  };
+  useEffect(() => {
+    setActiveModuleContext(null)
+    setInterviewPhase('idle')
+    setPendingFieldKey(null)
+    setConfirmedFieldKeys([])
+  }, [activeThreadId])
 
-  const submitInterviewAnswer = (fieldKey: string, value: unknown, label?: string) => {
-    if (!activeModuleContext) return;
+  useEffect(() => {
+    if (!pendingModuleActivation) return
+    const moduleId = pendingModuleActivation
+    clearPendingModuleActivation()
+    // Defer so thread/messages from createExperiment are committed first
+    window.setTimeout(() => activateModuleContext(moduleId), 50)
+  }, [pendingModuleActivation, clearPendingModuleActivation, activateModuleContext])
 
-    const moduleId = activeModuleContext.moduleId;
-    const updatedConfirmed = [...confirmedFieldKeys, fieldKey];
-    setConfirmedFieldKeys(updatedConfirmed);
+  useEffect(() => {
+    if (!activeModuleContext || interviewPhase !== 'running') return
+    if (moduleRunStatus !== 'success') return
 
-    matchView.updateModuleFormField(moduleId, fieldKey, value);
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userDisplay = label || String(value);
-
-    // Add user's answer message
-    const userMsg: ChatMessage = {
-      id: `user_ans_${Date.now()}`,
-      sender: 'user',
-      content: userDisplay,
-      timestamp: timeStr,
-    };
-
-    const nextStep = getNextInterviewStep(moduleId, updatedConfirmed);
-
-    if (nextStep) {
-      setPendingFieldKey(nextStep.fieldKey);
-      setSmartPills(getSmartPillsForPhase(moduleId, updatedConfirmed, 'interviewing'));
-
-      setMessages((prev) => [
-        ...prev,
-        userMsg,
-        {
-          id: `asst_q_${Date.now()}`,
-          sender: 'assistant',
-          content: nextStep.question,
-          timestamp: timeStr,
-        },
-      ]);
-    } else {
-      setInterviewPhase('ready');
-      setPendingFieldKey(null);
-      setSmartPills(getSmartPillsForPhase(moduleId, updatedConfirmed, 'ready'));
-
-      const readyMsg = buildReadyMessage(moduleId);
-
-      setMessages((prev) => [
-        ...prev,
-        userMsg,
-        {
-          id: `asst_r_${Date.now()}`,
-          sender: 'assistant',
-          content: readyMsg,
-          timestamp: timeStr,
-        },
-      ]);
+    const messages = messagesByThread[activeThreadId] ?? []
+    const hasResult = messages.some(
+      (m) =>
+        isModuleRunMessage(m) &&
+        m.moduleId === activeModuleContext.moduleId &&
+        m.status === 'success',
+    )
+    if (hasResult) {
+      setInterviewPhase('complete')
     }
-  };
+  }, [moduleRunStatus, activeModuleContext, interviewPhase, messagesByThread, activeThreadId])
 
-  const executeSimulation = () => {
-    if (!activeModuleContext) return;
+  const smartPills = useMemo((): InterviewPill[] => {
+    if (!activeModuleContext) return []
+    return getSmartPillsForPhase(
+      activeModuleContext.moduleId,
+      confirmedFieldKeys,
+      interviewPhase,
+      getSuggestionContext(selectedExperiment),
+    )
+  }, [
+    activeModuleContext,
+    confirmedFieldKeys,
+    interviewPhase,
+    getSuggestionContext,
+    selectedExperiment,
+  ])
 
-    setInterviewPhase('running');
-    setSmartPills([]);
-
-    const moduleId = activeModuleContext.moduleId;
-    matchView.runModule(moduleId, { skipUserMessage: true });
-
-    // Wait and complete the interview
-    setTimeout(() => {
-      setInterviewPhase('complete');
-      setSmartPills(getSmartPillsForPhase(moduleId, confirmedFieldKeys, 'complete'));
-
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `asst_done_${Date.now()}`,
-          sender: 'assistant',
-          content: `✅ Simulation for ${MODULE_BY_ID[moduleId]?.label || moduleId} run successfully. Results are compiled and visible in the Reports tab.`,
-          timestamp: timeStr,
-        },
-      ]);
-    }, 1800);
-  };
-
-  const pushResultsToInsights = () => {
-    matchView.setTab('insights');
-  };
+  const value = useMemo<ConversationalLoopContextValue>(
+    () => ({
+      activeModuleContext,
+      interviewPhase,
+      pendingFieldKey,
+      confirmedFieldKeys,
+      smartPills,
+      activateModuleContext,
+      submitInterviewAnswer,
+      executeSimulation,
+      pushResultsToInsights,
+    }),
+    [
+      activeModuleContext,
+      interviewPhase,
+      pendingFieldKey,
+      confirmedFieldKeys,
+      smartPills,
+      activateModuleContext,
+      submitInterviewAnswer,
+      executeSimulation,
+      pushResultsToInsights,
+    ],
+  )
 
   return (
-    <ConversationalLoopContext.Provider
-      value={{
-        messages,
-        isGenerating,
-        activeToolStatus,
-        executionStatus: activeToolStatus,
-        artifacts,
-        activeArtifact,
-        setActiveArtifact,
-        addArtifact,
-        experiments,
-        selectedExperimentId,
-        setSelectedExperimentId,
-        activePhase,
-        setActivePhase,
-        sendMessage,
-        clearHistory,
+    <ConversationalLoopContext.Provider value={value}>{children}</ConversationalLoopContext.Provider>
+  )
+}
 
-        // Interview machine
-        activeModuleContext,
-        interviewPhase,
-        pendingFieldKey,
-        confirmedFieldKeys,
-        smartPills,
-        activateModuleContext,
-        submitInterviewAnswer,
-        executeSimulation,
-        pushResultsToInsights,
-      }}
-    >
-      {children}
-    </ConversationalLoopContext.Provider>
-  );
-};
-
-export const useConversationalLoop = () => {
-  const context = useContext(ConversationalLoopContext);
-  if (!context) {
-    throw new Error('useConversationalLoop must be used within a ConversationalLoopProvider');
+export function useConversationalLoop(): ConversationalLoopContextValue {
+  const ctx = useContext(ConversationalLoopContext)
+  if (!ctx) {
+    throw new Error('useConversationalLoop must be used within ConversationalLoopProvider')
   }
-  return context;
-};
+  return ctx
+}

@@ -42,6 +42,7 @@ from continum.ExpSuite.stats_inference import (
     run_sprt,
 )
 from continum.orchestration.tools.adapter import create_expsuite_tool
+from continum.orchestration.tools.subgraph_tools import subgraph_tools
 
 # ==========================================
 # Tool Registrations: Stats & Inference
@@ -162,6 +163,14 @@ run_causal_engine_tool = create_expsuite_tool(
 # ==========================================
 # Consolidated Master Tool List Export
 # ==========================================
+#
+# Two granularities are exposed deliberately. The atomic tools above wrap a
+# single ExpSuite function each; the workflow tools appended from
+# `subgraph_tools` run a whole domain subgraph (ingestion, planning, health
+# monitoring, analysis) or one AskData branch. The model picks whichever matches
+# the request — "what sample size do I need" is one atomic call, "plan this
+# experiment" is one workflow call — rather than being forced through a fixed
+# pipeline.
 
 all_experimentation_tools = [
     # Stats & Inference
@@ -180,4 +189,6 @@ all_experimentation_tools = [
     calculate_did_tool,
     run_forecast_tool,
     run_causal_engine_tool,
+    # Domain workflows + AskData branches (orchestration/subgraphs)
+    *subgraph_tools,
 ]

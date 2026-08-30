@@ -29,6 +29,6 @@ async def resume_interrupted_graph(payload: ApprovalRequest):
 
     # Resume graph execution with approval state
     updated_state = {"messages": [HumanMessage(content=resume_message)]}
-    result = app_graph.invoke(updated_state, config)
+    app_graph.invoke(updated_state, config)
 
     return {"status": "resumed", "approved": payload.approved}

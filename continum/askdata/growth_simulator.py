@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 
-from continum.askdata.visual_generator import build_growth_forecast_chart
+from continum.AskData.chart_spec import ChartSpec, spec_to_plotly
+from continum.AskData.visual_generator import build_growth_forecast_spec
 from continum.ExpSuite.causal.forecasting import (
     ForecastInput,
     ForecastResult,
@@ -20,6 +21,9 @@ class GrowthSimulationInput(BaseModel):
 
 class GrowthSimulationResult(BaseModel):
     forecast: ForecastResult
+    # The renderer-neutral chart the UI draws. `plotly_json` is derived from it
+    # and kept for exports; nothing in MatchView reads it.
+    chart_spec: ChartSpec
     plotly_json: dict
     summary: str
 
@@ -36,8 +40,7 @@ def simulate_and_visualize_growth(input_data: GrowthSimulationInput) -> GrowthSi
 
     forecast_res = run_monte_carlo_forecast(f_input)
 
-    # Build Plotly chart
-    chart_json = build_growth_forecast_chart(
+    spec = build_growth_forecast_spec(
         p10_annual=forecast_res.p10_annual_lift,
         p50_annual=forecast_res.projected_annual_lift,
         p90_annual=forecast_res.p90_annual_lift,
@@ -45,5 +48,8 @@ def simulate_and_visualize_growth(input_data: GrowthSimulationInput) -> GrowthSi
     )
 
     return GrowthSimulationResult(
-        forecast=forecast_res, plotly_json=chart_json, summary=forecast_res.summary
+        forecast=forecast_res,
+        chart_spec=spec,
+        plotly_json=spec_to_plotly(spec),
+        summary=forecast_res.summary,
     )

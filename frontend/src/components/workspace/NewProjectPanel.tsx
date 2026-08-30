@@ -203,7 +203,7 @@ export function NewProjectPanel() {
                   className={inputClass}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Walmart Digital Growth"
+                  placeholder="e.g. Incremental lift measurement"
                   autoFocus
                 />
               </div>

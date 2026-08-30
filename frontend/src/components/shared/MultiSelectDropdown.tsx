@@ -7,6 +7,10 @@ export interface MultiSelectOption {
   label: string
   description?: string
   disabled?: boolean
+  /** Intent-based search synonyms (e.g. ["cvr", "conversion"] for
+   * "Transaction Conversion Rate") — matched and ranked above plain
+   * label/description substring matches. */
+  keywords?: string[]
 }
 
 interface MultiSelectDropdownProps {
@@ -45,11 +49,31 @@ export function MultiSelectDropdown({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return options
-    return options.filter(
-      (o) =>
-        o.label.toLowerCase().includes(q) ||
-        (o.description?.toLowerCase().includes(q) ?? false),
-    )
+
+    // Rank each option so the most relevant matches surface first — a
+    // customer searching "cvr" shouldn't have to know the exact catalog
+    // label to find "Transaction Conversion Rate".
+    const scored = options
+      .map((o) => {
+        const label = o.label.toLowerCase()
+        const description = o.description?.toLowerCase() ?? ''
+        const keywords = o.keywords?.map((k) => k.toLowerCase()) ?? []
+
+        let score = 0
+        if (label === q) score = 100
+        else if (keywords.some((k) => k === q)) score = 95
+        else if (label.startsWith(q)) score = 80
+        else if (keywords.some((k) => k.startsWith(q))) score = 75
+        else if (keywords.some((k) => k.includes(q))) score = 60
+        else if (label.includes(q)) score = 50
+        else if (description.includes(q)) score = 20
+
+        return { option: o, score }
+      })
+      .filter((s) => s.score > 0)
+
+    scored.sort((a, b) => b.score - a.score)
+    return scored.map((s) => s.option)
   }, [options, query])
 
   useEffect(() => {
