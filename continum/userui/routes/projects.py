@@ -1,9 +1,9 @@
 import os
+import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import duckdb
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -17,7 +17,12 @@ if not DB_PATH.exists():
 def get_db_connection():
     if not DB_PATH.exists():
         raise HTTPException(status_code=500, detail="Database file matchview_omnichannel.db not found.")
-    return duckdb.connect(str(DB_PATH))
+    try:
+        import duckdb
+        return duckdb.connect(str(DB_PATH))
+    except Exception:
+        conn = sqlite3.connect(str(DB_PATH))
+        return conn
 
 
 def init_chat_tables():
@@ -71,6 +76,8 @@ def init_chat_tables():
         for m in seed_msgs:
             conn.execute("INSERT INTO chat_messages VALUES (?, ?, ?, ?, ?)", m)
 
+    if hasattr(conn, "commit"):
+        conn.commit()
     conn.close()
 
 
@@ -179,6 +186,8 @@ def create_thread(project_id: str, req: CreateThreadRequest):
         thread_id = str(uuid.uuid4())
         now_str = datetime.now().isoformat()
         conn.execute("INSERT INTO chat_threads VALUES (?, ?, ?, ?, ?)", (thread_id, project_id, req.title, req.channel or "ecomm", now_str))
+        if hasattr(conn, "commit"):
+            conn.commit()
         conn.close()
         return {
             "status": "success",
@@ -223,6 +232,8 @@ def post_thread_message(thread_id: str, req: CreateMessageRequest):
         now_str = datetime.now().isoformat()
         conn.execute("INSERT INTO chat_messages VALUES (?, ?, ?, ?, ?)", (msg_id, thread_id, req.role, req.content, now_str))
         conn.execute("UPDATE chat_threads SET updated_at = ? WHERE id = ?", (now_str, thread_id))
+        if hasattr(conn, "commit"):
+            conn.commit()
         conn.close()
         return {
             "status": "success",
