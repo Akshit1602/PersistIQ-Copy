@@ -9,8 +9,10 @@ from continum.config import settings
 from continum.userui.routes import (
     approval_router,
     chat_router,
+    datasets_router,
     experiments_router,
     modules_router,
+    projects_router,
     suggestions_router,
 )
 
@@ -23,7 +25,7 @@ app = FastAPI(
 # Enable CORS for local Vite development server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +37,8 @@ app.include_router(experiments_router)
 app.include_router(approval_router)
 app.include_router(modules_router)
 app.include_router(suggestions_router)
+app.include_router(datasets_router)
+app.include_router(projects_router)
 
 
 @app.get("/health", tags=["Health Check"])
@@ -49,12 +53,6 @@ async def health_check():
 
 # ---------------------------------------------------------------------------
 # SPA serving (Databricks Apps)
-#
-# On Databricks Apps this process serves the built frontend as well as the API,
-# so the SPA is same-origin. Registered LAST so every /api/* route and /health
-# above still win, and guarded on the build existing so local dev — where Vite
-# serves the frontend on its own port and frontend/dist may be absent — starts
-# normally.
 # ---------------------------------------------------------------------------
 _DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 

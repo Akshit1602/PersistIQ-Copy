@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from continum.AskData.chart_spec import (
+from continum.askdata.chart_spec import (
     SERIES_COLORS,
     ChartSeries,
     ChartSpec,
@@ -24,8 +24,6 @@ from continum.AskData.chart_spec import (
     summarize_spec,
 )
 
-# Named chart types carry domain semantics (which arm is which, what the error
-# bar means); generic kinds are shape-only and take their meaning from `data`.
 NAMED_CHART_TYPES = ("metric_lift", "srm_distribution", "growth_forecast")
 GENERIC_CHART_KINDS = ("bar", "grouped_bar", "line", "area", "pie", "scatter")
 SUPPORTED_CHART_TYPES = NAMED_CHART_TYPES + GENERIC_CHART_KINDS + ("auto",)
@@ -47,9 +45,6 @@ class ChartGeneratorInput(BaseModel):
 
 class ChartGeneratorResult(BaseModel):
     chart_type: str
-    # The renderer-neutral spec the UI draws. None when the supplied data held
-    # nothing plottable -- callers must fall back to text rather than render an
-    # empty axis.
     chart_spec: Optional[ChartSpec] = None
     plotly_json: Dict[str, Any] = Field(default_factory=dict)
     summary: str
@@ -63,11 +58,6 @@ def build_metric_lift_spec(
     metric_name: str = "Metric",
     title: str = "Control vs. Treatment Comparison",
 ) -> ChartSpec:
-    """
-    Control against treatment, with the confidence interval drawn as an error
-    bar on the treatment arm only -- the interval is on the estimated effect,
-    and putting it on the control baseline would misstate what was measured.
-    """
     error: Optional[List[Optional[float]]] = None
     if ci_lower is not None and ci_upper is not None:
         error = [None, (ci_upper - ci_lower) / 2.0]
@@ -97,7 +87,6 @@ def build_srm_distribution_spec(
     variant_names: Optional[List[str]] = None,
     title: str = "Sample Ratio Allocation (SRM Check)",
 ) -> ChartSpec:
-    """Observed against expected exposure per variant, grouped side by side."""
     num_variants = max(len(observed_counts), len(expected_counts))
     names = variant_names or ["Control"] + [f"Treatment_{i}" for i in range(1, num_variants)]
 
@@ -127,7 +116,6 @@ def build_growth_forecast_spec(
     p90_annual: float,
     title: str = "Projected Annual Revenue Lift Distribution",
 ) -> ChartSpec:
-    """The three simulated percentiles as a range, lowest to highest."""
     return ChartSpec(
         kind="bar",
         title=title,
@@ -145,11 +133,6 @@ def build_growth_forecast_spec(
 
 
 def build_generic_spec(kind: str, title: str, data: Dict[str, Any]) -> Optional[ChartSpec]:
-    """
-    Builds a shape-only chart from either explicit categories/series or raw
-    result rows. Returns None when neither form carries plottable numbers, so
-    the caller reports "no chart" rather than rendering an empty frame.
-    """
     rows = data.get("rows")
     if rows:
         return derive_chart_spec(
@@ -162,7 +145,6 @@ def build_generic_spec(kind: str, title: str, data: Dict[str, Any]) -> Optional[
     categories = [str(c) for c in (data.get("categories") or data.get("x") or [])]
     raw_series = data.get("series") or []
 
-    # Accept the one-series shorthand `{"categories": [...], "values": [...]}`.
     if not raw_series and data.get("values"):
         raw_series = [{"name": data.get("series_name") or "Value", "values": data["values"]}]
 
@@ -201,7 +183,6 @@ def build_generic_spec(kind: str, title: str, data: Dict[str, Any]) -> Optional[
 
 
 def build_chart_spec(input_data: ChartGeneratorInput) -> Optional[ChartSpec]:
-    """Dispatches to the builder for `chart_type`. None when nothing is plottable."""
     chart_type = (input_data.chart_type or "auto").strip().lower()
     data = input_data.data or {}
 
@@ -234,11 +215,6 @@ def build_chart_spec(input_data: ChartGeneratorInput) -> Optional[ChartSpec]:
 
 
 def generate_visualization(input_data: ChartGeneratorInput) -> ChartGeneratorResult:
-    """
-    Master dispatcher. An unplottable request returns a result with no spec and
-    a summary saying so -- never a placeholder chart of zeroes, which is what
-    the old default branch produced and which reads downstream as real data.
-    """
     spec = build_chart_spec(input_data)
 
     if spec is None:
@@ -258,10 +234,6 @@ def generate_visualization(input_data: ChartGeneratorInput) -> ChartGeneratorRes
         plotly_json=spec_to_plotly(spec),
         summary=summarize_spec(spec),
     )
-
-
-# Backwards-compatible Plotly-returning wrappers. The subgraphs build specs
-# directly; these remain for callers importing the original names.
 
 
 def build_metric_lift_chart(*args: Any, **kwargs: Any) -> Dict[str, Any]:

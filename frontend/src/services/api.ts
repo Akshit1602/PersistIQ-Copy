@@ -1,8 +1,3 @@
-/**
- * Empty string means same-origin, which is what Databricks Apps needs: there the
- * FastAPI process serves the built SPA and the API from one host. Local dev sets
- * VITE_API_BASE_URL in frontend/.env.local to reach the backend on its own port.
- */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface Experiment {
@@ -31,15 +26,107 @@ export interface ApprovalParams {
   userFeedback?: string;
 }
 
-/**
- * Fetch cataloged experiments for top dropdown and MatchView Hub
- */
+export interface LoadedDatasetColumn {
+  name: string;
+  type: string;
+  null_count: number;
+  unique_count: number;
+  min?: number | string;
+  max?: number | string;
+  avg?: number | string;
+}
+
+export interface LoadedDataset {
+  table_name: string;
+  total_rows: number;
+  column_count: number;
+  columns: LoadedDatasetColumn[];
+  sample_data: Record<string, any>[];
+}
+
+export interface ApiProject {
+  id: string;
+  name: string;
+  channel: string;
+  description: string;
+  experiments_count: number;
+  total_records: number;
+  threads_count: number;
+  updated_at: string;
+}
+
+export interface ApiThreadGroup {
+  id: string;
+  project_id: string;
+  title: string;
+  channel: string;
+  updated_at: string;
+}
+
+export interface ApiChatMessage {
+  id: string;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 export async function fetchExperiments(): Promise<Experiment[]> {
   const res = await fetch(`${API_BASE_URL}/api/experiments`);
   if (!res.ok) {
     throw new Error(`Failed to fetch experiments: ${res.statusText}`);
   }
   return res.json();
+}
+
+export async function fetchLoadedDatasets(table?: string): Promise<{ tables_count: number; datasets: LoadedDataset[] }> {
+  const url = table ? `${API_BASE_URL}/api/datasets?table=${encodeURIComponent(table)}` : `${API_BASE_URL}/api/datasets`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch loaded datasets: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchApiProjects(): Promise<ApiProject[]> {
+  const res = await fetch(`${API_BASE_URL}/api/projects`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch projects: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.projects || [];
+}
+
+export async function fetchApiThreadGroups(projectId?: string): Promise<ApiThreadGroup[]> {
+  const url = projectId ? `${API_BASE_URL}/api/projects/threads?project_id=${encodeURIComponent(projectId)}` : `${API_BASE_URL}/api/projects/threads`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch thread groups: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.threads || [];
+}
+
+export async function fetchThreadMessages(threadId: string): Promise<ApiChatMessage[]> {
+  const res = await fetch(`${API_BASE_URL}/api/projects/threads/${encodeURIComponent(threadId)}/messages`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch thread messages: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.messages || [];
+}
+
+export async function postThreadMessage(threadId: string, role: string, content: string): Promise<ApiChatMessage> {
+  const res = await fetch(`${API_BASE_URL}/api/projects/threads/${encodeURIComponent(threadId)}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, content }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to post message: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.message;
 }
 
 export interface InputSuggestionField {
@@ -67,11 +154,6 @@ const EMPTY_SUGGESTIONS: InputSuggestionResponse = {
   fields: {},
 };
 
-/**
- * Baselines derived from the selected experiment's own data. Resolves to an
- * empty field map on any failure: a missing profile must degrade to the app's
- * own suggestions, never break the form.
- */
 export async function fetchInputSuggestions(
   experiment: string,
   channel: string,
@@ -86,9 +168,6 @@ export async function fetchInputSuggestions(
   }
 }
 
-/**
- * Stream Copilot response (tokens, tool execution badges, and UI artifacts)
- */
 export async function streamChatResponse({
   message,
   threadId = 'matchview_session',
@@ -130,7 +209,7 @@ export async function streamChatResponse({
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n\n');
-      buffer = lines.pop() || ''; // Hold onto incomplete chunk for next loop iteration
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -163,9 +242,6 @@ export async function streamChatResponse({
   }
 }
 
-/**
- * Resume an interrupted LangGraph workflow following human approval/rejection
- */
 export async function resumeApproval({
   threadId,
   approved,
