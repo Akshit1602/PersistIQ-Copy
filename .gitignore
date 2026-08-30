@@ -39,3 +39,5 @@ graphify-out/
 
 # foglamp scan (contains edit token)
 .foglamp/
+
+api_tester.py
