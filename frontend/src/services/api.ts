@@ -42,6 +42,39 @@ export async function fetchExperiments(): Promise<Experiment[]> {
   return res.json();
 }
 
+/**
+ * Fetch projects from backend database
+ */
+export async function fetchProjects(): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/projects`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch projects: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+/**
+ * Fetch chat thread groups from backend database
+ */
+export async function fetchThreads(): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/projects/threads`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch threads: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+/**
+ * Fetch conversation messages for a thread from backend database
+ */
+export async function fetchConversationMessages(threadId: string): Promise<any[]> {
+  const res = await fetch(`${API_BASE_URL}/api/projects/conversations/${threadId}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch conversations for thread ${threadId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export interface InputSuggestionField {
   value: number;
   source: string;

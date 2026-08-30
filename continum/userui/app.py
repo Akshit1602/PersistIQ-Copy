@@ -11,6 +11,7 @@ from continum.userui.routes import (
     chat_router,
     experiments_router,
     modules_router,
+    projects_router,
     suggestions_router,
 )
 
@@ -34,6 +35,7 @@ app.include_router(chat_router)
 app.include_router(experiments_router)
 app.include_router(approval_router)
 app.include_router(modules_router)
+app.include_router(projects_router)
 app.include_router(suggestions_router)
 
 

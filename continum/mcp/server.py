@@ -1,4 +1,4 @@
-from continum.AskData import SQLExecutionInput, execute_sql_query
+from continum.askdata import SQLExecutionInput, execute_sql_query
 from continum.ExpSuite.planning import (
     OpportunitySizingInput,
     PowerCalcInput,

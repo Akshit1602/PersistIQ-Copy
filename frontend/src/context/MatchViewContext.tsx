@@ -10,6 +10,9 @@ import {
 } from 'react'
 import {
   fetchExperiments,
+  fetchProjects,
+  fetchThreads,
+  fetchConversationMessages,
   fetchInputSuggestions,
   streamChatResponse,
   type Experiment,
@@ -364,81 +367,79 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   // above (already loaded into state) if the backend is unreachable.
   const loadBackendData = async () => {
     try {
-      const data: Experiment[] = await fetchExperiments();
+      const [backendProjects, dbThreads, data] = await Promise.all([
+        fetchProjects().catch(() => []),
+        fetchThreads().catch(() => []),
+        fetchExperiments().catch(() => []),
+      ]);
+
+      if (backendProjects && backendProjects.length > 0) {
+        setProjects(backendProjects);
+      }
+
       setBackendExperiments(data);
       if (data && data.length > 0) {
         const names = data.map((exp) => exp.name);
-        // Merge rather than replace. The backend only knows about experiments it
-        // has catalogued, all of which map to the digital projects; replacing
-        // outright would drop the store-channel fixtures and leave the store
-        // surfaces unreachable.
         setExperiments((prev) => [...new Set([...prev, ...names])]);
+      }
+
+      if (dbThreads && dbThreads.length > 0) {
+        setThreadGroupState(dbThreads);
 
         const nextProjectIds: Record<string, string> = {};
-        const nextThreadGroups: ThreadGroup[] = [];
-        const nextMessagesByThread: Record<string, ChatMessage[]> = {};
+        const allThreadIds: string[] = [];
 
-        data.forEach((exp, idx) => {
-          const projId = idx % 2 === 0 ? 'proj-walmart-digital' : 'proj-cart-reliability';
-          nextProjectIds[exp.name] = projId;
-
-          const threadId = `t_backend_${exp.experiment_id}`;
-          nextThreadGroups.push({
-            projectId: projId,
-            experiment: exp.name,
-            threads: [
-              {
-                id: threadId,
-                title: `${exp.name} Discussion`,
-                timestamp: 'Just now',
-              },
-            ],
-          });
-
-          nextMessagesByThread[threadId] = [
-            {
-              id: `system_${exp.experiment_id}_init`,
-              role: 'assistant',
-              content: `This is the discussion thread for **${exp.name}**. Ask me questions about its primary metric (${exp.primary_metric}), sample sizes, or run statistical tests like SRM checks.`,
-              timestamp: formatMessageTime(),
-              kind: 'text',
-              artifacts: [],
-            },
-          ];
+        dbThreads.forEach((group) => {
+          nextProjectIds[group.experiment] = group.projectId;
+          group.threads.forEach((t: any) => allThreadIds.push(t.id));
         });
 
         setExperimentProjectIds((prev) => ({ ...prev, ...nextProjectIds }));
-        setThreadGroupState((prev) => {
-          const backendExperimentNames = new Set(nextThreadGroups.map((g) => g.experiment));
-          // Backend groups win for experiments it knows about; fixture-only
-          // groups (the store project) are preserved alongside them.
-          return [...prev.filter((g) => !backendExperimentNames.has(g.experiment)), ...nextThreadGroups];
-        });
-        setMessagesByThread((prev) => ({ ...prev, ...nextMessagesByThread }));
 
-        setSelectedExperimentState(names[0]);
-        const firstThread = nextThreadGroups[0]?.threads[0]?.id;
-        if (firstThread) {
-          setActiveThreadId(firstThread);
-        }
-
-        // Dynamically add to specs
-        setExperimentSpecsByName((prev) => {
-          const next = { ...prev };
-          data.forEach((exp) => {
-            if (!next[exp.name]) {
-              next[exp.name] = {
-                name: exp.name,
-                hypothesis: `If we optimize ${exp.name}, the primary metric ${exp.primary_metric} will improve.`,
-                goal: `Increase ${exp.primary_metric}`,
-                channel: 'digital',
-                metricsApproved: true,
-              };
+        // Load conversation messages for all active threads
+        const messageEntries = await Promise.all(
+          allThreadIds.map(async (tid) => {
+            try {
+              const msgs = await fetchConversationMessages(tid);
+              return [tid, msgs as ChatMessage[]] as const;
+            } catch {
+              return [tid, [] as ChatMessage[]] as const;
             }
-          });
-          return next;
+          })
+        );
+
+        const loadedMessagesMap: Record<string, ChatMessage[]> = {};
+        messageEntries.forEach(([tid, msgs]) => {
+          if (msgs && msgs.length > 0) {
+            loadedMessagesMap[tid] = msgs;
+          }
         });
+
+        setMessagesByThread((prev) => ({ ...prev, ...loadedMessagesMap }));
+
+        const firstGroup = dbThreads[0];
+        if (firstGroup && firstGroup.threads[0]) {
+          setSelectedExperimentState(firstGroup.experiment);
+          setActiveThreadId(firstGroup.threads[0].id);
+        }
       }
+
+      // Populate specs for backend experiments dynamically
+      setExperimentSpecsByName((prev) => {
+        const next = { ...prev };
+        data.forEach((exp) => {
+          if (!next[exp.name]) {
+            next[exp.name] = {
+              name: exp.name,
+              hypothesis: `If we optimize ${exp.name}, the primary metric ${exp.primary_metric} will improve.`,
+              goal: `Increase ${exp.primary_metric}`,
+              channel: exp.name.toLowerCase().includes('kiosk') || exp.name.toLowerCase().includes('cashier') ? 'store' : 'digital',
+              metricsApproved: true,
+            };
+          }
+        });
+        return next;
+      });
     } catch (err) {
       console.warn('Backend fetch failed, relying on mock data:', err);
     }

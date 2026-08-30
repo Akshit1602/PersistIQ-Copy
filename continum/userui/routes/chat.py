@@ -1,5 +1,7 @@
 import asyncio
 import json
+import sqlite3
+import time
 from typing import Optional
 
 from fastapi import APIRouter
@@ -10,6 +12,41 @@ from pydantic import BaseModel, Field
 from continum.orchestration import app_graph
 
 router = APIRouter(prefix="/api/chat", tags=["Chat & Copilot"])
+
+DB_PATH = "matchview_omnichannel.db"
+
+def _persist_user_message(thread_id: str, content: str) -> str:
+    msg_id = f"msg_user_{int(time.time() * 1000)}"
+    timestamp = time.strftime("%Y-%m-%d %H:%M")
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO chat_messages (message_id, thread_id, role, content, kind, timestamp)
+            VALUES (?, ?, 'user', ?, 'text', ?)
+        """, (msg_id, thread_id, content, timestamp))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error persisting user message: {e}")
+    return msg_id
+
+def _persist_assistant_message(thread_id: str, content: str, artifacts: list = None) -> str:
+    msg_id = f"msg_asst_{int(time.time() * 1000)}"
+    timestamp = time.strftime("%Y-%m-%d %H:%M")
+    artifacts_json = json.dumps(artifacts) if artifacts else None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO chat_messages (message_id, thread_id, role, content, kind, timestamp, artifacts_json)
+            VALUES (?, ?, 'assistant', ?, 'text', ?, ?)
+        """, (msg_id, thread_id, content, timestamp, artifacts_json))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error persisting assistant message: {e}")
+    return msg_id
 
 
 def _as_text(content) -> str:
@@ -47,6 +84,8 @@ async def chat_stream_endpoint(payload: ChatRequest):
     Server-Sent Events (SSE) streaming endpoint emitting tokens, tool execution
     badges, and UIArtifact cards directly to the frontend.
     """
+    _persist_user_message(payload.thread_id, payload.message)
+
     config = {"configurable": {"thread_id": payload.thread_id}}
 
     initial_state = {
@@ -59,6 +98,9 @@ async def chat_stream_endpoint(payload: ChatRequest):
     async def event_generator():
         has_streamed_tokens = False
         has_streamed_artifacts = False
+        accumulated_text = ""
+        accumulated_artifacts = []
+
         async for event in app_graph.astream_events(initial_state, config, version="v2"):
             kind = event["event"]
 
@@ -67,6 +109,7 @@ async def chat_stream_endpoint(payload: ChatRequest):
                 chunk = _as_text(event["data"]["chunk"].content)
                 if chunk:
                     has_streamed_tokens = True
+                    accumulated_text += chunk
                     yield f"data: {json.dumps({'type': 'text_token', 'content': chunk})}\n\n"
 
             # If no model tokens were streamed (e.g. fallback mode), stream supervisor node's output at end
@@ -76,6 +119,7 @@ async def chat_stream_endpoint(payload: ChatRequest):
                     if isinstance(output, dict) and "messages" in output and output["messages"]:
                         last_msg = output["messages"][-1]
                         content = _as_text(getattr(last_msg, "content", last_msg))
+                        accumulated_text += content
                         for i in range(0, len(content), 12):
                             chunk = content[i : i + 12]
                             yield f"data: {json.dumps({'type': 'text_token', 'content': chunk})}\n\n"
@@ -105,6 +149,7 @@ async def chat_stream_endpoint(payload: ChatRequest):
                     for art in artifacts:
                         art_dict = art.model_dump() if hasattr(art, "model_dump") else art
                         has_streamed_artifacts = True
+                        accumulated_artifacts.append(art_dict)
                         yield f"data: {json.dumps({'type': 'artifact', 'payload': art_dict})}\n\n"
 
         # A turn that emits neither text nor a card renders as an empty chat
@@ -114,8 +159,12 @@ async def chat_stream_endpoint(payload: ChatRequest):
                 "I wasn't able to produce a response for that message. "
                 "Please rephrase it, or check the server logs if this repeats."
             )
+            accumulated_text = notice
             yield f"data: {json.dumps({'type': 'text_token', 'content': notice})}\n\n"
 
+        _persist_assistant_message(payload.thread_id, accumulated_text, accumulated_artifacts)
         yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
