@@ -11,6 +11,10 @@ import {
 import {
   fetchExperiments,
   fetchInputSuggestions,
+  fetchApiProjects,
+  fetchApiThreadGroups,
+  fetchThreadMessages,
+  postThreadMessage,
   streamChatResponse,
   type Experiment,
 } from '../services/api'
@@ -135,30 +139,17 @@ const INITIAL_EXPERIMENT_SPECS: Record<string, ExperimentSpec> = {
   },
 };
 
-/**
- * Which Insights chart best represents each module's output, used when a report
- * is opened from the Reports list. Ids match MOCK_CHARTS in data/mock.ts plus the
- * dashboard's own card ids ('exposure-trend', 'segment-conversion', 'metric-sheet')
- * — ChartDetectiveDrawer resolves explanations from both sets.
- *
- * Modules with no meaningful chart are deliberately absent: those fall back to
- * DEFAULT_CHART_TARGET rather than pointing at an unrelated visual.
- */
 const MODULE_CHART_TARGETS: Partial<Record<ModuleId, string>> = {
-  // Revenue / impact framing
   'opportunity-sizing': 'chart-roi',
   forecasting: 'chart-roi',
   'roi-synthesis': 'chart-roi',
-  // Traffic, allocation and audience volume
   'power-calculator': 'chart-reach',
   'balance-diagnostics': 'chart-reach',
   'audience-selection': 'chart-reach',
-  // Verified statistical outputs
   'health-monitor': 'metric-sheet',
   'sequential-testing': 'metric-sheet',
   'metrics-tracking': 'metric-sheet',
   'distribution-shift': 'metric-sheet',
-  // Effect / lift analysis
   'experiment-analysis': 'chart-lift',
   'causal-did': 'chart-lift',
   'simpsons-paradox': 'segment-conversion',
@@ -179,18 +170,15 @@ function nextThreadId() {
 }
 
 export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
 
-  // Main UI states
   const [currentPersona, setCurrentPersona] = useState<Persona>('executive');
   const [currentTab, setCurrentTab] = useState<Tab>('chat');
   const [selectedExperiment, setSelectedExperimentState] = useState<string>(EXPERIMENTS[0]);
   const [activePhase, setActivePhase] = useState<Phase>('auto');
   const [activeModuleId, setActiveModuleId] = useState<ModuleId | null>(null);
 
-  // Layout states
   const [chartDrawerOpen, setChartDrawerOpen] = useState<boolean>(false);
   const [chartDrawerTargetId, setChartDrawerTargetId] = useState<string | null>(null);
   const [activeGlobalPage, setActiveGlobalPage] = useState<'workspace' | 'archive' | 'settings'>('workspace');
@@ -204,7 +192,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [newProjectPanelOpen, setNewProjectPanelOpen] = useState<boolean>(false);
   const [knowledgeArchiveOpen, setKnowledgeArchiveOpen] = useState<boolean>(false);
 
-  // Projects & Experiments Lists
   const [projects, setProjects] = useState<Project[]>(() => structuredClone(INITIAL_PROJECTS));
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [experimentProjectIds, setExperimentProjectIds] = useState<Record<string, string>>(
@@ -212,7 +199,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
   const [experiments, setExperiments] = useState<string[]>([...EXPERIMENTS]);
 
-  // Thread state
   const [threadGroups, setThreadGroupState] = useState<ThreadGroup[]>(
     () => structuredClone(INITIAL_THREAD_GROUPS_WITH_PROJECTS)
   );
@@ -221,10 +207,8 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     t1: [...MOCK_MESSAGES],
   });
 
-  // Ticker and reports
   const [chatReports, setChatReports] = useState<ChatReport[]>([]);
 
-  // Analytics Lab panel
   const [labPanelView, setLabPanelView] = useState<LabPanelView>('tree');
   const [labModuleId, setLabModuleId] = useState<ModuleId | null>(null);
   const [moduleFormValuesByExperiment, setModuleFormValuesByExperiment] = useState<ModuleFormValuesByExperiment>({});
@@ -236,7 +220,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [analyticsLabExpanded, setAnalyticsLabExpanded] = useState<boolean>(false);
   const [highlightedFieldKeys, setHighlightedFieldKeys] = useState<string[]>([]);
 
-  // Dialog configurations
   const [experimentDataSourcesDialogExperiment, setExperimentDataSourcesDialogExperiment] = useState<string | null>(null);
   const [experimentDataSources, setExperimentDataSources] = useState<Record<string, ExperimentDataSourceConfig>>(
     () => Object.fromEntries(EXPERIMENTS.map((name) => [name, { type: 'internal' as const }]))
@@ -247,25 +230,17 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
   const [pendingModuleActivation, setPendingModuleActivation] = useState<ModuleId | null>(null);
 
-  // Baselines derived from each experiment's own data, keyed `experiment|channel`.
-  // Fetched once per pair and cached; an unreachable backend leaves the map
-  // empty and the suggestion engine falls back to app state.
   const [datasetSuggestionsByKey, setDatasetSuggestionsByKey] = useState<Record<string, DatasetFieldMap>>({});
 
   const requestedSuggestionKeysRef = useRef<Set<string>>(new Set());
   const runTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Single source of truth for the workspace ticker — derived from real
-  // experiment/workflow state so it can never disagree with what the rest of
-  // the app shows, and never shows fabricated placeholder numbers.
   const tickerMetrics = useMemo(
     () => buildWorkspaceStats(computeLiveExperimentStats(experiments, workflowProgressByExperiment)),
     [experiments, workflowProgressByExperiment]
   );
 
-  // A project's channel decides digital vs store framing for anything created
-  // under it. Falls back to 'digital' only when no project is selected yet.
   const channelForProject = useCallback(
     (projectId: string | null): ProjectChannel =>
       projects.find((p) => p.id === projectId)?.channel ?? 'digital',
@@ -276,23 +251,16 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     (experiment: string): ProjectChannel => {
       if (experimentSpecsByName[experiment]?.channel === 'store') return 'store';
       const projectId = experimentProjectIds[experiment];
-      // An experiment we have not catalogued yet (a wizard draft, say) belongs
-      // to whichever project the user is working in.
       return channelForProject(projectId ?? selectedProjectId);
     },
     [experimentSpecsByName, experimentProjectIds, channelForProject, selectedProjectId]
   );
 
-  // Derived baselines are fetched once per experiment/channel pair and cached.
-  // Failures resolve to an empty field map inside the service, so a backend
-  // that is down simply means fewer suggestions, not a broken form.
   const ensureDatasetSuggestions = useCallback(
     (experiment: string) => {
       if (!experiment) return;
       const channel = channelForExperiment(experiment);
       const key = `${experiment}|${channel}`;
-      // Ref-guarded rather than state-guarded so a re-render (or StrictMode's
-      // double invoke) cannot fire the same request twice.
       if (requestedSuggestionKeysRef.current.has(key)) return;
       requestedSuggestionKeysRef.current.add(key);
 
@@ -360,89 +328,65 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     runTimeoutsRef.current = [];
   }, []);
 
-  // Sync / Load logic — real backend fetch. Falls back to the mock fixtures
-  // above (already loaded into state) if the backend is unreachable.
   const loadBackendData = async () => {
     try {
       const data: Experiment[] = await fetchExperiments();
       setBackendExperiments(data);
-      if (data && data.length > 0) {
-        const names = data.map((exp) => exp.name);
-        // Merge rather than replace. The backend only knows about experiments it
-        // has catalogued, all of which map to the digital projects; replacing
-        // outright would drop the store-channel fixtures and leave the store
-        // surfaces unreachable.
-        setExperiments((prev) => [...new Set([...prev, ...names])]);
 
-        const nextProjectIds: Record<string, string> = {};
-        const nextThreadGroups: ThreadGroup[] = [];
-        const nextMessagesByThread: Record<string, ChatMessage[]> = {};
+      const apiProjs = await fetchApiProjects();
+      if (apiProjs && apiProjs.length > 0) {
+        const loadedProjs: Project[] = apiProjs.map((ap) => ({
+          id: ap.id,
+          name: ap.name,
+          description: ap.description,
+          channel: ap.channel as ProjectChannel,
+          dataSource: { type: 'internal' },
+          createdAt: ap.updated_at,
+        }));
+        setProjects(loadedProjs);
+      }
 
-        data.forEach((exp, idx) => {
-          const projId = idx % 2 === 0 ? 'proj-walmart-digital' : 'proj-cart-reliability';
-          nextProjectIds[exp.name] = projId;
-
-          const threadId = `t_backend_${exp.experiment_id}`;
-          nextThreadGroups.push({
-            projectId: projId,
-            experiment: exp.name,
-            threads: [
-              {
-                id: threadId,
-                title: `${exp.name} Discussion`,
-                timestamp: 'Just now',
-              },
-            ],
+      const apiThreads = await fetchApiThreadGroups();
+      if (apiThreads && apiThreads.length > 0) {
+        const groupsMap: Record<string, ThreadGroup> = {};
+        apiThreads.forEach((t) => {
+          if (!groupsMap[t.project_id]) {
+            groupsMap[t.project_id] = {
+              projectId: t.project_id,
+              experiment: t.title,
+              threads: [],
+            };
+          }
+          groupsMap[t.project_id].threads.push({
+            id: t.id,
+            title: t.title,
+            timestamp: t.updated_at,
           });
-
-          nextMessagesByThread[threadId] = [
-            {
-              id: `system_${exp.experiment_id}_init`,
-              role: 'assistant',
-              content: `This is the discussion thread for **${exp.name}**. Ask me questions about its primary metric (${exp.primary_metric}), sample sizes, or run statistical tests like SRM checks.`,
-              timestamp: formatMessageTime(),
-              kind: 'text',
-              artifacts: [],
-            },
-          ];
         });
-
-        setExperimentProjectIds((prev) => ({ ...prev, ...nextProjectIds }));
-        setThreadGroupState((prev) => {
-          const backendExperimentNames = new Set(nextThreadGroups.map((g) => g.experiment));
-          // Backend groups win for experiments it knows about; fixture-only
-          // groups (the store project) are preserved alongside them.
-          return [...prev.filter((g) => !backendExperimentNames.has(g.experiment)), ...nextThreadGroups];
-        });
-        setMessagesByThread((prev) => ({ ...prev, ...nextMessagesByThread }));
-
-        setSelectedExperimentState(names[0]);
-        const firstThread = nextThreadGroups[0]?.threads[0]?.id;
-        if (firstThread) {
-          setActiveThreadId(firstThread);
-        }
-
-        // Dynamically add to specs
-        setExperimentSpecsByName((prev) => {
-          const next = { ...prev };
-          data.forEach((exp) => {
-            if (!next[exp.name]) {
-              next[exp.name] = {
-                name: exp.name,
-                hypothesis: `If we optimize ${exp.name}, the primary metric ${exp.primary_metric} will improve.`,
-                goal: `Increase ${exp.primary_metric}`,
-                channel: 'digital',
-                metricsApproved: true,
-              };
-            }
-          });
-          return next;
-        });
+        setThreadGroupState(Object.values(groupsMap));
       }
     } catch (err) {
-      console.warn('Backend fetch failed, relying on mock data:', err);
+      console.warn('Backend fetch failed, relying on fallback data:', err);
     }
   };
+
+  useEffect(() => {
+    if (!activeThreadId) return;
+    fetchThreadMessages(activeThreadId)
+      .then((msgs) => {
+        if (msgs && msgs.length > 0) {
+          const chatMsgs: ChatMessage[] = msgs.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+            kind: 'text',
+          }));
+          setMessagesByThread((prev) => ({ ...prev, [activeThreadId]: chatMsgs }));
+        }
+      })
+      .catch((err) => console.warn(`Failed to fetch messages for thread ${activeThreadId}:`, err));
+  }, [activeThreadId]);
 
   useEffect(() => {
     loadBackendData();
@@ -457,7 +401,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [highlightedMessageId]);
 
-  // Actions
   const login = useCallback((email: string, _password?: string): boolean => {
     const trimmed = email.trim();
     if (!trimmed) return false;
@@ -565,32 +508,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       );
       const next = { ...prev };
       removeIds.forEach((id) => delete next[id]);
-      return next;
-    });
-    setChatReports((prev) => prev.filter((r) => !expNames.includes(r.experiment)));
-    setExperimentDataSources((prev) => {
-      const next = { ...prev };
-      expNames.forEach((n) => delete next[n]);
-      return next;
-    });
-    setExperimentSpecsByName((prev) => {
-      const next = { ...prev };
-      expNames.forEach((n) => delete next[n]);
-      return next;
-    });
-    setWorkflowProgressByExperiment((prev) => {
-      const next = { ...prev };
-      expNames.forEach((n) => delete next[n]);
-      return next;
-    });
-    setModuleFormValuesByExperiment((prev) => {
-      const next = { ...prev };
-      expNames.forEach((n) => delete next[n]);
-      return next;
-    });
-    setModuleRunsByExperiment((prev) => {
-      const next = { ...prev };
-      expNames.forEach((n) => delete next[n]);
       return next;
     });
 
@@ -713,7 +630,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const channel = channelForProject(selectedProjectId);
 
-    // Create the experiment spec
     const spec: ExperimentSpec = {
       name,
       hypothesis: input.hypothesis,
@@ -733,7 +649,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       setExperimentProjectIds((prev) => ({ ...prev, [name]: selectedProjectId }));
     }
 
-    // Save validator answers directly as locked module params
     setModuleFormValuesByExperiment((prev) => {
       const nextExp = prev[name] || {};
       return {
@@ -751,7 +666,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
     });
 
-    // Mark steps completed
     setWorkflowProgressByExperiment((prev) => ({
       ...prev,
       [name]: {
@@ -777,7 +691,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       timestamp: now,
     };
 
-    // Create a new thread with a brief handoff card
     const threadId = nextThreadId();
     const briefBody = buildBriefBody(spec, {
       'opportunity-sizing': input.opportunitySkipped ? { skipped: true } : input.opportunity,
@@ -814,7 +727,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     setActiveThreadId(threadId);
     setMessagesByThread((prev) => ({ ...prev, [threadId]: [welcome, learningsMessage, handoffMessage] }));
 
-    // Push brief to reports
     setChatReports((prev) => [
       ...prev,
       {
@@ -887,19 +799,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       threadIds.forEach((id) => delete next[id]);
       return next;
     });
-    setExperimentDataSources((prev) => {
-      const { [experiment]: _removed, ...rest } = prev;
-      return rest;
-    });
-    setExperimentSpecsByName((prev) => {
-      const { [experiment]: _removed, ...rest } = prev;
-      return rest;
-    });
-    setWorkflowProgressByExperiment((prev) => {
-      const { [experiment]: _removed, ...rest } = prev;
-      return rest;
-    });
-    setExperimentDataSourcesDialogExperiment(null);
 
     if (threadIds.has(activeThreadId)) {
       const fallbackGroup = remainingGroups[0];
@@ -949,9 +848,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, 500);
   }, []);
 
-  // Applies smart defaults derived from the experiment's spec/prior module
-  // output the first time a module is opened for this experiment, instead of
-  // always starting from a blank form.
   const applyLabModuleSelection = useCallback((moduleId: ModuleId, experimentOverride?: string) => {
     const experiment = experimentOverride ?? selectedExperiment;
     setLabModuleId(moduleId);
@@ -964,8 +860,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       const spec = experimentSpecsByName[experiment];
       const existing = experimentValues[moduleId];
 
-      // Data-derived and cross-module values land first so the form opens
-      // populated; benchmark-grade guesses stay behind a chip in the field UI.
       const suggestions = suggestFieldValues(moduleId, buildSuggestionContext(experiment));
       const { values: suggested } = prefillableValues(suggestions, existing ?? {});
       defaults = { ...defaults, ...suggested };
@@ -995,9 +889,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
 
       if (existing) {
-        // Re-opening a configured module only fills gaps — a field the user
-        // already answered is never rewritten, but one left blank picks up a
-        // suggestion that arrived after the first open.
         if (Object.keys(suggested).length === 0) return prev;
         return {
           ...prev,
@@ -1160,35 +1051,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
 
-      if (moduleId === 'metrics-tracking') {
-        setExperimentSpecsByName((prev) => {
-          const existing = prev[selectedExperiment];
-          if (!existing) return prev;
-          return {
-            ...prev,
-            [selectedExperiment]: {
-              ...existing,
-              metricsApproved: Boolean(String(params.featureDescription ?? '').trim()),
-            },
-          };
-        });
-      }
-
-      if (moduleId === 'experiment-type') {
-        setExperimentSpecsByName((prev) => {
-          const existing = prev[selectedExperiment];
-          if (!existing) return prev;
-          return {
-            ...prev,
-            [selectedExperiment]: {
-              ...existing,
-              experimentType: (params.experimentType as ExperimentSpec['experimentType']) ?? 'A/B',
-              typeRationale: String(params.typeRationale ?? ''),
-            },
-          };
-        });
-      }
-
       const report: ChatReport = {
         id: `report-${runId}`,
         runId,
@@ -1260,17 +1122,13 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (runMessage) scrollToMessage(runMessage.id);
   }, [moduleRunsByExperiment, selectedExperiment, messagesByThread, activeThreadId, scrollToMessage]);
 
-  // Real backend chat over SSE — tokens, tool-execution badges, and artifact
-  // cards stream from continum. This is intentionally the only chat path:
-  // no client-side LLM call, no local fabricated reply.
   const sendMessage = useCallback((content: string) => {
     if (!content.trim() || chatIsGenerating) return;
 
-    // Accumulated outside React state because the SSE callbacks fire faster
-    // than state settles, and the report built at onDone needs the whole turn.
     const turn = { artifacts: [] as UIArtifactCard[], tools: [] as string[], text: '' };
-
     const timestamp = formatMessageTime();
+    const threadId = activeThreadId || 't1';
+
     const userMsg: ChatMessage = {
       id: 'msg_user_' + Date.now(),
       role: 'user',
@@ -1279,12 +1137,12 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
       kind: 'text',
     };
 
-    const threadId = activeThreadId || 'matchview_session';
-
     setMessagesByThread((prev) => {
       const list = prev[threadId] || [];
       return { ...prev, [threadId]: [...list, userMsg] };
     });
+
+    postThreadMessage(threadId, 'user', content).catch((err) => console.warn('Failed to persist user message:', err));
 
     const assistantMsgId = 'msg_asst_' + Date.now();
     const assistantMsg: ChatMessage = {
@@ -1380,10 +1238,10 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
         setChatIsGenerating(false);
         setChatActiveToolStatus(null);
 
-        // Anything the Copilot actually produced — a chart, a stat card — is an
-        // analytical output and belongs in Reports alongside module runs.
-        // Reports previously only ever came from local module runs, so a chat
-        // turn that computed a real result left no trace on the tab.
+        if (turn.text) {
+          postThreadMessage(threadId, 'assistant', turn.text).catch((err) => console.warn('Failed to persist assistant message:', err));
+        }
+
         const report = buildCopilotReport({
           artifacts: turn.artifacts,
           toolNames: turn.tools,
@@ -1446,10 +1304,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     setLabPanelView('tree');
   }, []);
 
-  // Called from the Reports list's "Open in Insights" action. Brief-generator
-  // reports open the Reports tab directly (there is no dedicated brief chart);
-  // everything else navigates to Insights and opens the chart that represents
-  // the report's module, so the click lands somewhere specific.
   const openReport = useCallback((reportId: string) => {
     const report = chatReports.find((r) => r.id === reportId);
     if (!report) return;
@@ -1458,9 +1312,6 @@ export const MatchViewProvider: React.FC<{ children: ReactNode }> = ({ children 
     setActiveThreadId(report.threadId);
     setActiveModuleId(report.moduleId);
 
-    // A report that carries its own charts already shows everything it has, and
-    // a Copilot report with no module has no Insights chart to point at. Both
-    // stay on Reports rather than jumping to an unrelated visual.
     if (report.moduleId === 'brief-generator' || report.artifacts?.length || !report.moduleId) {
       setCurrentTab('reports');
       return;

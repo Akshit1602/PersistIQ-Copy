@@ -21,6 +21,7 @@ scipy>=1.13.0
 
 # Database & Visuals
 sqlalchemy>=2.0.0
+duckdb>=1.0.0
 plotly>=5.20.0
 
 # External Telemetry & MCP

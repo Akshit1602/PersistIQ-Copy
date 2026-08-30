@@ -1,4 +1,6 @@
 from continum.config import settings
+import continum.askdata
+
 from continum.orchestration import app_graph
 from continum.state import AgentState
 
