@@ -85,13 +85,6 @@ def generate_sql_query(question: str, domain_context: str = "ecomm") -> str:
             )
 
 
-class SQLExecutionInput(BaseModel):
-    query: str = Field(..., description="Natural language question or raw SQL statement")
-    schema_context: Optional[str] = Field(
-        None, description="Schema definition string for Text-to-SQL generation"
-    )
-
-
 class SQLExecutionResult(BaseModel):
     sql_statement: str
     columns: List[str]

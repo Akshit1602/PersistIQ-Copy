@@ -115,6 +115,10 @@ export function resolveChatIntent(content: string, ctx: ChatRouterContext): Chat
     return { type: 'text-reply', userContent: trimmed, reply: buildAssistantReply(ctx.persona, trimmed) }
   }
 
+  // Ensure domain routing check is evaluated if activeDomain is not explicitly provided
+  const activeDomain = ctx.activeDomain ?? (isStoreDomainQuery(trimmed) ? 'store' : 'ecomm')
+  ctx.activeDomain = activeDomain
+
   if (isInsightsIntent(trimmed)) {
     return {
       type: 'open-insights',
