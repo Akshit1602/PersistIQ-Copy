@@ -1,6 +1,6 @@
 from langgraph.graph import END, START, StateGraph
 
-from continum.askdata import SQLExecutionInput, execute_sql_query
+from continum.AskData import SQLExecutionInput, execute_sql_query
 from continum.mapMeta import (
     IndexExperimentsInput,
     ScannerInput,
