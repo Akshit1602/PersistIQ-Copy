@@ -13,7 +13,7 @@ None of it touches an LLM, so it needs no API key.
 import json
 
 import pytest
-from continum.askdata import ChartGeneratorInput, derive_chart_spec, generate_visualization
+from continum.AskData import ChartGeneratorInput, derive_chart_spec, generate_visualization
 from continum.orchestration.subgraphs.askdata_graph import route_after_sql, route_request
 from continum.orchestration.tools.subgraph_tools import (
     ask_data_insights,

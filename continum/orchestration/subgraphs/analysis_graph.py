@@ -2,7 +2,7 @@ import logging
 
 from langgraph.graph import END, START, StateGraph
 
-from continum.askdata import ChartGeneratorInput, generate_visualization
+from continum.AskData import ChartGeneratorInput, generate_visualization
 from continum.ExpSuite.causal import DiDInput, calculate_diff_in_diff
 from continum.ExpSuite.stats_inference import (
     CUPEDInput,

@@ -1,7 +1,7 @@
 import sys
-import continum.askdata
+import continum.AskData
 
-sys.modules["continum.AskData"] = continum.askdata
+sys.modules["continum.AskData"] = continum.AskData
 
 from continum.config import settings
 from continum.orchestration import app_graph
