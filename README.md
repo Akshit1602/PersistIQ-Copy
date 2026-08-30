@@ -86,7 +86,7 @@ The system is built on a clean, layered architecture that strictly separates pur
               │
        ┌──────┴────────────────────────┬────────────────────────┐
        ▼                               ▼                        ▼
-[ continum.ExpSuite ]       [ continum.mapMeta ]      [ continum.askdata ]
+[ continum.ExpSuite ]       [ continum.mapMeta ]      [ continum.AskData ]
  ├── stats_inference/        ├── scanner.py            ├── sql_engine.py
  ├── planning/               ├── metadata_store.py     ├── visual_generator.py
  └── causal/                 └── statsig_connector.py  └── growth_simulator.py

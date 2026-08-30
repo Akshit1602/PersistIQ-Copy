@@ -1,6 +1,6 @@
 import sys
 from continum.config import settings
-import continum.askdata as askdata
+import continum.AskData as askdata
 
 sys.modules["continum.AskData"] = askdata
 sys.modules["continum.AskData.chart_spec"] = askdata.chart_spec
