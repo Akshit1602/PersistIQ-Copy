@@ -1,6 +1,7 @@
 import sys
 
-from continum.AskData.chart_spec import (
+from continum.askdata import chart_spec, growth_simulator, sql_engine, visual_generator
+from continum.askdata.chart_spec import (
     ChartKind,
     ChartSeries,
     ChartSpec,
@@ -9,13 +10,13 @@ from continum.AskData.chart_spec import (
     spec_to_plotly,
     summarize_spec,
 )
-from continum.AskData.growth_simulator import (
+from continum.askdata.growth_simulator import (
     GrowthSimulationInput,
     GrowthSimulationResult,
     simulate_and_visualize_growth,
 )
-from continum.AskData.sql_engine import SQLExecutionInput, SQLExecutionResult, execute_sql_query
-from continum.AskData.visual_generator import (
+from continum.askdata.sql_engine import SQLExecutionInput, SQLExecutionResult, execute_sql_query
+from continum.askdata.visual_generator import (
     SUPPORTED_CHART_TYPES,
     ChartGeneratorInput,
     ChartGeneratorResult,
@@ -28,7 +29,12 @@ from continum.AskData.visual_generator import (
     generate_visualization,
 )
 
+# Register AskData case-compatibility aliases in sys.modules
 sys.modules["continum.AskData"] = sys.modules[__name__]
+sys.modules["continum.AskData.chart_spec"] = chart_spec
+sys.modules["continum.AskData.growth_simulator"] = growth_simulator
+sys.modules["continum.AskData.sql_engine"] = sql_engine
+sys.modules["continum.AskData.visual_generator"] = visual_generator
 
 __all__ = [
     "generate_visualization",
